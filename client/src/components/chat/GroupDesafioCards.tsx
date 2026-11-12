@@ -13,6 +13,7 @@ export type MsgGrupo = {
   conteudo: string;
   tipo:
     | "NORMAL"
+    | "AUDIO"
     | "DESAFIO"
     | "POST"
     | "USUARIO"

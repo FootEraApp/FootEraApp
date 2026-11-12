@@ -200,21 +200,32 @@ async function salvarMembro(
         select: {
         id: true,
         funcao: true,
+        ativo: true,
         },
     })
     ) as
     | {
         id: string;
         funcao: FuncaoMembroOrganizacao;
+        ativo: boolean;
         }
     | null;
+
+  if (
+    existente &&
+    !existente.ativo &&
+    ativo
+  ) {
+    throw new Error("MEMBERSHIP_REACTIVATION_REQUIRED");
+  }
 
   let funcaoFinal =
     funcao;
 
   if (
-    existente?.funcao ===
-    FuncaoMembroOrganizacao.PROPRIETARIO
+    existente?.ativo === true &&
+    existente.funcao ===
+      FuncaoMembroOrganizacao.PROPRIETARIO
   ) {
     funcaoFinal =
       FuncaoMembroOrganizacao.PROPRIETARIO;
@@ -452,6 +463,19 @@ export async function garantirOrganizacaoLegada(
   const legacyKey =
     `${params.tipo}:${params.ownerId}`;
 
+  const organizacaoExistente =
+    await db.organizacao.findUnique({
+      where: { legacyKey },
+      select: {
+        id: true,
+        ativo: true,
+      },
+    });
+
+  if (organizacaoExistente && !organizacaoExistente.ativo) {
+    throw new Error("ORGANIZATION_INACTIVE");
+  }
+
   const organizacao =
     await db.organizacao.upsert({
       where: {
@@ -466,8 +490,6 @@ export async function garantirOrganizacaoLegada(
           tipoOrganizacaoNova(
             params.tipo
           ),
-
-        ativo: true,
       },
 
       create: {
@@ -497,10 +519,15 @@ export async function garantirOrganizacaoLegada(
     );
   }
 
+  if (
+    params.proprietarioUsuarioId &&
+    params.proprietarioUsuarioId !== legado.usuarioId
+  ) {
+    throw new Error("ORGANIZATION_OWNER_MISMATCH");
+  }
+
   const proprietarioUsuarioId =
-    params.proprietarioUsuarioId ??
-    legado.usuarioId ??
-    null;
+    legado.usuarioId ?? null;
 
   if (
     proprietarioUsuarioId

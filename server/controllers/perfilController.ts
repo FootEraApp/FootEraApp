@@ -4,10 +4,10 @@ import {
   Categoria,
   PosicaoCampo,
   MetodologiaAssinaturaStatus,
-  PagamentoStatus,
   StatusUsuarioPapel,
   TipoUsuario,
   TipoOrganizacao,
+  StatusResponsavelAtleta
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
@@ -38,6 +38,9 @@ import {
   getProfileIdForRole,
   hasRole,
 } from "../services/roles.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
 
 type AtividadeUI = {
   id: string;
@@ -46,6 +49,8 @@ type AtividadeUI = {
   createdAt: string;
   imagemUrl?: string | null;
   link?: string | null;
+  treinoProgramadoId?: string | null;
+  treinoAgendadoId?: string | null;
 };
 
 const DEFAULT_AVATAR = "/assets/usuarios/footera-logo-fundo-verde.png";
@@ -213,37 +218,99 @@ function calcularIdadePorDataNascimento(dataNascimento: Date) {
   return idade;
 }
 
+function validarNascimentoMesmoUsuario(
+  nascimentoInformado: Date,
+  nascimentoCadastrado: Date | null
+): void {
+  if (!nascimentoCadastrado) return;
+
+  const informado = nascimentoInformado
+    .toISOString()
+    .slice(0, 10);
+
+  const cadastrado = nascimentoCadastrado
+    .toISOString()
+    .slice(0, 10);
+
+  if (informado !== cadastrado) {
+    const erro = new Error(
+      "A data de nascimento deve ser igual à cadastrada na conta."
+    ) as Error & {
+      statusCode?: number;
+      code?: string;
+    };
+
+    erro.statusCode = 409;
+    erro.code = "BIRTH_DATE_MISMATCH";
+    throw erro;
+  }
+}
+
 function parseDataNascimentoObrigatoria(raw: any) {
-  const valor = String(raw || "").trim();
+  const valor = String(raw ?? "").trim();
 
-  if (!valor) {
-    const err: any = new Error("Data de nascimento é obrigatória.");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const data = new Date(`${valor}T00:00:00`);
-
-  if (Number.isNaN(data.getTime())) {
-    const err: any = new Error("Data de nascimento inválida.");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const min = new Date("1900-01-01T00:00:00");
-  const hoje = inicioDoDia(new Date());
-
-  if (data < min || data > hoje) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
     const err: any = new Error(
-      "A data de nascimento deve estar entre 1900 e a data de hoje.",
+      "Informe a data de nascimento no formato AAAA-MM-DD."
     );
     err.statusCode = 400;
     throw err;
   }
 
+  const data = new Date(`${valor}T00:00:00.000Z`);
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(valor) ||
+    Number.isNaN(data.getTime()) ||
+    data.toISOString().slice(0, 10) !== valor
+  ) {
+    const err: any = new Error(
+      "Data de nascimento inválida."
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const hojeBrasil = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const parte = (tipo: string) =>
+    hojeBrasil.find((p) => p.type === tipo)?.value ?? "";
+
+  const hojeISO =
+    `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+  if (valor < "1900-01-01" || valor > hojeISO) {
+    const err: any = new Error(
+      "A data de nascimento deve estar entre 1900 e a data de hoje."
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nascimentoAno = data.getUTCFullYear();
+  const nascimentoMes = data.getUTCMonth() + 1;
+  const nascimentoDia = data.getUTCDate();
+
+  const [anoHoje, mesHoje, diaHoje] =
+    hojeISO.split("-").map(Number);
+
+  let idade = anoHoje - nascimentoAno;
+
+  if (
+    mesHoje < nascimentoMes ||
+    (mesHoje === nascimentoMes && diaHoje < nascimentoDia)
+  ) {
+    idade--;
+  }
+
   return {
     dataNascimento: data,
-    idade: calcularIdadePorDataNascimento(data),
+    idade,
   };
 }
 
@@ -1114,15 +1181,84 @@ export const getAtividadesRecentes = async (
 
     type AtividadeComTs = AtividadeUI & { ts: number };
 
+    const idsAgendamentosLegados = [
+      ...new Set(
+        atividadesDbSemTreinosOrfaos
+          .map((atividade) => {
+            const link = String(atividade.link ?? "");
+
+            if (!link.startsWith("/submissao?")) {
+              return "";
+            }
+
+            return (
+              new URLSearchParams(link.split("?")[1] ?? "")
+                .get("treinoAgendadoId") ?? ""
+            );
+          })
+          .filter(Boolean)
+      ),
+    ];
+
+    const agendamentosLegados =
+      idsAgendamentosLegados.length > 0
+        ? await prisma.treinoAgendado.findMany({
+            where: {
+              id: {
+                in: idsAgendamentosLegados,
+              },
+              atletaId: atleta.id,
+            },
+            select: {
+              id: true,
+              treinoProgramadoId: true,
+            },
+          })
+        : [];
+
+    const programadoPorAgendamento = new Map(
+      agendamentosLegados.map((agendamento) => [
+        agendamento.id,
+        agendamento.treinoProgramadoId,
+      ])
+    );
+
     const itensRaw: AtividadeComTs[] = [
       ...atividadesDbSemTreinosOrfaos.map(
         (a): AtividadeComTs => ({
           id: `ar-${a.id}`,
           tipo: a.tipo ?? "Atividade",
-          titulo: a.titulo ?? "Atividade",
+          titulo:
+            String(a.titulo ?? "").trim() &&
+            String(a.titulo ?? "").trim().toLowerCase() !== "atividade"
+              ? String(a.titulo).trim()
+              : String(a.tipo ?? "").toUpperCase() === "TREINO_TURMA"
+                ? "Treino em turma"
+                : "Atividade",
           createdAt: a.createdAt.toISOString(),
           imagemUrl: a.imagemUrl ?? null,
-          link: a.link ?? null,
+          link: (() => {
+            const linkOriginal = String(a.link ?? "");
+
+            if (!linkOriginal.startsWith("/submissao?")) {
+              return a.link ?? null;
+            }
+
+            const treinoAgendadoId =
+              new URLSearchParams(
+                linkOriginal.split("?")[1] ?? ""
+              ).get("treinoAgendadoId");
+
+            const programadoId = treinoAgendadoId
+              ? programadoPorAgendamento.get(treinoAgendadoId)
+              : null;
+
+            return programadoId
+              ? `/treinos/unico?programadoId=${encodeURIComponent(
+                  programadoId
+                )}`
+              : a.link ?? null;
+          })(),
           ts: +a.createdAt,
         }),
       ),
@@ -1148,14 +1284,27 @@ export const getAtividadesRecentes = async (
         const isLivre = snapshot.includes("livre");
 
         const dt = s.criadoEm ?? new Date();
+        const programadoId =
+          s.treinoAgendado?.treinoProgramadoId ??
+          s.treinoAgendado?.treinoProgramado?.id ??
+          null;
+
+        const link = programadoId
+          ? `/treinos/unico?programadoId=${encodeURIComponent(
+              programadoId
+            )}`
+          : "/trainings";
 
         return {
           id: `t-${s.id}`,
           tipo: isLivre ? "Treino Livre" : "Treino",
           titulo,
           createdAt: new Date(dt).toISOString(),
-          imagemUrl: s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
-          link: "/treinos",
+          imagemUrl:
+            s.treinoAgendado?.treinoProgramado?.imagemUrl ?? null,
+          treinoProgramadoId: programadoId,
+          treinoAgendadoId: s.treinoAgendadoId ?? null,
+          link,
           ts: +new Date(dt),
         };
       }),
@@ -1832,6 +1981,131 @@ export const atualizarPosicaoAtletaMe = async (
   }
 };
 
+export const atualizarPosicaoAtletaGerenciado =
+  async (
+    req: AuthenticatedRequest,
+    res: Response,
+  ) => {
+    const responsavelUsuarioId =
+      String(
+        req.userId ?? ""
+      ).trim();
+
+    const atletaId =
+      String(
+        req.params.atletaId ??
+        ""
+      ).trim();
+
+    if (!responsavelUsuarioId) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Não autenticado.",
+        });
+    }
+
+    if (!atletaId) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "atletaId é obrigatório.",
+        });
+    }
+
+    const contexto =
+      await getActiveContext(
+        responsavelUsuarioId
+      );
+
+    if (
+      contexto?.kind !==
+        "PERSONAL" ||
+      contexto.tipoUsuario !==
+        TipoUsuario.Responsavel
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "RESPONSAVEL_CONTEXT_REQUIRED",
+
+          error:
+            "Use o perfil de Responsável para alterar a posição do atleta.",
+        });
+    }
+
+    const autorizado =
+      await verificarPermissaoResponsavelAtleta({
+        responsavelUsuarioId,
+        atletaId,
+        permissao: "podeEditarPerfil",
+      });
+
+    if (!autorizado) {
+      return res.status(403).json({
+        code: "PROFILE_EDIT_NOT_ALLOWED",
+        error:
+          "Você não possui permissão para editar este atleta.",
+      });
+    }
+
+    const posicao =
+      String(
+        req.body?.posicao ??
+        ""
+      ).trim();
+
+    if (
+      !Object
+        .values(PosicaoCampo)
+        .includes(
+          posicao as PosicaoCampo
+        )
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Posição inválida.",
+        });
+    }
+
+    const atleta =
+      await prisma.atleta.update({
+        where: {
+          id:
+            atletaId,
+        },
+
+        data: {
+          posicao:
+            posicao as PosicaoCampo,
+        },
+
+        select: {
+          id: true,
+          usuarioId: true,
+          posicao: true,
+        },
+      });
+
+    return res.json({
+      ok: true,
+
+      atletaId:
+        atleta.id,
+
+      usuarioId:
+        atleta.usuarioId,
+
+      posicao:
+        atleta.posicao,
+    });
+  };
+
 export const getPerfilUsuario = async (req: Request, res: Response) => {
   try {
     const idRecebido = String(req.params.id || "").trim();
@@ -1896,6 +2170,7 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       marca: "Marca",
       learning: "Learning",
       creator: "Creator",
+      responsavel: "Responsavel",
     } as const;
 
     type PapelPerfil = (typeof papeisPermitidos)[keyof typeof papeisPermitidos];
@@ -2312,6 +2587,34 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
       }
     }
 
+    if (
+      !tipoPerfil &&
+      deveCarregarPerfil(
+        "Responsavel"
+      )
+    ) {
+      dadosEspecificos = {
+        nome:
+          usuario.nome ??
+          null,
+
+        foto:
+          usuario.foto ??
+          null,
+
+        cidade:
+          usuario.cidade ??
+          null,
+
+        estado:
+          usuario.estado ??
+          null,
+      };
+
+      tipoPerfil =
+        "Responsavel";
+    }
+
     // Um papel PENDENTE ainda não possui sua tabela específica. Retornamos o
     // papel solicitado com formulário vazio para que o proprietário o configure.
     if (tipoSolicitado && !tipoPerfil) {
@@ -2537,15 +2840,109 @@ export const atualizarPerfil = async (
   res: Response,
 ) => {
   const { id } = req.params;
-  const userIdFromToken = req.userId;
 
-  if (!userIdFromToken || id !== userIdFromToken) {
+  const userIdFromToken =
+    req.userId;
+
+  if (!userIdFromToken) {
     return res
-      .status(403)
-      .json({ error: "Você só pode editar o seu próprio perfil." });
+      .status(401)
+      .json({
+        error:
+          "Usuário não autenticado.",
+      });
   }
 
-  let { usuario, tipo, tipoUsuario } = req.body;
+  const editandoProprioPerfil =
+    id === userIdFromToken;
+
+  let vinculoGerenciado:
+    | {
+        id: string;
+        atletaId: string;
+      }
+    | null = null;
+
+  if (!editandoProprioPerfil) {
+    const activeContext =
+      await getActiveContext(
+        userIdFromToken
+      );
+
+    const usandoResponsavel =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      activeContext.tipoUsuario ===
+        TipoUsuario.Responsavel;
+
+    if (!usandoResponsavel) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "RESPONSAVEL_CONTEXT_REQUIRED",
+
+          error:
+            "Selecione seu perfil de Responsável para editar este atleta.",
+        });
+    }
+
+    const atletaAlvo = await prisma.atleta.findUnique({
+      where: {
+        usuarioId: id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (atletaAlvo) {
+      const autorizado =
+        await verificarPermissaoResponsavelAtleta({
+          responsavelUsuarioId: userIdFromToken,
+          atletaId: atletaAlvo.id,
+          permissao: "podeEditarPerfil",
+        });
+
+      if (autorizado) {
+        vinculoGerenciado =
+          await prisma.responsavelAtleta.findUnique({
+            where: {
+              responsavelUsuarioId_atletaId: {
+                responsavelUsuarioId: userIdFromToken,
+                atletaId: atletaAlvo.id,
+              },
+            },
+            select: {
+              id: true,
+              atletaId: true,
+            },
+          });
+      }
+    }
+
+    if (!vinculoGerenciado) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "PROFILE_EDIT_NOT_ALLOWED",
+
+          error:
+            "Você não possui permissão para editar o perfil deste atleta.",
+        });
+    }
+  }
+
+  const edicaoGerenciada =
+    !editandoProprioPerfil;
+
+  let {
+    usuario,
+    tipo,
+    tipoUsuario,
+  } =
+    req.body;
 
   try {
     if (typeof usuario === "string") {
@@ -2578,12 +2975,51 @@ export const atualizarPerfil = async (
     const usuarioAtual = await prisma.usuario.findUnique({
       where: { id },
       select: {
-        foto: true,
-        nome: true,
-        nomeDeUsuario: true,
-        email: true,
-        dataNascimento: true,
-        tipo: true,
+        foto:
+          true,
+
+        nome:
+          true,
+
+        nomeDeUsuario:
+          true,
+
+        email:
+          true,
+
+        dataNascimento:
+          true,
+
+        tipo:
+          true,
+
+        cpf:
+          true,
+
+        cep:
+          true,
+
+        cidade:
+          true,
+
+        estado:
+          true,
+
+        pais:
+          true,
+
+        logradouro:
+          true,
+
+        atleta: {
+          select: {
+            id:
+              true,
+
+            idade:
+              true,
+          },
+        },
       },
     });
 
@@ -2591,6 +3027,109 @@ export const atualizarPerfil = async (
       return res.status(404).json({
         error: "Usuário não encontrado.",
       });
+    }
+
+    const idadeAtualAtleta =
+      usuarioAtual
+        .dataNascimento
+        ? calcularIdadePorDataNascimento(
+            usuarioAtual
+              .dataNascimento
+          )
+        : usuarioAtual
+            .atleta
+            ?.idade ??
+          null;
+
+    const atletaMenor12EditandoProprioPerfil =
+      editandoProprioPerfil &&
+      Boolean(
+        usuarioAtual.atleta
+      ) &&
+      idadeAtualAtleta !==
+        null &&
+      idadeAtualAtleta <
+        12;
+
+    if (
+      atletaMenor12EditandoProprioPerfil
+    ) {
+      usuario = {
+        ...usuario,
+
+        /*
+        * Menor de 12 não pode alterar
+        * sozinho dados de identidade,
+        * contato ou endereço.
+        */
+        email:
+          usuarioAtual.email,
+
+        nomeDeUsuario:
+          usuarioAtual
+            .nomeDeUsuario,
+
+        dataNascimento:
+          usuarioAtual
+            .dataNascimento
+            ? usuarioAtual
+                .dataNascimento
+                .toISOString()
+                .slice(
+                  0,
+                  10
+                )
+            : null,
+
+        cpf:
+          usuarioAtual.cpf,
+
+        cep:
+          usuarioAtual.cep,
+
+        cidade:
+          usuarioAtual
+            .cidade,
+
+        estado:
+          usuarioAtual
+            .estado,
+
+        pais:
+          usuarioAtual.pais,
+
+        logradouro:
+          usuarioAtual
+            .logradouro,
+      };
+    }
+
+    if (edicaoGerenciada) {
+      usuario = {
+        ...usuario,
+
+        /*
+        * O responsável pode editar
+        * o perfil do atleta, mas não
+        * as credenciais/identidade
+        * sensíveis da conta.
+        */
+        email:
+          usuarioAtual.email,
+
+        nomeDeUsuario:
+          usuarioAtual.nomeDeUsuario,
+
+        dataNascimento:
+          usuarioAtual.dataNascimento
+            ? usuarioAtual.dataNascimento
+                .toISOString()
+                .slice(0, 10)
+            : null,
+
+        cpf:
+          usuarioAtual.cpf,
+      };
     }
 
     const file = req.file as any;
@@ -2634,8 +3173,11 @@ export const atualizarPerfil = async (
 
     let dataNascimentoFinal = usuarioAtual.dataNascimento;
 
-    if (usuario?.dataNascimento !== undefined) {
-      const valor = String(usuario.dataNascimento || "").trim();
+    if (
+      usuario?.dataNascimento !== undefined &&
+      usuario?.dataNascimento !== null
+    ) {
+      const valor = String(usuario.dataNascimento).trim();
 
       if (!valor) {
         return res.status(400).json({
@@ -2645,12 +3187,45 @@ export const atualizarPerfil = async (
 
       const parsed = parseDataNascimentoObrigatoria(valor);
 
+      if (usuarioAtual.dataNascimento) {
+        const dataOriginal = usuarioAtual.dataNascimento
+          .toISOString()
+          .slice(0, 10);
+
+        const dataSolicitada = parsed.dataNascimento
+          .toISOString()
+          .slice(0, 10);
+
+        if (dataSolicitada !== dataOriginal) {
+          return res.status(403).json({
+            code: "BIRTH_DATE_CHANGE_REQUIRES_VERIFICATION",
+            error:
+              "A data de nascimento já cadastrada só pode ser corrigida mediante verificação da identidade.",
+          });
+        }
+      }
+
       dataNascimentoFinal = parsed.dataNascimento;
     }
 
     const tipoKey = String(tipoUsuario).toLowerCase();
 
     const tipoNorm = tipoKey === "escolinha" ? "escola" : tipoKey;
+
+    if (
+      edicaoGerenciada &&
+      tipoNorm !== "atleta"
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "MANAGED_EDIT_ATHLETE_ONLY",
+
+          error:
+            "O responsável só pode editar o perfil de Atleta vinculado.",
+        });
+    }
 
     const papelPorTipo: Record<string, string> = {
       atleta: "Atleta",
@@ -2662,6 +3237,7 @@ export const atualizarPerfil = async (
       federacao: "Federacao",
       marca: "Marca",
       creator: "Creator",
+      responsavel: "Responsavel"
     };
 
     const papelSolicitado = papelPorTipo[tipoNorm];
@@ -2717,6 +3293,43 @@ export const atualizarPerfil = async (
       }
     }
 
+
+    // Primeira definição do nascimento:
+    // permitida apenas se o cadastro ainda não possui data.
+    //
+    // O updateMany condicional evita sobrescrever uma data
+    // que tenha sido definida por outra requisição concorrente.
+
+    if (
+      usuarioAtual.dataNascimento === null &&
+      dataNascimentoFinal !== null
+    ) {
+      const resultadoNascimento =
+        await prisma.usuario.updateMany({
+          where: {
+            id,
+            dataNascimento: null,
+          },
+          data: {
+            dataNascimento: dataNascimentoFinal,
+
+            // A primeira definição não libera o cupom
+            // imediatamente. Aplica 30 dias de carência.
+            aniversarioElegivelApartirDe: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ),
+          },
+        });
+
+      if (resultadoNascimento.count !== 1) {
+        return res.status(409).json({
+          code: "BIRTH_DATE_CONCURRENT_UPDATE",
+          error:
+            "Os dados de nascimento foram atualizados por outra operação. Recarregue o perfil.",
+        });
+      }
+    }
+
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -2730,7 +3343,6 @@ export const atualizarPerfil = async (
         pais: usuario.pais ?? null,
         logradouro: usuario.logradouro ?? null,
         cpf: usuario.cpf ?? null,
-        dataNascimento: dataNascimentoFinal,
       },
     });
 
@@ -3309,6 +3921,10 @@ export const atualizarPerfil = async (
         break;
       }
 
+      case "responsavel": {
+        break;
+      }
+
       default:
         return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
@@ -3758,6 +4374,7 @@ export async function getPerfilClube(
       select: {
         id: true,
         usuarioId: true,
+        organizacaoId: true,
         usuario: {
           select: {
             id: true,
@@ -3850,6 +4467,7 @@ export async function getPerfilClube(
       clube: {
         id: clube.id,
         usuarioId: clube.usuarioId,
+        organizacaoId: clube.organizacaoId,
         nome: clube.nome,
         cnpj: clube.cnpj,
         telefone1: clube.telefone1,
@@ -3926,6 +4544,7 @@ export async function getPerfilEscola(req: AuthenticatedRequest, res: Response) 
       select: {
         id: true,
         usuarioId: true,
+        organizacaoId: true,
         usuario: {
           select: {
             id: true,
@@ -3983,6 +4602,7 @@ export async function getPerfilEscola(req: AuthenticatedRequest, res: Response) 
       escolinha: {
         id: escola.id,
         usuarioId: escola.usuarioId,
+        organizacaoId: escola.organizacaoId,
         nome: escola.nome,
         cnpj: escola.cnpj,
         telefone1: escola.telefone1,
@@ -4731,6 +5351,7 @@ export const upgradeLearningProfile = async (
         nome: true,
         email: true,
         nomeDeUsuario: true,
+        dataNascimento: true,
       },
     });
 
@@ -4835,6 +5456,11 @@ export const upgradeLearningProfile = async (
         req.body?.dataNascimento,
       );
 
+      validarNascimentoMesmoUsuario(
+        nascimento.dataNascimento,
+        usuario.dataNascimento
+      );
+
       if (nascimento.idade < 17) {
         return res.status(400).json({
           message:
@@ -4927,6 +5553,59 @@ export const upgradeLearningProfile = async (
       const agora =
         new Date();
 
+      if (
+        tipoValidado === "ATLETA" ||
+        tipoValidado === "PROFESSOR" ||
+        tipoValidado === "OLHEIRO"
+      ) {
+        const nascimento =
+          parseDataNascimentoObrigatoria(
+            req.body?.dataNascimento
+          );
+
+        // Bloqueia a linha da conta para serializar
+        // duas operações de cadastro simultâneas.
+        await tx.$queryRaw`
+          SELECT "id"
+          FROM "Usuario"
+          WHERE "id" = ${usuarioId}
+          FOR UPDATE
+        `;
+
+        const contaAtual =
+          await tx.usuario.findUniqueOrThrow({
+            where: {
+              id: usuarioId,
+            },
+            select: {
+              dataNascimento: true,
+            },
+          });
+
+        validarNascimentoMesmoUsuario(
+          nascimento.dataNascimento,
+          contaAtual.dataNascimento
+        );
+
+        if (!contaAtual.dataNascimento) {
+          await tx.usuario.update({
+            where: {
+              id: usuarioId,
+            },
+            data: {
+              dataNascimento:
+                nascimento.dataNascimento,
+
+              aniversarioElegivelApartirDe:
+                new Date(
+                  agora.getTime() +
+                  30 * 24 * 60 * 60 * 1000
+                ),
+            },
+          });
+        }
+      }
+
       const ativarPapelPessoal =
         async (
           papel: TipoUsuario
@@ -4988,6 +5667,10 @@ export const upgradeLearningProfile = async (
           const nascimento = parseDataNascimentoObrigatoria(
             req.body.dataNascimento,
           );
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
+          );
 
           const categoriaCalculada = categoriaAtletaPorIdade(nascimento.idade);
 
@@ -5023,6 +5706,11 @@ export const upgradeLearningProfile = async (
         case "PROFESSOR": {
           const nascimento = parseDataNascimentoObrigatoria(
             req.body.dataNascimento,
+          );
+
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
           );
 
           const professor =
@@ -5078,6 +5766,11 @@ export const upgradeLearningProfile = async (
         case "OLHEIRO": {
           const nascimento = parseDataNascimentoObrigatoria(
             req.body.dataNascimento,
+          );
+
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
           );
 
           const olheiro = await tx.olheiro.create({

@@ -180,17 +180,22 @@ export default function PaginaLogin() {
           toast.success(data?.noticeMessage ?? "Sua conta foi reativada por um administrador.");
         }
 
-        const { isAdmin } = applyAuthSession(data, { lembrar: lembrarDeMim });
+        const { isAdmin } = applyAuthSession(data, {
+          lembrar: lembrarDeMim,
+        });
 
-        if (isAdmin) {
-          navigate("/admin");
-        } else {
-          navigate(
-            consumirRetornoAuth(
-              "/perfil"
-            )
-          );
-        }
+        const somenteGestaoConta =
+          data.somenteGestaoConta === true;
+
+        const retorno = consumirRetornoAuth("/perfil");
+
+        const destino = somenteGestaoConta
+          ? "/configuracoes"
+          : isAdmin
+            ? "/admin"
+            : retorno;
+
+        navigate(destino);
       } catch (err: any) {
         console.error("[APP LOGIN ERRO]", {
           status: err.response?.status,
@@ -268,43 +273,22 @@ export default function PaginaLogin() {
         setRecoverSenha("");
         setDeletedInfo(null);
 
+        const retorno = consumirRetornoAuth("/perfil");
+
         navigate(
-          isAdmin
-            ? "/admin"
-            : consumirRetornoAuth(
-                "/perfil"
-              )
+          data.somenteGestaoConta === true
+            ? "/configuracoes"
+            : isAdmin
+              ? "/admin"
+              : retorno,
         );
+
       } catch (e: any) {
         toast.error(e?.response?.data?.message ?? e?.message ?? "Não foi possível recuperar.");
       } finally {
         setRecoverLoading(false);
       }
     }
-
-  useEffect(() => {
-    if (isE2E) return;
-
-    const token =
-      Storage.token ||
-      localStorage.getItem("token") ||
-      sessionStorage.getItem("token");
-    if (!token) return;
-
-    const tipo = (
-      localStorage.getItem("tipoUsuario") ||
-      sessionStorage.getItem("tipoUsuario") ||
-      ""
-    ).toLowerCase();
-
-    navigate(
-      tipo === "admin"
-        ? "/admin"
-        : consumirRetornoAuth(
-            "/perfil"
-          )
-    );
-  }, []);
 
   useEffect(() => {
     if (isE2E) return;
@@ -350,22 +334,19 @@ export default function PaginaLogin() {
         return;
       }
 
-      const { isAdmin } =
-        applyAuthSession(
-          data,
-          {
-            lembrar:
-              lembrarDeMim
-          }
-        );
+      const { isAdmin } = applyAuthSession(data, {
+        lembrar: lembrarDeMim,
+      });
 
-      navigate(
-        isAdmin
+      const retorno = consumirRetornoAuth("/perfil");
+
+      const destino = data.somenteGestaoConta === true
+        ? "/configuracoes"
+        : isAdmin
           ? "/admin"
-          : consumirRetornoAuth(
-              "/perfil"
-            )
-      );
+          : retorno;
+
+      navigate(destino);
     } catch (err: any) {
       console.error("Erro no login com Google:", err.response?.data || err.message);
       setErro(

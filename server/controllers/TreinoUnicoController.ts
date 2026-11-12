@@ -126,6 +126,7 @@ function montarPayloadFromProgramado(tp: any, realizacoes: number) {
     nivel: tp.nivel ?? null,
     objetivo: tp.objetivo ?? null,
     duracao: tp.duracao ?? null,
+    pontuacao: tp.pontuacao ?? null,
     dicas: tp.dicas ?? [],
     tipoTreino: tp.tipoTreino ?? null,
     sessaoTreinoId: tp.sessaoTreinoId ?? null,
@@ -156,6 +157,7 @@ function montarPayloadFromAgendado(ag: any, realizacoes: number) {
     sessaoTreinoNome: tp?.sessaoTreino?.nome ?? null,
     objetivo: tp?.objetivo ?? null,
     duracao: tp?.duracao ?? null,
+    pontuacao: tp?.pontuacao ?? null,
     dicas: tp?.dicas ?? [],
     prazoEnvio:
       (ag.dataExpiracao ?? ag.dataTreino ?? tp?.dataAgendada ?? tp?.expiraEm)?.toISOString?.() ??

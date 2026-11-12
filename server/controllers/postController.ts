@@ -3,8 +3,12 @@ import { prisma } from "../prisma.js";
 import { sanitizeText, basicModerationFails, normalizeIncomingMediaUrl, MOD, isAllowedMime } from "../utils/moderation.js";
 import { getIO } from "../socket.js"
 import {
-  VisibilidadePostagem, NotificacaoTipo
+  VisibilidadePostagem,
+  NotificacaoTipo,
 } from "@prisma/client";
+import {
+  audit,
+} from "../services/audit.js";
 import {
   normalizarVisibilidadePostagem,
   podeVisualizarPostagem,
@@ -20,8 +24,12 @@ import {
   listarActiveContexts,
   type ActiveContext,
 } from "../services/activeContext.js";
-type AuthedReq = Request & { userId?: string };
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
+import { canPermission } from "../services/permissions.js";
 
+type AuthedReq = Request & { userId?: string };
 type AutorPostagemResolvido = {
   contexto: ActiveContext;
   organizacaoId: string | null;
@@ -190,11 +198,15 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     const organizacaoId =
       autorResolvido.organizacaoId;
 
+    const autorContextoKey =
+      autorResolvido.contexto.key;
+
     const post = await prisma.postagem.create({
       data: {
         usuarioId: req.userId!,
         conteudo: descricao || "",
         organizacaoId,
+        autorContextoKey,
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,
@@ -368,8 +380,8 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   });
 
   if (
-    String(post.usuarioId) !==
-    String(req.userId)
+    post.usuarioId &&
+    post.usuarioId !== req.userId
   ) {
     try {
       const nomeOrganizacao =
@@ -414,60 +426,410 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   return res.status(201).json(novoComentario);
 };
 
-export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
-  const { id } = req.params;
-  try {
-    const postagem = await prisma.postagem.findUnique({ where: { id } });
-    if (!postagem || postagem.usuarioId !== req.userId) {
-      return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
+async function podeEditarPostagem(
+  usuarioId: string,
+  postagem: {
+    usuarioId: string | null;
+    organizacaoId: string | null;
+  }
+): Promise<boolean> {
+  // Publicação institucional:
+  // exige autorização na organização proprietária.
+  if (postagem.organizacaoId) {
+    const contexto = await getActiveContext(usuarioId);
+
+    if (
+      contexto?.kind !== "ORGANIZATION" ||
+      contexto.organizationId !== postagem.organizacaoId
+    ) {
+      return false;
     }
+
+    return canPermission(
+      usuarioId,
+      "GERENCIAR_ORGANIZACAO"
+    );
+  }
+
+  // Publicação pessoal:
+  // somente o autor pode editar.
+  return (
+    postagem.usuarioId !== null &&
+    postagem.usuarioId === usuarioId
+  );
+}
+
+
+export const editarPostagemGet = async (
+  req: AuthedReq,
+  res: Response
+) => {
+  const { id } = req.params;
+
+  if (!req.userId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
+  }
+
+  try {
+    const postagem = await prisma.postagem.findUnique({
+      where: { id },
+    });
+
+    if (!postagem) {
+      return res.status(404).json({
+        message: "Postagem não encontrada.",
+      });
+    }
+
+    const autorizado = await podeEditarPostagem(
+      req.userId,
+      postagem
+    );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não tem permissão para editar esta postagem.",
+      });
+    }
+
     return res.json(postagem);
-  } catch {
-    return res.status(500).json({ message: "Erro ao buscar postagem." });
+  } catch (error) {
+    console.error("Erro ao buscar postagem para edição:", error);
+
+    return res.status(500).json({
+      message: "Erro ao buscar postagem.",
+    });
   }
 };
 
-export const editarPostagemPost = async (req: AuthedReq, res: Response) => {
+export const editarPostagemPost = async (
+  req: AuthedReq,
+  res: Response
+) => {
   const { id } = req.params;
-  const raw = String(req.body?.conteudo ?? "");
-  const conteudo = sanitizeText(raw, MOD.MAX_DESC_LEN);
 
-  const postagem = await prisma.postagem.findUnique({ where: { id } });
-  if (!postagem || postagem.usuarioId !== req.userId) {
-    return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
+  if (!req.userId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
   }
-  if (!conteudo) return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
 
-  const fail = basicModerationFails(conteudo);
-  if (fail) return res.status(422).json({ message: fail });
-
-  await prisma.postagem.update({ where: { id }, data: { conteudo } });
-  return res.json({ message: "Postagem atualizada com sucesso." });
-};
-
-export const deletarPost = async (req: AuthedReq, res: Response) => {
   try {
-    if (!req.userId) return res.status(401).json({ message: "Não autenticado." });
-    const { id } = req.params;
+    const postagem = await prisma.postagem.findUnique({
+      where: { id },
+    });
 
-    const post = await prisma.postagem.findUnique({ where: { id } });
-    if (!post) return res.status(404).json({ message: "Postagem não encontrada." });
-    if (post.usuarioId !== req.userId) {
-      return res.status(403).json({ message: "Você não pode apagar esta postagem." });
+    if (!postagem) {
+      return res.status(404).json({
+        message: "Postagem não encontrada.",
+      });
     }
 
-    await prisma.$transaction([
-      prisma.comentario.deleteMany({ where: { postagemId: id } }),
-      prisma.curtida.deleteMany({ where: { postagemId: id } }),
-      prisma.postagem.delete({ where: { id } }),
-    ]);
+    const autorizado = await podeEditarPostagem(
+      req.userId,
+      postagem
+    );
 
-    return res.status(204).send();
-  } catch (e) {
-    console.error("Erro ao deletar post:", e);
-    return res.status(500).json({ message: "Erro ao apagar postagem." });
+    if (!autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não tem permissão para editar esta postagem.",
+      });
+    }
+
+    const raw = String(req.body?.conteudo ?? "");
+
+    const conteudo = sanitizeText(
+      raw,
+      MOD.MAX_DESC_LEN
+    );
+
+    if (!conteudo) {
+      return res.status(400).json({
+        message: "O conteúdo não pode estar vazio.",
+      });
+    }
+
+    const fail = basicModerationFails(conteudo);
+
+    if (fail) {
+      return res.status(422).json({
+        message: fail,
+      });
+    }
+
+    await prisma.postagem.update({
+      where: { id },
+      data: { conteudo },
+    });
+
+    return res.json({
+      message: "Postagem atualizada com sucesso.",
+    });
+  } catch (error) {
+    console.error("Erro ao editar postagem:", error);
+
+    return res.status(500).json({
+      message: "Erro ao editar postagem.",
+    });
   }
 };
+
+async function responsavelPodeGerenciarPostagem(
+  responsavelUsuarioId: string,
+  postUsuarioId: string
+) {
+  const atleta = await prisma.atleta.findUnique({
+    where: {
+      usuarioId: postUsuarioId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!atleta) {
+    return null;
+  }
+
+  const autorizado =
+    await verificarPermissaoResponsavelAtleta({
+      responsavelUsuarioId,
+      atletaId: atleta.id,
+      permissao: "podeGerenciarConteudo",
+    });
+
+  if (!autorizado) {
+    return null;
+  }
+
+  return prisma.responsavelAtleta.findUnique({
+    where: {
+      responsavelUsuarioId_atletaId: {
+        responsavelUsuarioId,
+        atletaId: atleta.id,
+      },
+    },
+    select: {
+      id: true,
+      atletaId: true,
+      responsavelUsuarioId: true,
+    },
+  });
+}
+
+export const deletarPost =
+  async (
+    req: AuthedReq,
+    res: Response
+  ) => {
+    try {
+      if (!req.userId) {
+        return res
+          .status(401)
+          .json({
+            message:
+              "Não autenticado.",
+          });
+      }
+
+      const { id } =
+        req.params;
+
+      const post =
+        await prisma
+          .postagem
+          .findUnique({
+            where: {
+              id,
+            },
+
+            select: {
+              id: true,
+              usuarioId: true,
+              organizacaoId: true,
+              conteudo: true,
+            },
+          });
+
+      if (!post) {
+        return res
+          .status(404)
+          .json({
+            message:
+              "Postagem não encontrada.",
+          });
+      }
+
+      const proprioAutor =
+        !post.organizacaoId &&
+        post.usuarioId === req.userId;
+
+      let gestorOrganizacao = false;
+
+      if (post.organizacaoId) {
+        const contexto = await getActiveContext(req.userId);
+
+        const mesmaOrganizacao =
+          contexto?.kind === "ORGANIZATION" &&
+          contexto.organizationId === post.organizacaoId;
+
+        if (mesmaOrganizacao) {
+          gestorOrganizacao = await canPermission(
+            req.userId,
+            "GERENCIAR_ORGANIZACAO"
+          );
+        }
+
+        if (!gestorOrganizacao) {
+          return res.status(403).json({
+            code: "POST_ORGANIZATION_DELETE_FORBIDDEN",
+            message:
+              "Somente um gestor autorizado da organização proprietária pode excluir esta publicação.",
+          });
+        }
+      }
+
+      let vinculoResponsavel:
+        Awaited<
+          ReturnType<
+            typeof responsavelPodeGerenciarPostagem
+          >
+        > =
+        null;
+
+      if (!proprioAutor && !gestorOrganizacao) {
+        if (
+          post.organizacaoId
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "RESPONSAVEL_CANNOT_DELETE_ORGANIZATION_POST",
+
+              message:
+                "O responsável não pode apagar uma publicação feita em nome de uma organização.",
+            });
+        }
+
+        vinculoResponsavel =
+          post.usuarioId
+            ? await responsavelPodeGerenciarPostagem(
+                req.userId,
+                post.usuarioId
+              )
+            : null;
+
+        if (
+          !vinculoResponsavel
+        ) {
+          return res
+            .status(403)
+            .json({
+              code:
+                "POST_DELETE_FORBIDDEN",
+
+              message:
+                "Você não pode apagar esta postagem.",
+            });
+        }
+      }
+
+      await prisma
+        .$transaction([
+          prisma.comentario
+            .deleteMany({
+              where: {
+                postagemId:
+                  id,
+              },
+            }),
+
+          prisma.curtida
+            .deleteMany({
+              where: {
+                postagemId:
+                  id,
+              },
+            }),
+
+          prisma.postagem
+            .delete({
+              where: {
+                id,
+              },
+            }),
+        ]);
+
+      /*
+       * Auditoria extra quando o post
+       * foi removido pelo responsável.
+       */
+      if (
+        vinculoResponsavel
+      ) {
+        try {
+          await audit(
+            req as any,
+            {
+              acao:
+                "POST_REMOVIDO_POR_RESPONSAVEL",
+
+              entidade:
+                "Postagem",
+
+              entidadeId:
+                id,
+
+              descricao:
+                "Responsável removeu uma postagem do atleta supervisionado.",
+
+              meta: {
+                atletaId:
+                  vinculoResponsavel
+                    .atletaId,
+
+                atletaUsuarioId:
+                  post.usuarioId,
+
+                responsavelUsuarioId:
+                  req.userId,
+
+                responsavelAtletaId:
+                  vinculoResponsavel
+                    .id,
+              },
+            }
+          );
+        } catch (auditError) {
+          console.warn(
+            "[deletarPost] falha ao registrar auditoria:",
+            auditError
+          );
+        }
+      }
+
+      return res
+        .status(204)
+        .send();
+    } catch (e) {
+      console.error(
+        "Erro ao deletar post:",
+        e
+      );
+
+      return res
+        .status(500)
+        .json({
+          message:
+            "Erro ao apagar postagem.",
+        });
+    }
+  };
 
 export const buscarPostagemPorId =
   async (
@@ -580,7 +942,7 @@ export const buscarPostagemPorId =
         });
     }
   };
-  
+
 export const registrarCompartilhamento = async (req: AuthedReq, res: Response) => {
   const { postId } = req.params;
   try {
@@ -593,6 +955,7 @@ export const registrarCompartilhamento = async (req: AuthedReq, res: Response) =
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },
@@ -674,6 +1037,7 @@ export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response)
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },

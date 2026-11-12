@@ -3,7 +3,10 @@ const prisma = new PrismaClient();
 
 export async function recomputePontuacaoAtleta(atletaId: string) {
   const [{ totTreinos }] = await prisma.$queryRawUnsafe<any[]>(`
-    SELECT COALESCE(SUM(COALESCE(st."pontosCreditados", st."pontuacaoSnapshot", tp."pontuacao", 0)), 0) AS "totTreinos"
+    SELECT COALESCE(
+      SUM(COALESCE(st."pontosCreditados", st."pontuacaoSnapshot", 0)),
+      0
+    ) AS "totTreinos"
     FROM "SubmissaoTreino" st
     LEFT JOIN "TreinoAgendado" ta ON ta.id = st."treinoAgendadoId"
     LEFT JOIN "TreinoProgramado" tp ON tp.id = ta."treinoProgramadoId"

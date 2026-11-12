@@ -406,6 +406,40 @@ function isVideoUrl(url: string) {
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
 }
 
+function prepararUrlVideo(raw: string): string {
+  try {
+    const url = new URL(raw);
+
+    if (
+      url.hostname === "youtu.be" ||
+      url.hostname === "www.youtu.be"
+    ) {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      if (id) {
+        return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
+      }
+    }
+
+    if (
+      url.hostname === "youtube.com" ||
+      url.hostname === "www.youtube.com" ||
+      url.hostname === "m.youtube.com"
+    ) {
+      const id =
+        url.searchParams.get("v") ||
+        url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1];
+
+      if (id) {
+        return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
+      }
+    }
+  } catch {
+    // Mantém o endereço original se não for URL absoluta.
+  }
+
+  return raw;
+}
+
 function pickFirstId(obj: any, keys: string[]): string {
   for (const k of keys) {
     const val = obj?.[k];
@@ -3279,8 +3313,8 @@ export default function TreinosInstrutores({
         const horaRemarcar = remarcarHoraBySessaoId[sessao.id] ?? "";
 
         return (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
-            <div className="bg-white rounded-2xl shadow-lg max-w-md sm:max-w-lg w-full p-4 sm:p-5 space-y-3">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 px-4 py-4">
+            <div className="bg-white rounded-2xl shadow-lg max-w-md sm:max-w-lg w-full max-h-[calc(100dvh-2rem)] p-4 sm:p-5 flex flex-col gap-3 overflow-hidden">
               <div className="flex items-center justify-between mb-1">
                 <button
                   onClick={() => setSessaoAbertaExerciciosId(null)}
@@ -3334,7 +3368,7 @@ export default function TreinosInstrutores({
                 </div>
               )}
 
-              <div className="mt-2 max-h-[60vh] overflow-y-auto space-y-3">
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1">
                 {exercicios.length === 0 ? (
                   <p className="text-sm text-gray-500">
                     Nenhum exercício cadastrado para este treino.
@@ -3485,20 +3519,20 @@ export default function TreinosInstrutores({
                   });
 
                 return (
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <div className="shrink-0 border-t border-gray-200 bg-white pt-3">
                     {emAndamento ? (
                       <button
                         type="button"
                         disabled={!podeFinalizar}
                         title={
                           !podeFinalizar
-                            ? "Marque todos os exercícios para habilitar o finalizar."
-                            : ""
+                            ? "Marque todos os exercícios para habilitar a finalização."
+                            : "Finalizar treino e abrir a página de submissão."
                         }
-                        className={`flex-1 px-3 py-2 rounded-full text-white text-sm ${
+                        className={`w-full min-h-12 px-4 py-3 rounded-xl text-white text-sm font-semibold transition ${
                           podeFinalizar
-                            ? "bg-red-600 hover:bg-red-700"
-                            : "bg-red-300 cursor-not-allowed"
+                            ? "bg-emerald-700 hover:bg-emerald-800"
+                            : "bg-gray-400 cursor-not-allowed"
                         }`}
                         onClick={async () => {
                           if (!podeFinalizar) return;
@@ -3508,9 +3542,15 @@ export default function TreinosInstrutores({
                           await finalizarTreinoSessao(sessao.id);
                         }}
                       >
-                        Finalizar treino
+                        Finalizar e ir para submissão
                       </button>
                     ) : null}
+
+                    {emAndamento && !podeFinalizar && (
+                      <p className="mt-2 text-center text-xs text-gray-500">
+                        Marque todos os exercícios para liberar a finalização.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
@@ -3557,10 +3597,11 @@ export default function TreinosInstrutores({
       })()}
 
       {videoModal && (() => {
-        const isArquivo = isVideoUrl(videoModal.url);
+        const urlPreparada = prepararUrlVideo(videoModal.url);
+        const isArquivo = isVideoUrl(urlPreparada);
 
         return (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold">{videoModal.nome}</h4>
@@ -3570,7 +3611,7 @@ export default function TreinosInstrutores({
               <div className="w-full flex justify-center">
                 {isArquivo ? (
                 <video
-                  src={videoModal.url}
+                  src={urlPreparada}
                   className="max-h-[70vh] w-auto rounded-xl"
                   controls
                   autoPlay
@@ -3579,7 +3620,7 @@ export default function TreinosInstrutores({
                 />
                 ) : (
                   <iframe
-                    src={videoModal.url}
+                    src={urlPreparada}
                     className="w-full h-[70vh] rounded-xl"
                     allow="autoplay; fullscreen"
                     allowFullScreen

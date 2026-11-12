@@ -13,6 +13,7 @@ import {
   clearAuthSession,
   type ActiveContextSession,
   readAuthSessionSnapshot,
+  clearActiveContextSession,
 } from "../utils/authSession.js";
 import socket, {
   syncSocketContext,
@@ -195,7 +196,10 @@ export function UserProvider({
           readAuthSessionSnapshot()
             .token;
 
-        if (!token) {
+        if (
+          !token ||
+          readAuthSessionSnapshot().somenteGestaoConta
+        ) {
           setPermissions({
             ...EMPTY_PERMISSIONS,
           });
@@ -228,15 +232,19 @@ export function UserProvider({
             ...(response.data
               ?.permissions ?? {}),
           });
-        } catch (error) {
-          console.error(
-            "[UserContext] Erro ao carregar permissões:",
-            error
-          );
+        } catch (error: any) {
+          const semContexto =
+            error?.response?.status === 403 &&
+            error?.response?.data?.code === "NO_ACTIVE_CONTEXT";
 
-          setPermissions({
-            ...EMPTY_PERMISSIONS,
-          });
+          if (!semContexto) {
+            console.error(
+              "[UserContext] Erro ao carregar permissões:",
+              error,
+            );
+          }
+
+          setPermissions({ ...EMPTY_PERMISSIONS });
         } finally {
           setPermissionsLoading(
             false
@@ -273,16 +281,15 @@ export function UserProvider({
           readAuthSessionSnapshot()
             .token;
 
-        if (!token) {
-          setActiveContext(
-            null
-          );
+        if (
+          !token ||
+          readAuthSessionSnapshot().somenteGestaoConta
+        ) {
+          clearActiveContextSession();
 
+          setActiveContext(null);
           setContexts([]);
-
-          setContextsLoading(
-            false
-          );
+          setContextsLoading(false);
 
           return;
         }
@@ -325,24 +332,32 @@ export function UserProvider({
           );
 
           if (active) {
-            applyActiveContextSession(
-              active,
-              {
-                notify:
-                  false,
-              }
-            );
+            applyActiveContextSession(active, {
+              notify: false,
+            });
+          } else {
+            clearActiveContextSession();
           }
-        } catch (error) {
+
+        } catch (error: any) {
+          const semContexto =
+            error?.response?.status === 403 &&
+            error?.response?.data?.code === "NO_ACTIVE_CONTEXT";
+
+          if (semContexto) {
+            clearActiveContextSession();
+            setPermissions({ ...EMPTY_PERMISSIONS });
+            setActiveContext(null);
+            setContexts([]);
+            return;
+          }
+
           console.error(
             "[UserContext] Erro ao carregar contextos:",
-            error
+            error,
           );
 
-          setActiveContext(
-            null
-          );
-
+          setActiveContext(null);
           setContexts([]);
         } finally {
           setContextsLoading(
@@ -440,6 +455,7 @@ export function UserProvider({
       [
         refreshPermissions,
         refreshActiveContexts,
+        syncSession,
       ]
     );
 

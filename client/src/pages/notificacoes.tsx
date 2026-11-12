@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import {
   UserContext,
 } from "@/context/UserContext.js";
+import socket from "../services/socket.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -113,6 +114,66 @@ export default function PaginaNotificacoes() {
     userContext
       ?.activeContext ??
     null;
+  
+  const abrirPerfilDoPapel = async (
+    papel: "Atleta" | "Responsavel",
+    destino = "/perfil"
+  ): Promise<boolean> => {
+    const papelNormalizado = papel.toLowerCase();
+
+    const contextoAtual = userContext?.activeContext;
+
+    const jaEstaNoPapel =
+      contextoAtual?.kind === "PERSONAL" &&
+      String(
+        contextoAtual.tipoUsuario ?? ""
+      ).toLowerCase() === papelNormalizado;
+
+    if (jaEstaNoPapel) {
+      setLocation(destino);
+      return true;
+    }
+
+    const contextoDestino = userContext?.contexts.find(
+      (contexto) =>
+        contexto.kind === "PERSONAL" &&
+        String(
+          contexto.tipoUsuario ?? ""
+        ).toLowerCase() === papelNormalizado
+    );
+
+    if (!contextoDestino) {
+      toast.error(
+        `Você não possui um perfil de ${papel} disponível.`
+      );
+      return false;
+    }
+
+    if (!userContext) {
+      toast.error("Não foi possível carregar os contextos.");
+      return false;
+    }
+
+    try {
+      await userContext.switchActiveContext(
+        contextoDestino.key
+      );
+
+      setLocation(destino);
+      return true;
+    } catch (error) {
+      console.error(
+        "[Notificacoes] Erro ao trocar o papel ativo:",
+        error
+      );
+
+      toast.error(
+        `Não foi possível acessar o perfil de ${papel}.`
+      );
+
+      return false;
+    }
+  };
 
   const activeOrganizationType =
     String(
@@ -168,7 +229,7 @@ export default function PaginaNotificacoes() {
           "solicitacaoId"
         )
       : null;
-
+      
   useEffect(() => {
     const token = Storage.token;
     if (!token) return;
@@ -380,35 +441,89 @@ export default function PaginaNotificacoes() {
 
   useEffect(() => {
     const token = Storage.token;
+
     if (!token) {
+      setNotificacoes([]);
       setLoadingNotificacoes(false);
       return;
     }
 
-    (async () => {
-      try {
-        const r = await fetch(NOTIFS_BASE, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    let ativo = true;
 
-        if (!r.ok) {
-          console.warn("GET /notificacoes/me falhou:", r.status, await r.text());
+    const carregarNotificacoes = async () => {
+      try {
+        const resposta = await fetch(
+          NOTIFS_BASE,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!resposta.ok) {
+          console.warn(
+            "[notificacoes] Falha ao atualizar:",
+            resposta.status
+          );
           return;
         }
 
-        const json = await r.json();
-        const items: NotificacaoItem[] = Array.isArray(json?.items)
-          ? json.items
-          : [];
+        const json = await resposta.json();
 
-        setNotificacoes(items);
-      } catch (e) {
-        console.error("Erro ao buscar notificações", e);
+        const items: NotificacaoItem[] =
+          Array.isArray(json?.items)
+            ? json.items
+            : [];
+
+        if (ativo) {
+          setNotificacoes(items);
+        }
+      } catch (erro) {
+        console.warn(
+          "[notificacoes] Erro ao carregar:",
+          erro
+        );
       } finally {
-        setLoadingNotificacoes(false);
+        if (ativo) {
+          setLoadingNotificacoes(false);
+        }
       }
-    })();
-  }, []);
+    };
+
+    const atualizarAoVoltar = () => {
+      if (document.visibilityState === "visible") {
+        void carregarNotificacoes();
+      }
+    };
+
+    const atualizarViaSocket = () => {
+      void carregarNotificacoes();
+    };
+
+    void carregarNotificacoes();
+
+    socket.on("badge:update", atualizarViaSocket);
+
+    document.addEventListener(
+      "visibilitychange",
+      atualizarAoVoltar
+    );
+
+    return () => {
+      ativo = false;
+
+      socket.off(
+        "badge:update",
+        atualizarViaSocket
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        atualizarAoVoltar
+      );
+    };
+  }, [activeContext?.key]);
 
   useEffect(() => {
     const naoLidas = (notificacoes || []).filter((n) => n.lida === false).length;
@@ -700,7 +815,7 @@ export default function PaginaNotificacoes() {
   };
 
   const BotaoApagarNotificacao = ({
-    id,
+  id,
   }: {
     id: string;
   }) => {
@@ -1024,6 +1139,40 @@ export default function PaginaNotificacoes() {
                 : n.link;
 
             const tipoNotificacao = String(n.tipo || "").toUpperCase();
+            const isResponsavelNotif =
+              tipoNotificacao === "RESPONSAVEL_SOLICITACAO" ||
+              tipoNotificacao === "RESPONSAVEL_VINCULO";
+            
+            const papelDestino =
+              (() => {
+                if (!isResponsavelNotif) {
+                  return null;
+                }
+
+                try {
+                  const url = new URL(
+                    String(linkResolvido ?? ""),
+                    window.location.origin
+                  );
+
+                  const papel = String(
+                    url.searchParams.get("papel") ?? ""
+                  ).toLowerCase();
+
+                  if (papel === "responsavel") {
+                    return "Responsavel" as const;
+                  }
+
+                  if (papel === "atleta") {
+                    return "Atleta" as const;
+                  }
+
+                  return null;
+                } catch {
+                  return null;
+                }
+              })();
+
             const linkStr = String(linkResolvido || "");
             const tituloStr = String(n.titulo || "").toLowerCase();
             const mensagemStr = String(n.mensagem || "").toLowerCase();
@@ -1067,8 +1216,10 @@ export default function PaginaNotificacoes() {
               mensagemStr.includes("aula ao vivo");
 
             const textoAcao =
-              isBillingWarning ||
-              isBillingBlocked
+              isResponsavelNotif
+                ? "Gerenciar responsáveis:"
+                : isBillingWarning ||
+                  isBillingBlocked
                 ? "Abrir pagamentos:"
                 : isTreinoNotif
                 ? "Visualizar treino:"
@@ -1087,8 +1238,12 @@ export default function PaginaNotificacoes() {
                 : "Abrir:";
 
             const textoBotao =
-              isBillingWarning ||
-              isBillingBlocked
+              isResponsavelNotif
+                ? papelDestino === "Atleta"
+                  ? "Ver meus responsáveis"
+                  : "Gerenciar responsáveis"
+                : isBillingWarning ||
+                  isBillingBlocked
                 ? "Abrir pagamentos"
                 : isTreinoNotif
                 ? "Abrir treino"
@@ -1286,67 +1441,67 @@ export default function PaginaNotificacoes() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       {podeGerenciarOrganizacao && (
                         <>
-                          <button
-                            className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
-                            onClick={async () => {
-                              const token = Storage.token;
-                              if (!token) return;
+                        <button
+                          className="rounded-lg bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
+                          onClick={async () => {
+                            const token = Storage.token;
+                            if (!token) return;
 
-                              const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({ status: "APROVADA" }),
-                              });
+                            const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ status: "APROVADA" }),
+                            });
 
-                              if (!r.ok) {
-                                toast.error("Não foi possível aceitar a indicação.");
-                                return;
-                              }
+                            if (!r.ok) {
+                              toast.error("Não foi possível aceitar a indicação.");
+                              return;
+                            }
 
-                              await marcarComoLida(n.id);
-                              setNotificacoes((prev) =>
-                                prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
-                              );
-                              toast.success("Indicação aceita com sucesso.");
-                            }}
-                          >
-                            Aceitar
-                          </button>
+                            await marcarComoLida(n.id);
+                            setNotificacoes((prev) =>
+                              prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                            );
+                            toast.success("Indicação aceita com sucesso.");
+                          }}
+                        >
+                          Aceitar
+                        </button>
 
-                          <button
-                            className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
-                            onClick={async () => {
-                              const token = Storage.token;
-                              if (!token) return;
+                        <button
+                          className="rounded-lg bg-red-600 text-white text-sm px-4 py-2 hover:bg-red-700"
+                          onClick={async () => {
+                            const token = Storage.token;
+                            if (!token) return;
 
-                              const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
-                                method: "PATCH",
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  Authorization: `Bearer ${token}`,
-                                },
-                                body: JSON.stringify({ status: "REJEITADA" }),
-                              });
+                            const r = await fetch(`${API.BASE_URL}/api/indicacoes/${encodeURIComponent(indicacaoId)}/status`, {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                              },
+                              body: JSON.stringify({ status: "REJEITADA" }),
+                            });
 
-                              if (!r.ok) {
-                                toast.error("Não foi possível recusar a indicação.");
-                                return;
-                              }
+                            if (!r.ok) {
+                              toast.error("Não foi possível recusar a indicação.");
+                              return;
+                            }
 
-                              await marcarComoLida(n.id);
-                              setNotificacoes((prev) =>
-                                prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
-                              );
-                              toast.success("Indicação recusada.");
-                            }}
-                          >
-                            Recusar
-                          </button>
+                            await marcarComoLida(n.id);
+                            setNotificacoes((prev) =>
+                              prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                            );
+                            toast.success("Indicação recusada.");
+                          }}
+                        >
+                          Recusar
+                        </button>
                         </>
-                        )}
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1417,7 +1572,24 @@ export default function PaginaNotificacoes() {
 
                         <Link
                           href={linkResolvido}
-                          onClick={() => marcarComoLida(n.id)}
+                          onClick={async (event) => {
+                            if (isResponsavelNotif && papelDestino) {
+                              event.preventDefault();
+
+                              const abriu = await abrirPerfilDoPapel(
+                                papelDestino,
+                                String(linkResolvido || "/perfil")
+                              );
+
+                              if (abriu) {
+                                await marcarComoLida(n.id);
+                              }
+
+                              return;
+                            }
+
+                            void marcarComoLida(n.id);
+                          }}
                           className="inline-flex mt-2 items-center justify-center rounded-lg bg-green-800
                             text-white text-sm px-4 py-2 hover:bg-green-900"
                         >

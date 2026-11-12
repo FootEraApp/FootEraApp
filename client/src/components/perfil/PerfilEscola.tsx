@@ -37,6 +37,7 @@ type UsuarioMin = {
 type Escolinha = {
   id: string;
   usuarioId?: string | null;
+  organizacaoId?: string | null;
   nome: string;
   cnpj?: string | null;
   telefone1?: string | null;
@@ -2316,7 +2317,10 @@ export default function PerfilEscola({
       {aba === "postagens" && (
         <div className="mt-4 px-3 sm:px-4 grid gap-4">
           <SectionCard title="Postagens">
-            <ProfilePostsSection usuarioId={perfilUsuarioId} />
+            <ProfilePostsSection
+              usuarioId={perfilUsuarioId}
+              organizacaoId={data?.escolinha?.organizacaoId}
+            />
           </SectionCard>
         </div>
       )}

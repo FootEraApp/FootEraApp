@@ -10,6 +10,9 @@ import {
   NotificacaoTipo,
 } from "@prisma/client";
 import {
+  audit,
+} from "../services/audit.js";
+import {
   getPostVisibilityWhere,
   normalizarVisibilidadePostagem,
   podeVisualizarPostagem,
@@ -28,6 +31,10 @@ import {
 import {
   criarNotificacaoEEnviarPush,
 } from "./notificacoesController.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
+import { canPermission } from "../services/permissions.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -170,6 +177,46 @@ const postagemIncludeBase = {
       id: true,
       nome: true,
       tipo: true,
+
+      clube: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      escolinha: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      marca: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
+
+      federacao: {
+        select: {
+          logo:
+            true,
+
+          usuarioId:
+            true,
+        },
+      },
     },
   },
   curtidas: { select: { usuarioId: true } },
@@ -181,12 +228,128 @@ const postagemIncludeBase = {
   },
 };
 
+function obterLogoOrganizacao(
+  organizacao: any
+) {
+  if (!organizacao) {
+    return null;
+  }
+
+  return (
+    organizacao.clube?.logo ??
+    organizacao.escolinha?.logo ??
+    organizacao.marca?.logo ??
+    organizacao.federacao?.logo ??
+    null
+  );
+}
+
+function normalizarOrganizacaoPost(
+  post: any
+): any {
+  if (!post) {
+    return post;
+  }
+
+  let perfilUsuarioId:
+    string | null =
+    null;
+
+  let perfilPapel:
+    string | null =
+    null;
+
+  if (
+    post.organizacao
+      ?.clube
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .clube.usuarioId ??
+      null;
+
+    perfilPapel =
+      "Clube";
+  } else if (
+    post.organizacao
+      ?.escolinha
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .escolinha
+        .usuarioId ??
+      null;
+
+    perfilPapel =
+      "Escolinha";
+  } else if (
+    post.organizacao
+      ?.marca
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .marca.usuarioId ??
+      null;
+
+    perfilPapel =
+      "Marca";
+  } else if (
+    post.organizacao
+      ?.federacao
+  ) {
+    perfilUsuarioId =
+      post.organizacao
+        .federacao
+        .usuarioId ??
+      null;
+
+    perfilPapel =
+      "Federacao";
+  }
+
+  const organizacao =
+    post.organizacao
+      ? {
+          id:
+            post.organizacao.id,
+
+          nome:
+            post.organizacao.nome,
+
+          tipo:
+            post.organizacao.tipo,
+
+          logo:
+            obterLogoOrganizacao(
+              post.organizacao
+            ),
+
+          perfilUsuarioId,
+
+          perfilPapel,
+        }
+      : null;
+
+  return {
+    ...post,
+
+    organizacao,
+
+    repostOf:
+      post.repostOf
+        ? normalizarOrganizacaoPost(
+            post.repostOf
+          )
+        : null,
+  };
+}
+
 async function carregarCadeiaRepost(post: any): Promise<any> {
   if (!post?.repostOfId) return post;
 
   let atual = post;
   let depth = 0;
-  const MAX_DEPTH = 20; 
+  const MAX_DEPTH = 20;
 
   while (atual?.repostOfId && depth < MAX_DEPTH) {
     const pai = await prisma.postagem.findUnique({
@@ -411,6 +574,40 @@ async function getAdsConfigForUser(userId?: string) {
   };
 }
 
+async function podeVisualizarCadeiaPostagem(
+  post: any,
+  usuarioId?: string | null
+): Promise<boolean> {
+  const visitados = new Set<string>();
+  let atual = post;
+  let profundidade = 0;
+
+  while (atual) {
+    if (profundidade++ >= 20) {
+      return false;
+    }
+
+    const id = String(atual.id ?? "");
+
+    if (!id || visitados.has(id)) {
+      return false;
+    }
+
+    visitados.add(id);
+
+    const permitido =
+      await podeVisualizarPostagem(atual, usuarioId);
+
+    if (!permitido) {
+      return false;
+    }
+
+    atual = atual.repostOf ?? null;
+  }
+
+  return true;
+}
+
 export const getFeedPosts: RequestHandler = async (req, res) => {
   try {
     const userId = (req as any).userId as string | undefined;
@@ -471,11 +668,75 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       filterWhere = { usuarioId: { in: ids } };
     }
 
-    const where:
-      Prisma.PostagemWhereInput = {
+    const perfilUsuarioId = String(
+      req.query.perfilUsuarioId ?? ""
+    ).trim();
+
+    const perfilPapel = String(
+      req.query.perfilPapel ?? ""
+    ).trim();
+
+    const perfilOrganizacaoId = String(
+      req.query.perfilOrganizacaoId ?? ""
+    ).trim();
+
+    const filtrosDePerfilInformados = [
+      perfilUsuarioId,
+      perfilPapel,
+      perfilOrganizacaoId,
+    ].some(Boolean);
+
+    let perfilWhere: Prisma.PostagemWhereInput = {};
+
+    if (filtrosDePerfilInformados) {
+      // O cliente escolhe um perfil pessoal OU uma organização.
+      // Não permitimos misturar os dois modos.
+      if (
+        perfilOrganizacaoId &&
+        (perfilUsuarioId || perfilPapel)
+      ) {
+        return res.status(400).json({
+          code: "INVALID_PROFILE_FILTER",
+          message: "Informe somente um tipo de perfil.",
+        });
+      }
+
+      if (perfilOrganizacaoId) {
+        perfilWhere = {
+          organizacaoId: perfilOrganizacaoId,
+        };
+      } else {
+        const papeisPermitidos = [
+          "Atleta",
+          "Professor",
+          "Olheiro",
+          "Learning",
+          "Responsavel",
+          "Creator",
+        ];
+
+        if (
+          !perfilUsuarioId ||
+          !papeisPermitidos.includes(perfilPapel)
+        ) {
+          return res.status(400).json({
+            code: "INVALID_PROFILE_FILTER",
+            message: "Informe um usuário e um papel válidos.",
+          });
+        }
+
+        perfilWhere = {
+          usuarioId: perfilUsuarioId,
+          organizacaoId: null,
+          autorContextoKey: `personal:${perfilPapel}`,
+        };
+      }
+    }
+
+    const where: Prisma.PostagemWhereInput = {
       AND: [
         visibilityWhere,
-        filterWhere,
+        filtrosDePerfilInformados ? perfilWhere : filterWhere,
       ],
     };
 
@@ -487,9 +748,28 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       },
     });
 
-    const postagens = ordenarPostsDestaquePrimeiro(
-      await carregarCadeiasDosPosts(postagensBase)
+    const postagensComCadeia =
+      await carregarCadeiasDosPosts(
+        postagensBase
+      );
+
+    const autorizacoes = await Promise.all(
+      postagensComCadeia.map((post) =>
+        podeVisualizarCadeiaPostagem(post, userId)
+      )
     );
+
+    const postagensAutorizadas =
+      postagensComCadeia.filter(
+        (_, index) => autorizacoes[index]
+      );
+
+    const postagens =
+      ordenarPostsDestaquePrimeiro(
+        postagensAutorizadas.map(
+          normalizarOrganizacaoPost
+        )
+      );
 
     const items = userId
       ? postagens
@@ -498,7 +778,7 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
             sanitizePublicPost
           )
           .filter(Boolean);
-          
+
     const ads = await getAdsConfigForUser(userId);
 
     return res.json({
@@ -557,9 +837,26 @@ export async function getPostById(req: Request, res: Response) {
       });
     }
 
+    const postComCadeia =
+      await carregarCadeiaRepost(postBase);
+
+    const cadeiaPermitida =
+      await podeVisualizarCadeiaPostagem(
+        postComCadeia,
+        viewerId
+      );
+
+    if (!cadeiaPermitida) {
+      return res.status(403).json({
+        code: "POST_NOT_ACCESSIBLE",
+        message:
+          "Esta publicação não está disponível.",
+      });
+    }
+
     const post =
-      await carregarCadeiaRepost(
-        postBase
+      normalizarOrganizacaoPost(
+        postComCadeia
       );
 
     if (!viewerId) {
@@ -569,6 +866,7 @@ export async function getPostById(req: Request, res: Response) {
     }
 
     return res.json(post);
+
   } catch (error) {
     console.error("Erro ao buscar post:", error);
     return res.status(500).json({ erro: "Erro interno ao buscar o post" });
@@ -655,17 +953,9 @@ export const curtirPostagem: RequestHandler = async (req, res) => {
         },
       });
 
-      /*
-      * Não notificamos quando o usuário
-      * curte a própria publicação.
-      *
-      * Mesmo que o post seja exibido como
-      * organização, usuarioId continua
-      * sendo quem efetivamente publicou.
-      */
       if (
-        String(post.usuarioId) !==
-        String(usuarioId)
+        post.usuarioId &&
+        post.usuarioId !== usuarioId
       ) {
         try {
           const nomeOrganizacao =
@@ -738,7 +1028,7 @@ export const seguirUsuario: RequestHandler = async (req, res) => {
   if (jaSegue) return res.status(409).json({ message: "Você já segue este usuário." });
 
   await prisma.seguidor.create({ data: { seguidorUsuarioId, seguidoUsuarioId } });
-  
+
   const organizacaoId =
     await obterOrganizacaoAtivaDoUsuario(
       seguidoUsuarioId
@@ -776,7 +1066,7 @@ export const postar: RequestHandler = async (req, res) => {
 
   const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } = req.body;
   const texto = (descricao && descricao.length ? descricao : conteudo) || "";
-  const file = req.file as any; 
+  const file = req.file as any;
 
   try {
     let tipoMidia: "Imagem" | "Video" | undefined;
@@ -787,10 +1077,10 @@ export const postar: RequestHandler = async (req, res) => {
       const isVideo = file.mimetype?.startsWith("video");
       if (isVideo) {
         tipoMidia = "Video";
-        videoUrl = file.location; 
+        videoUrl = file.location;
       } else {
         tipoMidia = "Imagem";
-        imagemUrl = file.location; 
+        imagemUrl = file.location;
       }
     } else {
       if (imagemUrlBody) {
@@ -822,11 +1112,15 @@ export const postar: RequestHandler = async (req, res) => {
     const organizacaoId =
       autorResolvido.organizacaoId;
 
+    const autorContextoKey =
+      autorResolvido.contexto.key;
+
     const postagem = await prisma.postagem.create({
       data: {
         conteudo: texto,
         usuarioId,
         organizacaoId,
+        autorContextoKey,
         dataCriacao: new Date(),
         tipoMidia,
         imagemUrl,
@@ -847,8 +1141,13 @@ export const postar: RequestHandler = async (req, res) => {
         },
       });
 
+    const postNormalizado =
+      normalizarOrganizacaoPost(
+        postForEmit
+      );
+
     await emitirNovoPost(
-      postForEmit,
+      postNormalizado,
       usuarioId,
       visibilidade
     );
@@ -893,68 +1192,319 @@ export const postar: RequestHandler = async (req, res) => {
     }
 };
 
-export const deletarPostagem: RequestHandler = async (req, res) => {
-  const { id } = req.params;
-  const usuarioId = req.userId;
+async function responsavelPodeGerenciarPostagem(
+  responsavelUsuarioId: string,
+  atletaUsuarioId: string
+) {
+  const atleta = await prisma.atleta.findUnique({
+    where: {
+      usuarioId: atletaUsuarioId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!atleta) {
+    return null;
+  }
+
+  const autorizado =
+    await verificarPermissaoResponsavelAtleta({
+      responsavelUsuarioId,
+      atletaId: atleta.id,
+      permissao: "podeGerenciarConteudo",
+    });
+
+  if (!autorizado) {
+    return null;
+  }
+
+  return prisma.responsavelAtleta.findUnique({
+    where: {
+      responsavelUsuarioId_atletaId: {
+        responsavelUsuarioId,
+        atletaId: atleta.id,
+      },
+    },
+    select: {
+      id: true,
+      atletaId: true,
+      responsavelUsuarioId: true,
+    },
+  });
+}
+
+export const deletarPostagem:
+  RequestHandler =
+async (req, res) => {
+  const { id } =
+    req.params;
+
+  const usuarioId =
+    req.userId;
 
   if (!usuarioId) {
-    return res.status(401).json({ mensagem: "Usuário não autenticado." });
+    return res
+      .status(401)
+      .json({
+        mensagem:
+          "Usuário não autenticado.",
+      });
   }
 
   try {
-    const post = await prisma.postagem.findUnique({
-      where: { id },
-      select: { 
-        id: true, 
-        usuarioId: true, 
-        repostOfId: true,
-        imagemUrl: true,   
-        videoUrl: true     
-      },
-    });
+    const post =
+      await prisma
+        .postagem
+        .findUnique({
+          where: {
+            id,
+          },
+
+          select: {
+            id: true,
+            usuarioId: true,
+            organizacaoId: true,
+            repostOfId: true,
+            imagemUrl: true,
+            videoUrl: true,
+          },
+        });
 
     if (!post) {
-      return res.status(404).json({ mensagem: "Postagem não encontrada." });
-    }
-
-    if (post.usuarioId !== usuarioId) {
-      return res.status(403).json({ mensagem: "Não autorizado." });
-    }
-
-    if (post.imagemUrl && post.imagemUrl.includes("amazonaws.com")) {
-      await deleteFromS3(post.imagemUrl);
-    }
-    if (post.videoUrl && post.videoUrl.includes("amazonaws.com")) {
-      await deleteFromS3(post.videoUrl);
-    }
-
-    if (post.repostOfId) {
-      let rootId = post.repostOfId;
-      let cursor = await prisma.postagem.findUnique({
-        where: { id: rootId },
-        select: { repostOfId: true },
-      });
-
-      while (cursor?.repostOfId) {
-        rootId = cursor.repostOfId;
-        cursor = await prisma.postagem.findUnique({
-          where: { id: cursor.repostOfId },
-          select: { repostOfId: true },
+      return res
+        .status(404)
+        .json({
+          mensagem:
+            "Postagem não encontrada.",
         });
+    }
+
+    // Uma postagem pessoal pertence ao autor.
+    // Uma postagem institucional pertence à organização.
+    const proprioAutor =
+      !post.organizacaoId &&
+      post.usuarioId === usuarioId;
+
+    let gestorOrganizacao = false;
+
+    if (post.organizacaoId) {
+      const contexto = await getActiveContext(usuarioId);
+
+      const mesmaOrganizacao =
+        contexto?.kind === "ORGANIZATION" &&
+        contexto.organizationId === post.organizacaoId;
+
+      if (mesmaOrganizacao) {
+        gestorOrganizacao = await canPermission(
+          usuarioId,
+          "GERENCIAR_ORGANIZACAO"
+        );
       }
 
-      await prisma.postagem.update({
-        where: { id: rootId },
-        data: { reposts: { decrement: 1 } },
-      }).catch(() => {});
+      if (!gestorOrganizacao) {
+        return res.status(403).json({
+          code: "POST_ORGANIZATION_DELETE_FORBIDDEN",
+          mensagem:
+            "Somente um gestor autorizado da organização proprietária pode excluir esta publicação.",
+        });
+      }
     }
 
-    await prisma.postagem.delete({ where: { id } });
+    let vinculoResponsavel:
+      Awaited<
+        ReturnType<
+          typeof responsavelPodeGerenciarPostagem
+        >
+      > =
+      null;
 
-    return res.json({ mensagem: "Postagem e arquivos excluídos com sucesso." });
+    if (!proprioAutor && !gestorOrganizacao) {
+      if (
+        post.organizacaoId
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "RESPONSAVEL_CANNOT_DELETE_ORGANIZATION_POST",
+
+            mensagem:
+              "O responsável não pode apagar uma publicação feita em nome de uma organização.",
+          });
+      }
+
+      vinculoResponsavel =
+        post.usuarioId
+          ? await responsavelPodeGerenciarPostagem(
+              usuarioId,
+              post.usuarioId
+            )
+          : null;
+
+      if (
+        !vinculoResponsavel
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "POST_DELETE_FORBIDDEN",
+
+            mensagem:
+              "Você não está autorizado a apagar esta postagem.",
+          });
+      }
+    }
+
+    if (
+      post.repostOfId
+    ) {
+      let rootId =
+        post.repostOfId;
+
+      let cursor =
+        await prisma
+          .postagem
+          .findUnique({
+            where: {
+              id:
+                rootId,
+            },
+
+            select: {
+              repostOfId:
+                true,
+            },
+          });
+
+      while (
+        cursor?.repostOfId
+      ) {
+        rootId =
+          cursor
+            .repostOfId;
+
+        cursor =
+          await prisma
+            .postagem
+            .findUnique({
+              where: {
+                id:
+                  cursor
+                    .repostOfId,
+              },
+
+              select: {
+                repostOfId:
+                  true,
+              },
+            });
+      }
+
+      await prisma
+        .postagem
+        .update({
+          where: {
+            id:
+              rootId,
+          },
+
+          data: {
+            reposts: {
+              decrement:
+                1,
+            },
+          },
+        })
+        .catch(
+          () => {}
+        );
+    }
+
+    await prisma
+      .postagem
+      .delete({
+        where: {
+          id,
+        },
+      });
+
+    /*
+     * Registramos separadamente
+     * quando a exclusão foi feita
+     * pelo responsável.
+     */
+    if (
+      vinculoResponsavel
+    ) {
+      try {
+        await audit(
+          req as any,
+          {
+            acao:
+              "POST_REMOVIDO_POR_RESPONSAVEL",
+
+            entidade:
+              "Postagem",
+
+            entidadeId:
+              id,
+
+            descricao:
+              "Responsável removeu uma postagem do atleta supervisionado.",
+
+            meta: {
+              atletaId:
+                vinculoResponsavel
+                  .atletaId,
+
+              atletaUsuarioId:
+                post.usuarioId,
+
+              responsavelUsuarioId:
+                usuarioId,
+
+              responsavelAtletaId:
+                vinculoResponsavel
+                  .id,
+            },
+          }
+        );
+      } catch (
+        auditError
+      ) {
+        /*
+         * O post já foi removido.
+         * Falha na auditoria não deve
+         * transformar a exclusão em 500.
+         */
+        console.warn(
+          "[deletarPostagem] erro ao registrar auditoria:",
+          auditError
+        );
+      }
+    }
+
+    return res.json({
+      mensagem:
+        vinculoResponsavel
+          ? "Postagem removida pelo responsável."
+          : "Postagem excluída com sucesso.",
+    });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ mensagem: "Erro ao excluir postagem." });
+    console.error(
+      "Erro ao excluir postagem:",
+      err
+    );
+
+    return res
+      .status(500)
+      .json({
+        mensagem:
+          "Erro ao excluir postagem.",
+      });
   }
 };
 
@@ -995,31 +1545,15 @@ export const getPerfil: RequestHandler = async (req, res) => {
   }
 };
 
-export const deletarUsuario: RequestHandler = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const usuario = await prisma.usuario.findUnique({ where: { id } });
-
-    if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    }
-
-    await prisma.seguidor.deleteMany({
-      where: {
-        OR: [{ seguidorUsuarioId: id }, { seguidoUsuarioId: id }],
-      },
-    });
-
-    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
-
-    await prisma.usuario.delete({ where: { id } });
-
-    res.json({ message: "Usuário deletado com sucesso." });
-  } catch (error) {
-    console.error("Erro ao deletar usuário:", error);
-    res.status(500).json({ message: "Erro interno ao deletar usuário." });
-  }
+export const deletarUsuario = async (
+  _req: Request,
+  res: Response
+) => {
+  return res.status(409).json({
+    code: "ACCOUNT_DELETION_UNDER_REVIEW",
+    message:
+      "A exclusão definitiva de contas está temporariamente indisponível enquanto verificamos a preservação dos dados financeiros e institucionais.",
+  });
 };
 
 export async function repostPost(req: Request, res: Response) {
@@ -1043,10 +1577,28 @@ export async function repostPost(req: Request, res: Response) {
           usuarioId: true,
           visibilidade: true,
           oculto: true,
+          organizacaoId: true,
         },
       });
 
     if (!clicked) return res.status(404).json({ message: "Post não encontrado" });
+
+    const postComCadeia =
+      await carregarCadeiaRepost(clicked);
+
+    const cadeiaPermitida =
+      await podeVisualizarCadeiaPostagem(
+        postComCadeia,
+        userId
+      );
+
+    if (!cadeiaPermitida) {
+      return res.status(403).json({
+        code: "POST_NOT_ACCESSIBLE",
+        message:
+          "Você não pode republicar este conteúdo.",
+      });
+    }
 
     const permitido =
       await podeVisualizarPostagem(
@@ -1118,6 +1670,9 @@ export async function repostPost(req: Request, res: Response) {
     const organizacaoRepostId =
       autorRepost.organizacaoId;
 
+    const autorRepostContextoKey =
+      autorRepost.contexto.key;
+
     const novoBase =
       await prisma.postagem.create({
         data: {
@@ -1126,6 +1681,9 @@ export async function repostPost(req: Request, res: Response) {
 
           organizacaoId:
             organizacaoRepostId,
+
+          autorContextoKey:
+            autorRepostContextoKey,
 
           conteudo:
             conteudoRepost,
@@ -1142,7 +1700,12 @@ export async function repostPost(req: Request, res: Response) {
         },
       });
 
-    const novo = await carregarCadeiaRepost(novoBase);
+    const novo =
+      normalizarOrganizacaoPost(
+        await carregarCadeiaRepost(
+          novoBase
+        )
+      );
 
     await prisma.postagem.update({
       where: { id: rootId },
@@ -1184,6 +1747,7 @@ async (req, res) => {
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },

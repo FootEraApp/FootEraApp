@@ -26,10 +26,17 @@ type TipoPerfil =
   | "Federacao"
   | "Marca";
 
+type ModoResponsavel =
+  | "existente"
+  | "novo"
+  | null;
+
 type Responsavel = {
   nome: string;
   email: string;
   telefone?: string;
+  senha: string;
+  confirmarSenha: string;
 };
 
 type GoogleProfile = {
@@ -365,11 +372,25 @@ export default function CadastroGoogleComplementar() {
   const [tipoPerfil, setTipoPerfil] = useState<TipoPerfil>("Atleta");
   const [nome, setNome] = useState(googleProfile?.name || "");
   const [dataNascimento, setDataNascimento] = useState("");
-  const [responsavel, setResponsavel] = useState<Responsavel>({
-    nome: "",
-    email: "",
-    telefone: "",
-  });
+  const [
+    modoResponsavel,
+    setModoResponsavel,
+  ] =
+    useState<ModoResponsavel>(
+      null
+    );
+
+  const [
+    responsavel,
+    setResponsavel,
+  ] =
+    useState<Responsavel>({
+      nome: "",
+      email: "",
+      telefone: "",
+      senha: "",
+      confirmarSenha: "",
+    });
   const [aceitaTermos, setAceitaTermos] = useState(false);
 
   const [finalizandoCadastro, setFinalizandoCadastro] = useState(false);
@@ -381,6 +402,20 @@ export default function CadastroGoogleComplementar() {
   const idade = useMemo(() => calcIdade(dataNascimento), [dataNascimento]);
   const precisaResponsavel =
     tipoPerfil === "Atleta" && idade !== null && idade < 12;
+
+  useEffect(() => {
+    if (!precisaResponsavel) {
+      setModoResponsavel(null);
+
+      setResponsavel({
+        nome: "",
+        email: "",
+        telefone: "",
+        senha: "",
+        confirmarSenha: "",
+      });
+    }
+  }, [precisaResponsavel]);
 
   const googlePictureUrl =
     typeof googleProfile?.picture === "string" && googleProfile.picture.trim()
@@ -457,22 +492,79 @@ export default function CadastroGoogleComplementar() {
     }
 
     if (precisaResponsavel) {
-      if (!responsavel.nome.trim()) {
-        setErro("Informe o nome do responsável.");
-        return false;
-      }
-
-      if (!EMAIL_RE.test(responsavel.email.trim())) {
-        setErro("Informe um e-mail válido do responsável.");
+      if (!modoResponsavel) {
+        setErro(
+          "Escolha como o responsável será vinculado."
+        );
         return false;
       }
 
       if (
-        responsavel.telefone?.trim() &&
-        !PHONE_RE.test(responsavel.telefone.trim())
+        !EMAIL_RE.test(
+          responsavel.email.trim()
+        )
       ) {
-        setErro("Informe um telefone válido do responsável ou deixe em branco.");
+        setErro(
+          "Informe um e-mail válido do responsável."
+        );
         return false;
+      }
+
+      if (
+        modoResponsavel ===
+        "existente"
+      ) {
+        if (!responsavel.senha.trim()) {
+          setErro(
+            "Informe a senha da conta FootEra do responsável."
+          );
+          return false;
+        }
+      }
+
+      if (
+        modoResponsavel ===
+        "novo"
+      ) {
+        if (!responsavel.nome.trim()) {
+          setErro(
+            "Informe o nome do responsável."
+          );
+          return false;
+        }
+
+        if (
+          !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(
+            responsavel.senha
+          )
+        ) {
+          setErro(
+            "A senha do responsável deve ter pelo menos 8 caracteres, uma letra e um número."
+          );
+          return false;
+        }
+
+        if (
+          responsavel.confirmarSenha !==
+          responsavel.senha
+        ) {
+          setErro(
+            "As senhas do responsável não coincidem."
+          );
+          return false;
+        }
+
+        if (
+          responsavel.telefone?.trim() &&
+          !PHONE_RE.test(
+            responsavel.telefone.trim()
+          )
+        ) {
+          setErro(
+            "Informe um telefone válido do responsável ou deixe em branco."
+          );
+          return false;
+        }
       }
     }
 
@@ -534,9 +626,25 @@ export default function CadastroGoogleComplementar() {
         ...(precisaResponsavel
           ? {
               responsavel: {
-                nome: responsavel.nome.trim(),
-                email: responsavel.email.trim().toLowerCase(),
-                telefone: responsavel.telefone?.trim() || undefined,
+                modo:
+                  modoResponsavel,
+
+                nome:
+                  responsavel.nome
+                    .trim(),
+
+                email:
+                  responsavel.email
+                    .trim()
+                    .toLowerCase(),
+
+                telefone:
+                  responsavel.telefone
+                    ?.trim() ||
+                  undefined,
+
+                senha:
+                  responsavel.senha,
               },
             }
           : {}),
@@ -859,63 +967,195 @@ export default function CadastroGoogleComplementar() {
               {precisaResponsavel && (
                 <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <h4 className="font-semibold text-green-950">
-                    Responsável legal
+                    Este atleta precisa de um responsável
                   </h4>
-                  <p className="mb-4 mt-1 text-xs text-gray-500">
-                    Obrigatório para atletas menores de 12 anos.
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    A criança continuará podendo acessar a própria conta, mas ela ficará vinculada e supervisionada por um responsável.
                   </p>
 
-                  <div className="space-y-3">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">
-                        Nome do responsável*
-                      </label>
-                      <input
-                        value={responsavel.nome}
-                        onChange={(e) =>
-                          setResponsavel((atual) => ({
-                            ...atual,
-                            nome: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                      />
-                    </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModoResponsavel("existente")
+                      }
+                      className={[
+                        "rounded-xl border p-4 text-left transition",
+                        modoResponsavel === "existente"
+                          ? "border-green-800 bg-green-50"
+                          : "border-gray-300 bg-white hover:border-green-300",
+                      ].join(" ")}
+                    >
+                      <strong className="block text-sm text-green-950">
+                        Já tenho uma conta FootEra
+                      </strong>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">
-                        E-mail do responsável*
-                      </label>
-                      <input
-                        type="email"
-                        value={responsavel.email}
-                        onChange={(e) =>
-                          setResponsavel((atual) => ({
-                            ...atual,
-                            email: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                      />
-                    </div>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Vincule uma conta existente como responsável.
+                      </span>
+                    </button>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">
-                        Telefone do responsável — opcional
-                      </label>
-                      <input
-                        value={responsavel.telefone || ""}
-                        placeholder="(00) 00000-0000"
-                        onChange={(e) =>
-                          setResponsavel((atual) => ({
-                            ...atual,
-                            telefone: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setModoResponsavel("novo")
+                      }
+                      className={[
+                        "rounded-xl border p-4 text-left transition",
+                        modoResponsavel === "novo"
+                          ? "border-green-800 bg-green-50"
+                          : "border-gray-300 bg-white hover:border-green-300",
+                      ].join(" ")}
+                    >
+                      <strong className="block text-sm text-green-950">
+                        Criar conta de responsável
+                      </strong>
+
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Crie uma nova conta FootEra para o responsável.
+                      </span>
+                    </button>
                   </div>
+
+                  {modoResponsavel === "existente" && (
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          E-mail da conta FootEra*
+                        </label>
+
+                        <input
+                          type="email"
+                          value={responsavel.email}
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              email: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          Senha da conta FootEra*
+                        </label>
+
+                        <input
+                          type="password"
+                          value={responsavel.senha}
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              senha: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {modoResponsavel === "novo" && (
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          Nome do responsável*
+                        </label>
+
+                        <input
+                          value={responsavel.nome}
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              nome: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          E-mail do responsável*
+                        </label>
+
+                        <input
+                          type="email"
+                          value={responsavel.email}
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              email: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          Senha do responsável*
+                        </label>
+
+                        <input
+                          type="password"
+                          value={responsavel.senha}
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              senha: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          Confirmar senha*
+                        </label>
+
+                        <input
+                          type="password"
+                          value={
+                            responsavel.confirmarSenha
+                          }
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              confirmarSenha:
+                                e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium">
+                          Telefone — opcional
+                        </label>
+
+                        <input
+                          value={
+                            responsavel.telefone || ""
+                          }
+                          placeholder="(00) 00000-0000"
+                          onChange={(e) =>
+                            setResponsavel((atual) => ({
+                              ...atual,
+                              telefone:
+                                e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

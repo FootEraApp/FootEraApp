@@ -396,34 +396,8 @@ async function isDonoDaAula(
         aula.contextoLegacyOrganizationId
     );
 
-  /*
-   * Compatibilidade com aulas antigas.
-   *
-   * Antes desta migração as aulas não
-   * possuíam contexto salvo. Nesse caso
-   * mantemos temporariamente a regra
-   * antiga.
-   */
   if (!aulaTemContexto) {
-    return (
-      String(
-        aula.criadorUsuarioId ||
-          ""
-      ) ===
-        String(userId) ||
-      String(
-        aula.metodologia
-          ?.criadorUsuarioId ||
-          ""
-      ) ===
-        String(userId) ||
-      String(
-        aula.metodologiaAvulsa
-          ?.criadorUsuarioId ||
-          ""
-      ) ===
-        String(userId)
-    );
+    return false;
   }
 
   if (

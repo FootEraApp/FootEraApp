@@ -5,6 +5,7 @@ import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
 import { enforceTotalLimit } from '../services/usage.js';
 import { audit } from "../services/audit.js";
 import { prisma } from "../prisma.js";
+import { calcularPontuacaoTreinoPersistencia } from "../services/treinoPontuacao.service.js";
 import {
   getActiveContext,
 } from "../services/activeContext.js";
@@ -1091,6 +1092,14 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       })
     );
 
+    // Pontuação oficial, calculada com os exercícios finais antes de persistir.
+    const pontosCalculados = await calcularPontuacaoTreinoPersistencia({
+      nivel: nivelNorm,
+      tipoTreino: tipoTreinoNorm,
+      duracao,
+      exercicios: itens,
+    });
+
     if (owner.dono === "Professor") {
       const profExiste = await prisma.professor.findUnique({
         where: { id: owner.professorId! },
@@ -1152,7 +1161,7 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
             dicas: Array.isArray(dicas) ? dicas : [],
             imagemUrl: imagemFinal,
             metas: metas ?? null,
-            pontuacao: pontuacao != null ? Number(pontuacao) : null,
+            pontuacao: pontosCalculados.total,
             expiraEm: expiraEm ? new Date(expiraEm) : null,
             naoExpira: Boolean(naoExpira),
             sessaoTreinoId: sessaoTreinoIdFinal,
@@ -1774,6 +1783,18 @@ export async function updateTreino(req: Request, res: Response) {
       })
     );
 
+    // Quando um campo não é reenviado na edição, mantém o valor vigente.
+    const anteriorPontuacao = await prisma.treinoProgramado.findUniqueOrThrow({
+      where: { id },
+      select: { nivel: true, tipoTreino: true, duracao: true },
+    });
+    const pontosAtualizados = await calcularPontuacaoTreinoPersistencia({
+      nivel: nivel !== undefined ? normNivel(nivel) : anteriorPontuacao.nivel,
+      tipoTreino: tipoTreino !== undefined ? normTipoTreino(tipoTreino) : anteriorPontuacao.tipoTreino,
+      duracao: duracao !== undefined ? duracao : anteriorPontuacao.duracao,
+      exercicios: itens,
+    });
+
     const antigos = await prisma.treinoProgramadoExercicio.findMany({
       where: { treinoProgramadoId: id },
       select: { exercicioId: true },
@@ -1818,7 +1839,7 @@ export async function updateTreino(req: Request, res: Response) {
           ...(dicas !== undefined ? { dicas: Array.isArray(dicas) ? dicas : [] } : {}),
           ...imagemPatch,
           ...(metas !== undefined ? { metas } : {}),
-          ...(pontuacao !== undefined ? { pontuacao: pontuacao != null ? Number(pontuacao) : null } : {}),
+          pontuacao: pontosAtualizados.total,
           ...(expiraEm !== undefined ? { expiraEm: expiraEm ? new Date(expiraEm) : null } : {}),
           ...(naoExpira !== undefined ? { naoExpira: Boolean(naoExpira) } : {}),
           ...dataDono,
@@ -1976,7 +1997,7 @@ export const getAllTreinos = async (req: Request, res: Response) => {
       viewerOwner
         ?.criadorUsuarioId ??
       "";
-  
+
     const {
       professorId,
       ownerTipo,

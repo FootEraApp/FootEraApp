@@ -1,6 +1,6 @@
 import { toast } from "@/lib/toast";
 import { Switch } from "../components/ui/switch.js";
-import { useState, useEffect } from "react";
+import { useContext, useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { API, FLAGS, MESSAGES } from "../config.js";
@@ -13,6 +13,10 @@ import {
   getPushDeviceStatus,
   type PushDeviceStatus,
 } from "../services/pushNotifications.js";
+import { UserContext } from "../context/UserContext.js";
+import TransferenciasRecebidas from "../components/organizacoes/TransferenciasRecebidas.js";
+import HistoricoTransferencias from "../components/organizacoes/HistoricoTransferencias.js";
+import SolicitacaoNascimentoDocumental from "../components/profile/SolicitacaoNascimentoDocumental.js";
 
 type FeedbackTipo = "sugestao" | "bug";
 type VisibilidadePerfil =
@@ -20,10 +24,101 @@ type VisibilidadePerfil =
   | "NAO_LISTADO"
   | "PRIVADO";
 
+type SupervisaoPrivacidade = {
+  supervisionado:
+    boolean;
+
+  permitirPerfilPublico:
+    boolean;
+
+  permitirMensagensDiretas:
+    boolean;
+
+  permitirMostrarEmail:
+    boolean;
+};
+
+type ResponsavelDoAtleta = {
+  id: string;
+
+  status:
+    | "PENDENTE"
+    | "ATIVO"
+    | "REVOGADO";
+
+  principal:
+    boolean;
+
+  parentesco?:
+    string | null;
+
+  origemSolicitacao?:
+    string | null;
+
+  responsavel: {
+    id: string;
+
+    nome: string;
+
+    nomeDeUsuario?:
+      string | null;
+
+    foto?:
+      string | null;
+  };
+};
+
 const TUTORIAL_ENABLED = FLAGS.TUTORIAL_ENABLED;
 
 export default function ConfiguracoesPerfil() {
   const [, setLocation] = useLocation();
+  const userContext = useContext(UserContext);
+
+  const activeContext = userContext?.activeContext;
+
+  const somenteGestaoConta =
+    localStorage.getItem("somenteGestaoConta") === "true" ||
+    sessionStorage.getItem("somenteGestaoConta") === "true";
+
+  const organizacaoAtual =
+    activeContext?.kind === "ORGANIZATION"
+      ? activeContext
+      : null;
+
+  const podeSolicitarSaidaOrganizacao =
+    organizacaoAtual?.organizationRole === "MEMBRO" &&
+    Boolean(organizacaoAtual.organizationId);
+
+  const papelAtual =
+    activeContext?.kind === "PERSONAL"
+      ? String(activeContext.tipoUsuario ?? "")
+      : null;
+
+  const papeisComExclusaoIndividual = [
+    "Professor",
+    "Olheiro",
+    "Learning",
+    "Atleta",
+    "Responsavel",
+    "Creator",
+  ];
+
+  const podeExcluirPapelAtual =
+    papelAtual !== null &&
+    activeContext?.kind === "PERSONAL" &&
+    papeisComExclusaoIndividual.includes(papelAtual);
+
+  const [showDeleteRoleModal, setShowDeleteRoleModal] =
+    useState(false);
+
+  const [confirmRoleText, setConfirmRoleText] =
+    useState("");
+
+  const [roleDeleteError, setRoleDeleteError] =
+    useState<string | null>(null);
+
+  const [deletingRole, setDeletingRole] =
+    useState(false);
   const [
     visibilidadePerfil,
     setVisibilidadePerfil,
@@ -63,6 +158,41 @@ export default function ConfiguracoesPerfil() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  type ImpedimentoExclusaoConta = {
+    codigo: string;
+    categoria:
+      | "ADMIN"
+      | "ORGANIZACAO"
+      | "RESPONSAVEL"
+      | "ATLETA"
+      | "PROFESSOR"
+      | "CREATOR"
+      | "ASSINATURA"
+      | "FINANCEIRO"
+      | "TRANSFERENCIA"
+      | "LEARNING"
+      | "EVENTO"
+      | "OLHEIRO"
+      | "CONTEUDO";
+    titulo: string;
+    descricao: string;
+    orientacao: string;
+    organizacaoId?: string | null;
+    legadoId?: string | null;
+  };
+
+  const [deleteDetails, setDeleteDetails] = useState<{
+    impedimentos: ImpedimentoExclusaoConta[];
+    avisos: ImpedimentoExclusaoConta[];
+    diagnosticoCompleto: boolean;
+    podeSolicitarExclusao: boolean;
+  } | null>(null);
+  const [diagnosticoLoading, setDiagnosticoLoading] =
+    useState(false);
+
+  const [diagnosticoConsultado, setDiagnosticoConsultado] =
+    useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -88,6 +218,55 @@ export default function ConfiguracoesPerfil() {
   const [pushDeviceStatus, setPushDeviceStatus] = useState<PushDeviceStatus | "checking">("checking");
   const [pushPermission, setPushPermission] = useState<NotificationPermission | "unsupported" | null>(null);
   const [pushHasSubscription, setPushHasSubscription] = useState(false);
+  const [
+    supervisao,
+    setSupervisao,
+  ] =
+    useState<SupervisaoPrivacidade | null>(
+      null
+    );
+
+  const [
+    meusResponsaveis,
+    setMeusResponsaveis,
+  ] =
+    useState<
+      ResponsavelDoAtleta[]
+    >([]);
+
+  const [
+    responsaveisLoading,
+    setResponsaveisLoading,
+  ] =
+    useState(false);
+
+  const [
+    podeDesvincularResponsaveis,
+    setPodeDesvincularResponsaveis,
+  ] =
+    useState(false);
+
+  const [
+    idadeAtleta,
+    setIdadeAtleta,
+  ] =
+    useState<
+      number | null
+    >(null);
+
+  const [
+    showResponsaveisModal,
+    setShowResponsaveisModal,
+  ] =
+    useState(false);
+
+  const [
+    desvinculandoResponsavelId,
+    setDesvinculandoResponsavelId,
+  ] =
+    useState<
+      string | null
+    >(null);
 
   const REQUIRED_PHRASE = "Excluir Conta Footera";
 
@@ -116,6 +295,17 @@ export default function ConfiguracoesPerfil() {
       return;
     }
   }, []);
+
+  useEffect(() => {
+    if (
+      tipoNorm !==
+      "atleta"
+    ) {
+      return;
+    }
+
+    carregarMeusResponsaveis();
+  }, [tipoNorm]);
 
     async function apiTrocarSenha() {
       setSegErr(null);
@@ -187,12 +377,173 @@ export default function ConfiguracoesPerfil() {
 
     try {
       if (token) {
-        
+
       }
     } finally {
       try { socket?.disconnect(); } catch {}
       try { localStorage.clear(); sessionStorage.clear(); } catch {}
       setLocation("/login");
+    }
+  }
+
+  async function carregarMeusResponsaveis() {
+    if (
+      tipoNorm !==
+      "atleta"
+    ) {
+      setMeusResponsaveis(
+        []
+      );
+
+      setPodeDesvincularResponsaveis(
+        false
+      );
+
+      setIdadeAtleta(
+        null
+      );
+
+      return;
+    }
+
+    try {
+      setResponsaveisLoading(
+        true
+      );
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/atleta/me/responsaveis`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${getToken()}`,
+            },
+          }
+        );
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível carregar seus responsáveis."
+        );
+      }
+
+      setMeusResponsaveis(
+        Array.isArray(
+          data?.items
+        )
+          ? data.items
+          : []
+      );
+
+      setPodeDesvincularResponsaveis(
+        Boolean(
+          data?.podeDesvincularResponsaveis
+        )
+      );
+
+      setIdadeAtleta(
+        typeof data?.idade ===
+        "number"
+          ? data.idade
+          : null
+      );
+    } catch (
+      error: any
+    ) {
+      console.error(
+        "[ConfiguracoesPerfil] responsáveis:",
+        error
+      );
+
+      setMeusResponsaveis(
+        []
+      );
+    } finally {
+      setResponsaveisLoading(
+        false
+      );
+    }
+  }
+
+  async function desvincularResponsavel(
+    item: ResponsavelDoAtleta
+  ) {
+    if (
+      !podeDesvincularResponsaveis
+    ) {
+      toast.error(
+        "Enquanto sua conta for supervisionada, você não pode remover um responsável ativo."
+      );
+
+      return;
+    }
+
+    const confirmar =
+      window.confirm(
+        `Deseja remover ${item.responsavel.nome} dos seus responsáveis?`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setDesvinculandoResponsavelId(
+        item.id
+      );
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/atleta/me/responsaveis/${encodeURIComponent(
+            item.id
+          )}`,
+          {
+            method:
+              "DELETE",
+
+            headers: {
+              Authorization:
+                `Bearer ${getToken()}`,
+            },
+          }
+        );
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível remover o responsável."
+        );
+      }
+
+      toast.success(
+        data?.message ||
+        "Responsável desvinculado."
+      );
+
+      await carregarMeusResponsaveis();
+    } catch (
+      error: any
+    ) {
+      toast.error(
+        error?.message ||
+        "Não foi possível remover o responsável."
+      );
+    } finally {
+      setDesvinculandoResponsavelId(
+        null
+      );
     }
   }
 
@@ -217,6 +568,11 @@ export default function ConfiguracoesPerfil() {
           "Não foi possível carregar as configurações de privacidade."
       );
     }
+
+    setSupervisao(
+      data?.supervisao ??
+      null
+    );
 
     const proximaVisibilidade =
       (data?.visibilidadePerfil ??
@@ -525,9 +881,160 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
+  async function excluirPapelAtual(
+    e: React.FormEvent
+  ) {
+    e.preventDefault();
+
+    setRoleDeleteError(null);
+
+    if (!papelAtual || !podeExcluirPapelAtual) {
+      setRoleDeleteError(
+        "Este perfil ainda não pode ser excluído por esta opção."
+      );
+      return;
+    }
+
+    if (confirmRoleText.trim() !== `Excluir ${papelAtual}`) {
+      setRoleDeleteError(
+        `Digite exatamente "Excluir ${papelAtual}".`
+      );
+      return;
+    }
+
+    try {
+      setDeletingRole(true);
+
+      const resposta = await fetch(
+        `${API.REST}/usuarios/me/papeis/${encodeURIComponent(papelAtual)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      const data = await resposta.json().catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+            "Não foi possível excluir este perfil."
+        );
+      }
+
+      if (!data?.activeContext?.key) {
+        throw new Error(
+          "O perfil foi desativado, mas não foi possível determinar o próximo contexto. Atualize a página."
+        );
+      }
+
+      setShowDeleteRoleModal(false);
+      setConfirmRoleText("");
+
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.assign("/login");
+    } catch (error: any) {
+      setRoleDeleteError(
+        error?.message ||
+          "Erro ao excluir o perfil."
+      );
+    } finally {
+      setDeletingRole(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!showDeleteModal) return;
+
+    const controller = new AbortController();
+
+    async function carregarDiagnostico() {
+      setDiagnosticoLoading(true);
+      setDiagnosticoConsultado(false);
+      setDeleteDetails(null);
+      setDeleteError(null);
+
+      try {
+        const token = getToken();
+
+        if (!token) {
+          throw new Error("Sessão expirada. Entre novamente.");
+        }
+
+        const resp = await fetch(
+          `${API.REST}/configuracoes/minha-conta/diagnostico`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          },
+        );
+
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+          throw new Error(
+            data?.message || "Não foi possível consultar as pendências.",
+          );
+        }
+
+        if (controller.signal.aborted) return;
+
+        const diagnostico = data?.diagnostico;
+
+        setDeleteDetails({
+          impedimentos: Array.isArray(diagnostico?.impedimentos)
+            ? diagnostico.impedimentos
+            : [],
+
+          avisos: Array.isArray(diagnostico?.avisos)
+            ? diagnostico.avisos
+            : [],
+
+          diagnosticoCompleto:
+            diagnostico?.diagnosticoCompleto === true,
+
+          podeSolicitarExclusao:
+            diagnostico?.podeSolicitarExclusao === true,
+        });
+
+        setDiagnosticoConsultado(true);
+      } catch (error: any) {
+        if (controller.signal.aborted) return;
+
+        setDeleteError(
+          error?.message || "Erro ao consultar as pendências.",
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setDiagnosticoLoading(false);
+        }
+      }
+    }
+
+    void carregarDiagnostico();
+
+    return () => controller.abort();
+  }, [showDeleteModal]);
+
   async function excluirConta(e: React.FormEvent) {
     e.preventDefault();
+    if (
+      !diagnosticoConsultado ||
+      diagnosticoLoading ||
+      deleteDetails?.diagnosticoCompleto !== true ||
+      deleteDetails?.podeSolicitarExclusao !== true ||
+      Boolean(deleteDetails?.impedimentos.length)
+    ) {
+      return;
+    }
     setDeleteError(null);
+    setDeleteDetails(null);
 
     try {
       setDeleting(true);
@@ -550,7 +1057,23 @@ export default function ConfiguracoesPerfil() {
         return;
       }
 
-      setDeleteError(data?.message || "Não foi possível excluir a conta.");
+      setDeleteError(
+        data?.message || "Não foi possível excluir a conta."
+      );
+
+      if (
+        data?.code === "ACCOUNT_DELETE_BLOCKED" &&
+        Array.isArray(data?.details?.impedimentos)
+      ) {
+        setDeleteDetails({
+          impedimentos: data.details.impedimentos,
+          avisos: Array.isArray(data.details.avisos)
+            ? data.details.avisos
+            : [],
+          diagnosticoCompleto: false,
+          podeSolicitarExclusao: false,
+        });
+      }
     } catch {
       setDeleteError("Erro ao conectar com o servidor.");
     } finally {
@@ -656,27 +1179,116 @@ export default function ConfiguracoesPerfil() {
     }
   }
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("secao") !== "transferencias") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      document
+        .getElementById("transferencias-propriedade")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   return (
     <div className="min-h-screen bg-transparent pb-24">
-      
+
       <header className="bg-green-900 text-white py-3 px-3 flex items-center relative">
-        <Link
-          href="/perfil"
-          aria-label="Voltar para perfil"
-          className="inline-flex h-10 w-10 items-center justify-center
-            rounded-full bg-white/10 text-white
-            hover:bg-white/20 focus:outline-none
-            focus:ring-2 focus:ring-white/30 z-10"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
+        {!somenteGestaoConta && (
+          <Link
+            href="/perfil"
+            aria-label="Voltar para perfil"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/30 z-10"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        )}
 
         <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold pointer-events-none">
           Configurações
         </h1>
       </header>
 
-      <div className="bg-white mx-4 mt-4 p-4 rounded-xl shadow mb-4">
+      {somenteGestaoConta && (
+        <div className="mx-4 mt-4 rounded-xl border border-green-200 bg-white p-4">
+          <h2 className="font-bold text-green-900">
+            Gestão da sua conta FootEra
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-700">
+            Sua conta não possui perfis ativos no momento.
+            Você ainda pode consultar o histórico das transferências
+            de propriedade e solicitar a exclusão da conta.
+          </p>
+
+          <p className="mt-2 text-xs text-gray-500">
+            As organizações transferidas permanecem com os novos
+            proprietários. Seus históricos não serão apagados.
+          </p>
+
+          <div className="mt-5 border-t border-gray-200 pt-4">
+            <h3 className="font-bold text-gray-900">
+              O que deseja fazer agora?
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Você pode manter esta conta para consultar seus
+              históricos, ativar um novo perfil independente
+              ou solicitar a exclusão da conta.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4">
+              <h4 className="font-semibold text-green-900">
+                Continuar utilizando o FootEra
+              </h4>
+
+              <p className="mt-2 text-sm text-gray-700">
+                Ative um novo papel utilizando esta mesma conta.
+                Sua antiga organização continuará com o novo
+                proprietário.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setLocation("/perfil/recuperar")}
+                className="mt-3 w-full rounded-lg bg-green-800 px-4 py-3 font-semibold text-white hover:bg-green-900"
+              >
+                Ativar outro perfil
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm text-gray-600">
+              Se preferir, não precisa fazer nada agora.
+              Seu histórico de transferências continuará
+              disponível nesta página.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.assign("/login");
+            }}
+            className="mt-4 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
+          >
+            Sair da conta
+          </button>
+        </div>
+      )}
+
+      {!somenteGestaoConta && (
+        <>
+        <div className="bg-white mx-4 mt-4 p-4 rounded-xl shadow mb-4">
         <h2 className="text-gray-800 font-bold mb-3">Conta</h2>
         <div className="flex justify-between py-2 items-start border-b">
           <div>
@@ -744,6 +1356,45 @@ export default function ConfiguracoesPerfil() {
           </button>
         </div>
 
+        {tipoNorm ===
+          "atleta" && (
+          <div className="flex justify-between py-2 items-start border-b">
+            <div>
+              <p className="font-semibold">
+                🛡️ Meus responsáveis
+              </p>
+
+              <p className="text-sm text-gray-600">
+                Consulte os responsáveis vinculados à sua conta.
+              </p>
+
+              {idadeAtleta !==
+                null && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {idadeAtleta <
+                  12
+                    ? "Sua conta ainda é supervisionada."
+                    : "Você já pode administrar seus vínculos de responsável."}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setShowResponsaveisModal(
+                  true
+                );
+
+                await carregarMeusResponsaveis();
+              }}
+              className="text-green-800 font-semibold"
+            >
+              Gerenciar
+            </button>
+          </div>
+        )}
+
         <div className="flex justify-between py-2 items-start">
           <div>
             <p className="font-semibold">💲 Assinaturas</p>
@@ -794,6 +1445,8 @@ export default function ConfiguracoesPerfil() {
           </div>
         )}
       </div>
+
+      <SolicitacaoNascimentoDocumental />
 
       <div className="bg-white mx-4 p-4 rounded-xl shadow mb-4">
         <div className="flex items-start justify-between gap-3">
@@ -864,10 +1517,87 @@ export default function ConfiguracoesPerfil() {
         </button>
       </div>
 
+      {podeExcluirPapelAtual && (
+        <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-amber-200 p-4">
+          <h3 className="text-gray-900 font-bold text-lg">
+            Excluir perfil atual
+          </h3>
+
+          <p className="text-sm text-gray-600 mt-2">
+            Você está usando o perfil{" "}
+            <strong>{papelAtual}</strong>.
+            Ao excluí-lo, esse papel deixará de aparecer
+            nas suas opções de perfil.
+            Sua conta e os outros papéis continuarão ativos.
+          </p>
+
+          <p className="text-xs text-amber-800 mt-2">
+            Os históricos e registros vinculados ao perfil
+            serão preservados nesta etapa.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmRoleText("");
+              setRoleDeleteError(null);
+              setShowDeleteRoleModal(true);
+            }}
+            className="mt-3 w-full sm:w-auto rounded-md border border-red-600 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+          >
+            Excluir somente {papelAtual}
+          </button>
+        </div>
+      )}
+
+      {organizacaoAtual && (
+        <div className="mx-4 mb-4 rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="font-bold text-lg text-gray-900">
+            Minha organização
+          </h3>
+
+          <p className="mt-1 text-sm text-gray-600">
+            {organizacaoAtual.label}
+          </p>
+
+          <p className="mt-2 text-sm text-gray-600">
+            {organizacaoAtual.organizationRole === "PROPRIETARIO"
+              ? "Você é proprietário desta organização. Para deixar de ser proprietário, acesse Editar perfil e envie uma solicitação de transferência. A organização continuará ativa e seus históricos serão preservados."
+              : podeSolicitarSaidaOrganizacao
+                ? "Você pode solicitar a saída desta organização sem excluir a instituição nem seus históricos."
+                : "Para deixar esta organização, primeiro é necessário resolver ou encerrar suas responsabilidades institucionais."}
+          </p>
+
+          {organizacaoAtual.organizationRole === "PROPRIETARIO" && (
+            <Link
+              href="/perfil/editar"
+              className="mt-3 inline-flex items-center rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50"
+            >
+              Ir para transferência de propriedade
+            </Link>
+          )}
+        </div>
+      )}
+
+        </>
+      )}
+      {getToken() && (
+        <>
+          {!somenteGestaoConta && (
+            <TransferenciasRecebidas token={getToken()} />
+          )}
+
+          <HistoricoTransferencias token={getToken()} />
+        </>
+      )}
+
       <div className="mx-4 mb-4 rounded-xl shadow bg-white border border-red-200 p-4">
         <h3 className="text-red-700 font-bold text-lg">Excluir conta</h3>
-        <p className="text-sm text-red-700 mt-1">
-          Esta ação é <strong>irreversível</strong>. Todos os seus dados e conteúdos serão removidos.
+        <p className="mt-1 text-sm text-red-700">
+          Ao solicitar a exclusão, sua conta será desativada e movida
+          para a lixeira, com possibilidade de restauração por até
+          30 dias. A remoção definitiva dependerá das verificações
+          de segurança e das regras de preservação de dados.
         </p>
 
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -884,13 +1614,83 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
 
+      {showDeleteRoleModal && papelAtual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-lg">
+            <h3 className="text-lg font-semibold text-red-700">
+              Excluir perfil {papelAtual}
+            </h3>
+
+            <p className="mt-2 text-sm text-gray-700">
+              O perfil {papelAtual} deixará de ficar ativo.
+              Seus outros perfis permanecerão disponíveis.
+            </p>
+
+            <p className="mt-3 text-sm text-gray-700">
+              Para confirmar, digite:
+              <strong className="ml-1">
+                Excluir {papelAtual}
+              </strong>
+            </p>
+
+            <form onSubmit={excluirPapelAtual} className="mt-4">
+              <input
+                type="text"
+                value={confirmRoleText}
+                onChange={(e) =>
+                  setConfirmRoleText(e.target.value)
+                }
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder={`Excluir ${papelAtual}`}
+                required
+              />
+
+              {roleDeleteError && (
+                <p className="mt-2 text-sm text-red-600">
+                  {roleDeleteError}
+                </p>
+              )}
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={deletingRole}
+                  onClick={() => {
+                    setShowDeleteRoleModal(false);
+                    setConfirmRoleText("");
+                    setRoleDeleteError(null);
+                  }}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-sm"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={
+                    deletingRole ||
+                    confirmRoleText.trim() !==
+                      `Excluir ${papelAtual}`
+                  }
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {deletingRole
+                    ? "Excluindo..."
+                    : "Excluir perfil"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-5">
             <h3 className="text-lg font-semibold text-red-600">Excluir conta</h3>
 
             <p className="text-sm text-gray-700 mt-2">
-              Para confirmar a exclusão permanente, digite exatamente{" "}
+              Para mover sua conta para a lixeira, digite exatamente{" "}
               <span className="font-semibold text-gray-900">"{REQUIRED_PHRASE}"</span> no campo abaixo
               e clique em <span className="font-semibold">Excluir</span>. Mas caso for necessario você tem 30 dias para restaurar a conta.
             </p>
@@ -904,11 +1704,117 @@ export default function ConfiguracoesPerfil() {
                 className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-red-200"
                 required
               />
-
-              {deleteError && (
-                <div className="mt-2 text-sm text-red-600">{deleteError}</div>
+              {diagnosticoLoading && (
+                <p className="mt-3 text-sm text-gray-600">
+                  Verificando responsabilidades e vínculos da conta...
+                </p>
               )}
 
+              {diagnosticoConsultado &&
+                deleteDetails?.diagnosticoCompleto === false && (
+                  <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="font-semibold">
+                      Exclusão temporariamente indisponível
+                    </p>
+
+                    <p className="mt-1">
+                      A verificação completa das responsabilidades
+                      desta conta ainda não foi concluída.
+                      Você poderá solicitar a exclusão quando
+                      todas as verificações de segurança
+                      estiverem disponíveis.
+                    </p>
+                  </div>
+                )}
+
+              {deleteError && (
+                <div className="mt-2 text-sm text-red-600">
+                  {deleteError}
+                </div>
+              )}
+
+              {deleteDetails &&
+                deleteDetails.impedimentos.length > 0 && (
+                <div className="mt-3 space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                  <p className="font-semibold text-amber-900">
+                    Antes de excluir sua conta, resolva estas pendências:
+                  </p>
+
+                  {deleteDetails.impedimentos.map((impedimento, index) => (
+                    <div
+                      key={`${impedimento.codigo}-${impedimento.organizacaoId ?? impedimento.legadoId ?? index}`}
+                      className="rounded-lg border border-amber-200 bg-white p-3"
+                    >
+                      <p className="font-semibold text-gray-900">
+                        {impedimento.titulo}
+                      </p>
+
+                      <p className="mt-1 text-gray-700">
+                        {impedimento.descricao}
+                      </p>
+
+                      <p className="mt-2 font-medium text-gray-900">
+                        Próxima etapa:
+                      </p>
+
+                      <p className="mt-1 text-gray-700">
+                        {impedimento.orientacao}
+                      </p>
+                    </div>
+                  ))}
+
+                  <p className="text-xs text-amber-900">
+                    Depois de resolver as pendências, solicite novamente
+                    a exclusão da conta.
+                  </p>
+                </div>
+              )}
+
+              {deleteDetails &&
+                deleteDetails.avisos.length > 0 && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm">
+                    <p className="font-semibold text-blue-900">
+                      Históricos e registros que precisam ser preservados
+                    </p>
+
+                    {deleteDetails.avisos.map((aviso, index) => (
+                      <div
+                        key={`${aviso.codigo}-${aviso.organizacaoId ?? aviso.legadoId ?? index}`}
+                        className="rounded-lg border border-blue-200 bg-white p-3"
+                      >
+                        <p className="font-semibold text-gray-900">
+                          {aviso.titulo}
+                        </p>
+
+                        <p className="mt-1 text-gray-700">
+                          {aviso.descricao}
+                        </p>
+
+                        <p className="mt-2 text-gray-600">
+                          {aviso.orientacao}
+                        </p>
+                      </div>
+                    ))}
+
+                    <p className="text-xs text-blue-900">
+                      Esses registros não impedem automaticamente a
+                      exclusão lógica. A auditoria e as regras de
+                      preservação ainda precisam ser concluídas.
+                    </p>
+                  </div>
+                )}
+
+              {diagnosticoConsultado &&
+                !diagnosticoLoading &&
+                deleteDetails?.impedimentos.length === 0 && (
+                  <p className="mt-3 text-sm text-gray-600">
+                    Nenhuma pendência foi identificada nas verificações
+                    realizadas até agora.
+                    {deleteDetails?.diagnosticoCompleto !== true
+                      ? " A auditoria completa da conta ainda está pendente."
+                      : " A verificação de pendências foi concluída."}
+                  </p>
+                )}
               <div className="mt-4 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -916,6 +1822,7 @@ export default function ConfiguracoesPerfil() {
                     setShowDeleteModal(false);
                     setConfirmText("");
                     setDeleteError(null);
+                    setDeleteDetails(null);
                   }}
                   className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                   disabled={deleting}
@@ -925,11 +1832,23 @@ export default function ConfiguracoesPerfil() {
                 <button
                   type="submit"
                   className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
-                  disabled={deleting || !matchConfirm}
+                  disabled={
+                    deleting ||
+                    diagnosticoLoading ||
+                    !diagnosticoConsultado ||
+                    !matchConfirm ||
+                    deleteDetails?.diagnosticoCompleto !== true ||
+                    deleteDetails?.podeSolicitarExclusao !== true ||
+                    Boolean(deleteDetails?.impedimentos.length)
+                  }
                   title={
-                    matchConfirm
-                      ? "Excluir conta"
-                      : `Digite exatamente "${REQUIRED_PHRASE}" para habilitar`
+                    deleteDetails?.diagnosticoCompleto !== true
+                      ? "A exclusão está indisponível até a conclusão da auditoria."
+                      : deleteDetails?.podeSolicitarExclusao !== true
+                        ? "Resolva as pendências antes de excluir a conta."
+                        : !matchConfirm
+                          ? `Digite exatamente "${REQUIRED_PHRASE}" para habilitar`
+                          : "Solicitar exclusão da conta"
                   }
                 >
                   {deleting ? "Excluindo..." : "Excluir"}
@@ -968,7 +1887,7 @@ export default function ConfiguracoesPerfil() {
 
       {showFeedbackModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-xl shadow-lg p-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-gray-900">Enviar feedback / reportar erro</h3>
               <button
@@ -1093,6 +2012,18 @@ export default function ConfiguracoesPerfil() {
               <p className="mt-1 pb-4 text-sm text-gray-600">
                 Ajuste quem pode ver seu perfil e como as pessoas podem interagir com você.
               </p>
+              {supervisao?.supervisionado && (
+                <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <div className="font-semibold text-blue-900">
+                    🛡️ Conta supervisionada
+                  </div>
+
+                  <p className="mt-1 text-xs leading-relaxed text-blue-800">
+                    Algumas configurações precisam estar liberadas pelo seu responsável.
+                    Você sempre pode escolher opções mais privadas.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
@@ -1117,13 +2048,21 @@ export default function ConfiguracoesPerfil() {
                   <div className="mt-3 space-y-2">
                     <button
                       type="button"
-                      disabled={privacidadeSaving}
+                      disabled={
+                        privacidadeSaving ||
+                        (
+                          supervisao
+                            ?.supervisionado &&
+                          !supervisao
+                            .permitirPerfilPublico
+                        )
+                      }
                       onClick={() =>
                         setVisibilidadePerfil(
                           "PUBLICO"
                         )
                       }
-                      className={`w-full rounded-xl border p-3 text-left transition ${
+                      className={`disabled:cursor-not-allowed disabled:opacity-50 w-full rounded-xl border p-3 text-left transition ${
                         visibilidadePerfil ===
                         "PUBLICO"
                           ? "border-green-700 bg-green-50 shadow-sm"
@@ -1155,6 +2094,12 @@ export default function ConfiguracoesPerfil() {
                             mesmo sem conta. Ele também pode aparecer no
                             Explorar.
                           </div>
+                          {supervisao?.supervisionado &&
+                            !supervisao.permitirPerfilPublico && (
+                              <div className="mt-2 font-semibold text-amber-700">
+                                🔒 Seu responsável precisa liberar esta opção.
+                              </div>
+                            )}
                         </div>
                       </div>
                     </button>
@@ -1255,8 +2200,34 @@ export default function ConfiguracoesPerfil() {
 
                   <Switch
                     checked={mensagens}
+                    disabled={
+                      privacidadeSaving ||
+                      (
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMensagensDiretas &&
+                        !mensagens
+                      )
+                    }
                     onCheckedChange={(v) => {
-                      if (privacidadeSaving) {
+                      if (
+                        privacidadeSaving
+                      ) {
+                        return;
+                      }
+
+                      if (
+                        v === true &&
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMensagensDiretas
+                      ) {
+                        toast.error(
+                          "Seu responsável precisa liberar mensagens diretas."
+                        );
+
                         return;
                       }
 
@@ -1295,8 +2266,34 @@ export default function ConfiguracoesPerfil() {
 
                   <Switch
                     checked={mostrarEmail}
+                    disabled={
+                      privacidadeSaving ||
+                      (
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMostrarEmail &&
+                        !mostrarEmail
+                      )
+                    }
                     onCheckedChange={(v) => {
-                      if (privacidadeSaving) {
+                      if (
+                        privacidadeSaving
+                      ) {
+                        return;
+                      }
+
+                      if (
+                        v === true &&
+                        supervisao
+                          ?.supervisionado &&
+                        !supervisao
+                          .permitirMostrarEmail
+                      ) {
+                        toast.error(
+                          "Seu responsável precisa liberar a exibição do e-mail."
+                        );
+
                         return;
                       }
 
@@ -1338,7 +2335,7 @@ export default function ConfiguracoesPerfil() {
 
       {showNotificacoesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-xl shadow-lg p-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-gray-900">🔔 Notificações</h3>
               <button
@@ -1535,9 +2532,164 @@ export default function ConfiguracoesPerfil() {
         </div>
       )}
 
+      {showResponsaveisModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-lg">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Meus responsáveis
+              </h3>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowResponsaveisModal(
+                    false
+                  )
+                }
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {idadeAtleta !==
+              null &&
+              idadeAtleta <
+                12 && (
+              <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                <p className="font-semibold text-blue-900">
+                  🛡️ Conta supervisionada
+                </p>
+
+                <p className="mt-1 text-xs leading-relaxed text-blue-800">
+                  Como você ainda tem menos de 12 anos, os responsáveis ativos não podem ser removidos por esta conta.
+                </p>
+              </div>
+            )}
+
+            {idadeAtleta !==
+              null &&
+              idadeAtleta >=
+                12 && (
+              <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3">
+                <p className="font-semibold text-green-900">
+                  Conta com autonomia
+                </p>
+
+                <p className="mt-1 text-xs leading-relaxed text-green-800">
+                  Você já pode remover qualquer vínculo de responsável, inclusive o responsável principal.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 space-y-3">
+              {responsaveisLoading ? (
+                <div className="py-6 text-center text-sm text-gray-500">
+                  Carregando...
+                </div>
+              ) : meusResponsaveis.length ===
+                0 ? (
+                <div className="rounded-xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                  Nenhum responsável vinculado.
+                </div>
+              ) : (
+                meusResponsaveis.map(
+                  (item) => (
+                    <div
+                      key={
+                        item.id
+                      }
+                      className="rounded-xl border border-gray-200 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={
+                            item
+                              .responsavel
+                              .foto ||
+                            "/assets/usuarios/default-user.png"
+                          }
+                          alt={
+                            item
+                              .responsavel
+                              .nome
+                          }
+                          className="h-11 w-11 rounded-full border object-cover"
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-gray-900">
+                            {
+                              item
+                                .responsavel
+                                .nome
+                            }
+                          </p>
+
+                          {item
+                            .responsavel
+                            .nomeDeUsuario && (
+                            <p className="text-xs text-gray-500">
+                              @
+                              {
+                                item
+                                  .responsavel
+                                  .nomeDeUsuario
+                              }
+                            </p>
+                          )}
+
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {item.principal && (
+                              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
+                                Principal
+                              </span>
+                            )}
+
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                              {
+                                item.status
+                              }
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {item.status ===
+                        "ATIVO" &&
+                        podeDesvincularResponsaveis && (
+                        <button
+                          type="button"
+                          disabled={
+                            desvinculandoResponsavelId ===
+                            item.id
+                          }
+                          onClick={() =>
+                            desvincularResponsavel(
+                              item
+                            )
+                          }
+                          className="mt-3 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
+                        >
+                          {desvinculandoResponsavelId ===
+                          item.id
+                            ? "Removendo..."
+                            : "Remover responsável"}
+                        </button>
+                      )}
+                    </div>
+                  )
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSegurancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-lg p-5">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto bg-white rounded-xl shadow-lg p-5">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-lg font-semibold text-gray-900">🔑 Segurança</h3>
               <button
@@ -1727,7 +2879,7 @@ export default function ConfiguracoesPerfil() {
         </div>
       </div>
     )}
-    <BottomNav />
+    {!somenteGestaoConta && <BottomNav />}
     </div>
   );
 }

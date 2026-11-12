@@ -48,16 +48,42 @@ export async function me(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
 
-    const contexto =
-      await resolveUserContext(
-        req.userId
-      );
+    let contexto:
+      Awaited<ReturnType<typeof resolveUserContext>> | null = null;
+
+    try {
+      contexto = await resolveUserContext(req.userId);
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== "NO_ACTIVE_CONTEXT"
+      ) {
+        throw error;
+      }
+    }
+
+    if (!contexto) {
+      return res.json({
+        id: usuario.id,
+        nome: usuario.nome,
+        nomeDeUsuario: usuario.nomeDeUsuario,
+        email: usuario.email,
+        foto: usuario.foto,
+        tipo: null,
+        tipoUsuarioId: null,
+        activeContext: null,
+        somenteGestaoConta: true,
+        plano: "FREE",
+        adsEnabled: false,
+        capabilities: [],
+      });
+    }
 
     const flags = await getUserFlags(req.userId);
 
     return res.json({
       ...usuario,
-
+      somenteGestaoConta: false,
       tipo:
         contexto.tipo,
 
@@ -180,10 +206,21 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    const contexto =
-      await resolveUserContext(
-        usuario.id
-      );
+    let contexto:
+      Awaited<ReturnType<typeof resolveUserContext>> | null = null;
+
+    try {
+      contexto = await resolveUserContext(usuario.id);
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        error.message !== "NO_ACTIVE_CONTEXT"
+      ) {
+        throw error;
+      }
+    }
+
+    const somenteGestaoConta = contexto === null;
 
     await prisma.loginEvent.create({
       data: { usuarioId: usuario.id },
@@ -212,17 +249,11 @@ export async function login(req: Request, res: Response) {
 
       token,
 
-      tipo:
-        contexto.tipo,
-
-      tipoUsuarioId:
-        contexto.tipoUsuarioId,
-
-      activeContext:
-        contexto.activeContext,
-
-      isAdmin:
-        contexto.isAdmin === true,
+      tipo: contexto?.tipo ?? null,
+      tipoUsuarioId: contexto?.tipoUsuarioId ?? null,
+      activeContext: contexto?.activeContext ?? null,
+      isAdmin: contexto?.isAdmin === true,
+      somenteGestaoConta,
 
       nomeDeUsuario:
         usuario.nomeDeUsuario,
@@ -231,23 +262,12 @@ export async function login(req: Request, res: Response) {
         usuario.id,
 
       usuario: {
-        id:
-          usuario.id,
-
-        nomeDeUsuario:
-          usuario.nomeDeUsuario,
-
-        tipo:
-          contexto.tipo,
-
-        activeContext:
-          contexto.activeContext,
-
-        email:
-          usuario.email,
-
-        verified:
-          usuario.verified,
+        id: usuario.id,
+        nomeDeUsuario: usuario.nomeDeUsuario,
+        tipo: contexto?.tipo ?? null,
+        activeContext: contexto?.activeContext ?? null,
+        email: usuario.email,
+        verified: usuario.verified,
       },
     });
   } catch (error) {

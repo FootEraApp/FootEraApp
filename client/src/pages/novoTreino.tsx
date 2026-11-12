@@ -232,11 +232,32 @@ const getToken = () =>
   "";
 
 const PONTOS = {
-  NIVEL: { Base: 0, Avancado: 10, Performance: 20 } as Record<string, number>,
-  TIPO: { Tecnico: 5, Fisico: 6, Tatico: 8 } as Record<string, number>,
-  POR_EXERCICIO: 4,
+  NIVEL: {
+    base: 0,
+    avancado: 10,
+    performance: 20,
+  },
+  TIPO: {
+    tecnico: 5,
+    fisico: 6,
+    tatico: 8,
+    mental: 5,
+  },
+  EXERCICIO: {
+    base: 4,
+    avancado: 6,
+    performance: 8,
+  },
   POR_15_MIN: 1,
 };
+
+function normalizarNivelOuTipo(valor: unknown): string {
+  return String(valor ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
 
 const NOMES_MESES_PT = [
   "Janeiro",
@@ -426,28 +447,73 @@ function calcularPontuacaoTreino(
   duracaoMin: number,
   exercicios: ExItemUILocal[],
 ): PontuacaoDetalhe {
-  const exCount = exercicios.filter((e) => e.idCatalogo || (e.nome && e.nome.trim())).length;
-  const ptsEx = exCount * PONTOS.POR_EXERCICIO;
+  const nivelNormalizado = normalizarNivelOuTipo(nivel);
+  const tipoNormalizado = normalizarNivelOuTipo(tipoTreino);
 
-  const ptsNivel = PONTOS.NIVEL[nivel as keyof typeof PONTOS.NIVEL] ?? 0;
-  const ptsTipo = PONTOS.TIPO[tipoTreino as keyof typeof PONTOS.TIPO] ?? 0;
+  const ptsNivel =
+    PONTOS.NIVEL[
+      nivelNormalizado as keyof typeof PONTOS.NIVEL
+    ] ?? 0;
 
-  const dur = Number.isFinite(Number(duracaoMin)) ? Number(duracaoMin) : 0;
-  const ptsDur = Math.max(0, Math.floor(dur / 15) * PONTOS.POR_15_MIN);
-  const total = ptsEx + ptsNivel + ptsTipo + ptsDur;
+  const ptsTipo =
+    PONTOS.TIPO[
+      tipoNormalizado as keyof typeof PONTOS.TIPO
+    ] ?? 0;
+
+  const exerciciosValidos = exercicios.filter((ex) =>
+    Boolean(
+      String(
+        ex.exercicioId ||
+        ex.idCatalogo ||
+        ex.exercicioPersonalizadoId ||
+        ex.exercicioTemporarioId ||
+        ex.nome ||
+        ""
+      ).trim()
+    )
+  );
+
+  const ptsEx = exerciciosValidos.reduce((total, ex) => {
+    const nivelExercicio =
+      normalizarNivelOuTipo(ex.nivel) ||
+      nivelNormalizado;
+
+    const pontos =
+      PONTOS.EXERCICIO[
+        nivelExercicio as keyof typeof PONTOS.EXERCICIO
+      ] ??
+      PONTOS.EXERCICIO[
+        nivelNormalizado as keyof typeof PONTOS.EXERCICIO
+      ] ??
+      4;
+
+    return total + pontos;
+  }, 0);
+
+  const minutos = Number(duracaoMin);
+  const ptsDur =
+    Number.isFinite(minutos) && minutos > 0
+      ? Math.floor(minutos / 15) * PONTOS.POR_15_MIN
+      : 0;
 
   return {
-    total,
+    total: ptsNivel + ptsTipo + ptsEx + ptsDur,
     nivel: ptsNivel,
     tipo: ptsTipo,
     exercicios: ptsEx,
     duracao: ptsDur,
-    exCount,
+    exCount: exerciciosValidos.length,
   };
 }
 
 interface UsuarioLogado {
-  tipo: "atleta" | "escola" | "escolinha" | "clube" | "professor";
+  tipo:
+    | "atleta"
+    | "responsavel"
+    | "escola"
+    | "escolinha"
+    | "clube"
+    | "professor";
 }
 
 interface Exercicio {
@@ -1143,7 +1209,98 @@ export default function NovoTreino() {
     return (sp.get(key) || "").trim();
   };
 
-  const search = route.includes("?") ? route.slice(route.indexOf("?")) : "";
+  const search =
+    typeof window !== "undefined"
+      ? window.location.search
+      : "";
+
+  const atletaIdGerenciado =
+    getQueryParam(
+      search,
+      "atletaId"
+    );
+  
+  const treinoProgramadoIdDaUrl =
+    getQueryParam(search, "treinoProgramadoId");
+
+  const [nomeAtletaGerenciado, setNomeAtletaGerenciado] =
+  useState<string | null>(null);
+
+  const ehResponsavelGerenciando =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "responsavel" &&
+    Boolean(
+      atletaIdGerenciado
+    );
+      
+    useEffect(() => {
+      if (!ehResponsavelGerenciando) {
+        setNomeAtletaGerenciado(null);
+        return;
+      }
+
+      let cancelado = false;
+
+      async function consultarNomeAtleta() {
+        try {
+          const token =
+            Storage.token ??
+            localStorage.getItem("token") ??
+            sessionStorage.getItem("token");
+
+          const resposta = await fetch(
+            `${API.BASE_URL}/api/responsaveis/me/atletas`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!resposta.ok) {
+            throw new Error("Falha ao consultar atletas.");
+          }
+
+          const dados = await resposta.json();
+
+          const vinculo = (
+            Array.isArray(dados?.items) ? dados.items : []
+          ).find(
+            (item: any) =>
+              item.atletaId === atletaIdGerenciado &&
+              item.status === "ATIVO" &&
+              (
+                item.principal === true ||
+                item.podeGerenciarTreinos === true
+              )
+          );
+
+          if (!cancelado) {
+            setNomeAtletaGerenciado(
+              vinculo?.atleta?.nome ?? null
+            );
+          }
+        } catch (error) {
+          console.error(
+            "[NovoTreino] Falha ao identificar atleta:",
+            error
+          );
+
+          if (!cancelado) {
+            setNomeAtletaGerenciado(null);
+          }
+        }
+      }
+
+      void consultarNomeAtleta();
+
+      return () => {
+        cancelado = true;
+      };
+    }, [ehResponsavelGerenciando, atletaIdGerenciado]);
+
   const treinoIdEdit =
     getQueryParam(search, "id") ||
     getQueryParam(search, "treinoId") ||
@@ -1181,10 +1338,49 @@ export default function NovoTreino() {
   const [assinaturaChecada, setAssinaturaChecada] = useState(false);
   const [carregandoAssinatura, setCarregandoAssinatura] = useState(false);
 
+  useEffect(() => {
+    setAssinaturaChecada(
+      false
+    );
+
+    setIsAtletaPro(
+      true
+    );
+  }, [
+    activeContext?.key,
+    atletaIdGerenciado,
+  ]);
+
   const [prazos, setPrazos] = useState<Record<string, string>>({});
   const [exerciciosDisponiveis, setExerciciosDisponiveis] = useState<Exercicio[]>([]);
   const [treinosDisponiveis, setTreinosDisponiveis] = useState<TreinoProgramado[]>([]);
   const [treinosSalvosAtleta, setTreinosSalvosAtleta] = useState<TreinoProgramado[]>([]);
+  const [
+    salvandoTreinoId,
+    setSalvandoTreinoId,
+  ] =
+    useState<string | null>(
+      null
+    );
+  const treinosSalvosIds =
+    useMemo(
+      () =>
+        new Set(
+          treinosSalvosAtleta
+            .map(
+              (treino) =>
+                String(
+                  treino.treinoProgramadoId ??
+                  treino.id ??
+                  ""
+                ).trim()
+            )
+            .filter(Boolean)
+        ),
+      [
+        treinosSalvosAtleta,
+      ]
+    );
   const [carregandoSalvosAtleta, setCarregandoSalvosAtleta] = useState(false);
   const [erroSalvosAtleta, setErroSalvosAtleta] = useState("");
   const [capaPreview, setCapaPreview] = useState<string>("");
@@ -1195,6 +1391,52 @@ export default function NovoTreino() {
   const [abaTreinosAtleta, setAbaTreinosAtleta] = useState<AbaTreinosAtleta>("meu_professor");
   const [buscaTreinoAtleta, setBuscaTreinoAtleta] = useState("");
   const [treinosFootera, setTreinosFootera] = useState<TreinoProgramado[]>([]);
+  const [
+    treinoIdEmFoco,
+    setTreinoIdEmFoco,
+  ] = useState(treinoProgramadoIdDaUrl);
+
+  const treinoPreSelecionadoRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      !treinoIdEmFoco ||
+      treinoPreSelecionadoRef.current
+    ) {
+      return;
+    }
+
+    const idDesejado = String(treinoIdEmFoco).trim();
+
+    const encontrar = (lista: TreinoProgramado[]) =>
+      lista.some(
+        (treino) =>
+          String(
+            treino.treinoProgramadoId ??
+            treino.id ??
+            ""
+          ).trim() === idDesejado
+      );
+
+    if (encontrar(treinosDisponiveis)) {
+      setAbaTreinosAtleta("meu_professor");
+    } else if (encontrar(treinosSalvosAtleta)) {
+      setAbaTreinosAtleta("salvos");
+    } else if (encontrar(treinosFootera)) {
+      setAbaTreinosAtleta("footera");
+    } else {
+      return;
+    }
+
+    setBuscaTreinoAtleta("");
+    treinoPreSelecionadoRef.current = true;
+  }, [
+    treinoIdEmFoco,
+    treinosDisponiveis,
+    treinosSalvosAtleta,
+    treinosFootera,
+  ]);
+
   const [professorVinculadoIds, setProfessorVinculadoIds] = useState<string[]>([]);
   const [atletasVinculados, setAtletasVinculados] = useState<AtletaVinculado[]>([]);
   const [atletasSelecionados, setAtletasSelecionados] = useState<string[]>([]);
@@ -1532,13 +1774,30 @@ export default function NovoTreino() {
   }
 
   async function checarAssinaturaAtletaPro() {
-    const ehAtletaAtivo =
+    const ehAtleta =
       activeContext?.kind ===
         "PERSONAL" &&
       activeTipoUsuario ===
         "atleta";
 
-    if (!ehAtletaAtivo) {
+    const ehResponsavel =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      activeTipoUsuario ===
+        "responsavel" &&
+      Boolean(
+        atletaIdGerenciado
+      );
+
+    /*
+    * Essa regra só se aplica à tela
+    * de Atleta / Responsável
+    * gerenciando Atleta.
+    */
+    if (
+      !ehAtleta &&
+      !ehResponsavel
+    ) {
       setIsAtletaPro(
         true
       );
@@ -1555,8 +1814,7 @@ export default function NovoTreino() {
 
     const userId =
       String(
-        authContext?.user?.id ??
-        ""
+        usuarioId ?? ""
       ).trim();
 
     if (
@@ -1574,37 +1832,65 @@ export default function NovoTreino() {
       return false;
     }
 
-    if (!token || !userId) {
-      setIsAtletaPro(false);
-      setAssinaturaChecada(true);
-      return false;
-    }
-
     try {
-      setCarregandoAssinatura(true);
-
-      const res = await axios.get(
-        `${API.BASE_URL}/api/usuarios/${encodeURIComponent(userId)}/assinatura`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      setCarregandoAssinatura(
+        true
       );
 
-      const ok = Boolean(res.data?.isPro);
+      const queryResponsavel =
+        ehResponsavel &&
+        atletaIdGerenciado
+          ? `?atletaId=${encodeURIComponent(
+              atletaIdGerenciado
+            )}`
+          : "";
 
-      setIsAtletaPro(ok);
-      setAssinaturaChecada(true);
+      const res =
+        await axios.get(
+          `${API.BASE_URL}/api/usuarios/${encodeURIComponent(
+            userId
+          )}/assinatura${queryResponsavel}`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      const ok =
+        Boolean(
+          res.data?.isPro
+        );
+
+      setIsAtletaPro(
+        ok
+      );
+
+      setAssinaturaChecada(
+        true
+      );
 
       return ok;
     } catch (e) {
-      console.warn("[NovoTreino] erro ao checar assinatura:", e);
+      console.warn(
+        "[NovoTreino] erro ao checar assinatura:",
+        e
+      );
 
-      setIsAtletaPro(false);
-      setAssinaturaChecada(true);
+      setIsAtletaPro(
+        false
+      );
+
+      setAssinaturaChecada(
+        true
+      );
 
       return false;
     } finally {
-      setCarregandoAssinatura(false);
+      setCarregandoAssinatura(
+        false
+      );
     }
   }
 
@@ -2010,28 +2296,52 @@ export default function NovoTreino() {
     useMemo(() => {
       if (
         activeContext?.kind !==
-          "PERSONAL" ||
-        activeTipoUsuario !==
-          "atleta"
+        "PERSONAL"
       ) {
         return "";
       }
 
-      return activeTipoUsuarioId;
+      if (
+        activeTipoUsuario ===
+        "atleta"
+      ) {
+        return activeTipoUsuarioId;
+      }
+
+      if (
+        activeTipoUsuario ===
+          "responsavel" &&
+        atletaIdGerenciado
+      ) {
+        return atletaIdGerenciado;
+      }
+
+      return "";
     }, [
       activeContext?.key,
       activeContext?.kind,
       activeTipoUsuario,
       activeTipoUsuarioId,
+      atletaIdGerenciado,
     ]);
 
+  const contextoAtletaGerenciavel =
+      activeContext?.kind ===
+        "PERSONAL" &&
+      (
+        activeTipoUsuario ===
+          "atleta" ||
+        (
+          activeTipoUsuario ===
+            "responsavel" &&
+          Boolean(
+            atletaIdGerenciado
+          )
+        )
+      );
+
   useEffect(() => {
-    if (
-      activeContext?.kind !==
-        "PERSONAL" ||
-      activeTipoUsuario !==
-        "atleta"
-    ) {
+    if (!contextoAtletaGerenciavel) {
       return;
     }
 
@@ -2055,19 +2365,70 @@ export default function NovoTreino() {
         }
 
         const tries = [
-          `${API.BASE_URL}/api/treinos/disponiveis?atletaId=${encodeURIComponent(atletaId)}`,
+          `${API.BASE_URL}/api/treinos/disponiveis?atletaId=${encodeURIComponent(
+            atletaId
+          )}`,
         ];
 
-        let lista: any[] = [];
-        for (const url of tries) {
-          const r = await fetch(url, { headers });
-          if (!r.ok) continue;
-          const j = await r.json();
-          const arr = Array.isArray(j)
-            ? j
-            : j.items ?? j.data ?? j.rows ?? j.result ?? [];
-          if (Array.isArray(arr)) {
-            lista = arr;
+        let lista:
+          any[] =
+          [];
+
+        for (
+          const url of tries
+        ) {
+          const r =
+            await fetch(
+              url,
+              {
+                headers,
+              }
+            );
+
+          if (!r.ok) {
+            const erro =
+              await r
+                .text()
+                .catch(
+                  () => ""
+                );
+
+            console.error(
+              "[NovoTreino] /api/treinos/disponiveis falhou:",
+              {
+                status:
+                  r.status,
+
+                url,
+
+                atletaId,
+
+                resposta:
+                  erro,
+              }
+            );
+
+            continue;
+          }
+
+          const j =
+            await r.json();
+
+          const arr =
+            Array.isArray(j)
+              ? j
+              : j.items ??
+                j.data ??
+                j.rows ??
+                j.result ??
+                [];
+
+          if (
+            Array.isArray(arr)
+          ) {
+            lista =
+              arr;
+
             break;
           }
         }
@@ -2126,7 +2487,16 @@ export default function NovoTreino() {
   }, [atletaIdLogado, activeContext?.key, activeTipoUsuario]);
 
   useEffect(() => {
-    if (usuario?.tipo !== "atleta" || abaTreinosAtleta !== "salvos") return;
+    if (
+      !(
+        usuario?.tipo ===
+          "atleta" ||
+        usuario?.tipo ===
+          "responsavel"
+      )
+    ) {
+      return;
+    }
 
     const controller = new AbortController();
     setCarregandoSalvosAtleta(true);
@@ -2137,11 +2507,29 @@ export default function NovoTreino() {
         const token = getToken();
         if (!token) throw new Error("Entre na FootEra para ver seus treinos salvos.");
 
-        const r = await fetch(`${API.BASE_URL}/api/treinos/biblioteca`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-          cache: "no-store",
-        });
+        const bibliotecaQuery =
+          atletaIdGerenciado
+            ? `?atletaId=${encodeURIComponent(
+                atletaIdGerenciado
+              )}`
+            : "";
+
+        const r =
+          await fetch(
+            `${API.BASE_URL}/api/treinos/biblioteca${bibliotecaQuery}`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+
+              signal:
+                controller.signal,
+
+              cache:
+                "no-store",
+            }
+          );
         await assertOk(r, "Falha ao carregar seus treinos salvos");
         const data = await r.json();
         const items = Array.isArray(data?.items) ? data.items : [];
@@ -2174,16 +2562,18 @@ export default function NovoTreino() {
     })();
 
     return () => controller.abort();
-  }, [usuario?.tipo, abaTreinosAtleta]);
+  }, [
+    usuario?.tipo,
+    atletaIdGerenciado,
+    activeContext?.key,
+  ]);
 
   useEffect(() => {
-    const tipo =
-      (Storage as any).tipoSalvo ??
-      localStorage.getItem("tipoUsuario") ??
-      sessionStorage.getItem("tipoUsuario") ??
-      "";
-
-    if (String(tipo).toLowerCase() !== "atleta") return;
+    if (
+      !contextoAtletaGerenciavel
+    ) {
+      return;
+    }
 
     let cancel = false;
 
@@ -2238,12 +2628,7 @@ export default function NovoTreino() {
   }, [atletaIdLogado]);
 
   useEffect(() => {
-    if (
-      activeContext?.kind !==
-        "PERSONAL" ||
-      activeTipoUsuario !==
-        "atleta"
-    ) {
+    if (!contextoAtletaGerenciavel) {
       return;
     }
 
@@ -2429,22 +2814,30 @@ export default function NovoTreino() {
         : activeTipoUsuario === "escolinha"
         ? "escola"
         : activeTipoUsuario;
+    
+    const tipoTela =
+      tipoContexto ===
+          "responsavel" &&
+        atletaIdGerenciado
+        ? "responsavel"
+        : tipoContexto;
 
     const permitidos = [
       "escola",
       "clube",
       "professor",
       "atleta",
+      "responsavel",
     ] as const;
 
     if (
       permitidos.includes(
-        tipoContexto as any
+        tipoTela as any
       )
     ) {
       setUsuario({
         tipo:
-          tipoContexto as
+          tipoTela as
             (typeof permitidos)[number],
       });
     } else {
@@ -3954,6 +4347,296 @@ export default function NovoTreino() {
     }
   };
 
+  const salvarTreinoDisponivel =
+    async (
+      t: TreinoProgramado
+    ) => {
+      const token =
+        getToken();
+
+      if (!token) {
+        showToast(
+          "Sessão expirada. Faça login novamente.",
+          "error"
+        );
+
+        return;
+      }
+
+      /*
+      * Atleta:
+      *   salva na própria biblioteca.
+      *
+      * Responsável:
+      *   salva na biblioteca do atleta
+      *   que está sendo gerenciado.
+      */
+      const queryAtleta =
+        ehResponsavelGerenciando &&
+        atletaIdGerenciado
+          ? `?atletaId=${encodeURIComponent(
+              atletaIdGerenciado
+            )}`
+          : "";
+
+      try {
+        setSalvandoTreinoId(
+          t.id
+        );
+
+        const resposta =
+          await fetch(
+            `${API.BASE_URL}/api/treinos/biblioteca${queryAtleta}`,
+            {
+              method:
+                "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+
+                Authorization:
+                  `Bearer ${token}`,
+              },
+
+              body:
+                JSON.stringify({
+                  treinoProgramadoId:
+                    t.id,
+                }),
+            }
+          );
+
+        const data =
+          await resposta
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if (
+          resposta.status ===
+          409
+        ) {
+          /*
+          * Se o backend diz que já existe,
+          * sincronizamos o estado local.
+          */
+          setTreinosSalvosAtleta(
+            (atuais) => {
+              const existe =
+                atuais.some(
+                  (item) =>
+                    String(
+                      item.treinoProgramadoId ??
+                      item.id
+                    ) ===
+                    String(t.id)
+                );
+
+              return existe
+                ? atuais
+                : [
+                    ...atuais,
+                    {
+                      ...t,
+                      treinoProgramadoId:
+                        t.id,
+                    },
+                  ];
+            }
+          );
+
+          showToast(
+            data?.message ||
+              "Este treino já está salvo.",
+            "info"
+          );
+
+          return;
+        }
+
+        if (!resposta.ok) {
+          throw new Error(
+            data?.message ||
+              "Não foi possível salvar o treino."
+          );
+        }
+
+        setTreinosSalvosAtleta(
+          (atuais) => {
+            const existe =
+              atuais.some(
+                (item) =>
+                  String(
+                    item.treinoProgramadoId ??
+                    item.id
+                  ) ===
+                  String(t.id)
+              );
+
+            if (existe) {
+              return atuais;
+            }
+
+            return [
+              ...atuais,
+              {
+                ...t,
+
+                treinoProgramadoId:
+                  t.id,
+              },
+            ];
+          }
+        );
+
+        showToast(
+          "Treino salvo com sucesso!",
+          "success"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "[NovoTreino] salvar treino:",
+          error
+        );
+
+        showToast(
+          error?.message ||
+            "Não foi possível salvar o treino.",
+          "error"
+        );
+      } finally {
+        setSalvandoTreinoId(
+          null
+        );
+      }
+    };
+
+  const removerTreinoSalvo =
+    async (
+      t: TreinoProgramado
+    ) => {
+      const token =
+        getToken();
+
+      if (!token) {
+        showToast(
+          "Sessão expirada. Faça login novamente.",
+          "error"
+        );
+
+        return;
+      }
+
+      const confirmou =
+        window.confirm(
+          `Deseja remover "${t.nome}" dos treinos salvos?`
+        );
+
+      if (!confirmou) {
+        return;
+      }
+
+      const treinoProgramadoId =
+        String(
+          t.treinoProgramadoId ??
+          t.id ??
+          ""
+        ).trim();
+
+      if (
+        !treinoProgramadoId
+      ) {
+        showToast(
+          "Não foi possível identificar o treino.",
+          "error"
+        );
+
+        return;
+      }
+
+      const queryAtleta =
+        ehResponsavelGerenciando &&
+        atletaIdGerenciado
+          ? `?atletaId=${encodeURIComponent(
+              atletaIdGerenciado
+            )}`
+          : "";
+
+      try {
+        setSalvandoTreinoId(
+          treinoProgramadoId
+        );
+
+        const resposta =
+          await fetch(
+            `${API.BASE_URL}/api/treinos/biblioteca/${encodeURIComponent(
+              treinoProgramadoId
+            )}${queryAtleta}`,
+            {
+              method:
+                "DELETE",
+
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        const data =
+          await resposta
+            .json()
+            .catch(
+              () => ({})
+            );
+
+        if (!resposta.ok) {
+          throw new Error(
+            data?.message ||
+              "Não foi possível remover o treino dos salvos."
+          );
+        }
+
+        setTreinosSalvosAtleta(
+          (atuais) =>
+            atuais.filter(
+              (item) =>
+                String(
+                  item.treinoProgramadoId ??
+                  item.id
+                ) !==
+                treinoProgramadoId
+            )
+        );
+
+        showToast(
+          "Treino removido dos salvos.",
+          "success"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          "[NovoTreino] remover treino salvo:",
+          error
+        );
+
+        showToast(
+          error?.message ||
+            "Não foi possível remover o treino dos salvos.",
+          "error"
+        );
+      } finally {
+        setSalvandoTreinoId(
+          null
+        );
+      }
+    };
+
   const agendarTreino = async (t: TreinoProgramado) => {
     try {
       const atletaId = String(atletaIdLogado || "").trim();
@@ -3989,7 +4672,16 @@ export default function NovoTreino() {
       const expira = new Date(quando.getTime() + 3 * 24 * 60 * 60 * 1000);
       const dataTreinoLocal = toISOWithLocalOffset(quando);
       const dataExpiracaoLocal = toISOWithLocalOffset(expira);
-      const res = await fetch(`${API.BASE_URL}/api/treinos/agendados`, {
+      const qsResponsavel =
+        ehResponsavelGerenciando
+          ? `?atletaId=${encodeURIComponent(
+              atletaId
+            )}`
+          : "";
+
+      const res =
+        await fetch(
+          `${API.BASE_URL}/api/treinos/agendados${qsResponsavel}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -4039,12 +4731,16 @@ export default function NovoTreino() {
   if (!usuario)
     return (
       <div className="p-4 text-center">
-        Você precisa estar logado como <b>Escola</b>, <b>Clube</b> ou{" "}
-        <b>Professor</b> para criar treinos.
+        Use um perfil de Atleta, Responsável, Professor, Clube ou Escola para acessar esta área.
       </div>
     );
 
-  if (usuario.tipo === "atleta") {
+  if (
+    usuario.tipo ===
+      "atleta" ||
+    usuario.tipo ===
+      "responsavel"
+  ) {
     const normalizarBusca = (v: string) =>
       String(v || "")
         .normalize("NFD")
@@ -4065,7 +4761,7 @@ export default function NovoTreino() {
         ? treinosSalvosAtleta
         : treinosParceirosFootera;
 
-    const listaAtiva = termoBusca
+    const listaFiltrada = termoBusca
       ? listaBase.filter((t) => {
           const nomesCriadores = [
             t.criador?.nome,
@@ -4083,8 +4779,54 @@ export default function NovoTreino() {
         })
       : listaBase;
 
+    const listaComTreinoSelecionado = treinoIdEmFoco
+      ? listaFiltrada.filter(
+          (t) =>
+            String(
+              t.treinoProgramadoId ??
+              t.id ??
+              ""
+            ).trim() === treinoIdEmFoco
+        )
+      : listaFiltrada;
+
+    const listaAtiva =
+      treinoIdEmFoco && listaComTreinoSelecionado.length > 0
+        ? listaComTreinoSelecionado
+        : listaFiltrada;
+
     return (
       <div className="p-4 max-w-xl mx-auto mb-5">
+        {treinoIdEmFoco && (
+          <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3">
+            <p className="text-sm font-semibold text-green-900">
+              Treino selecionado para agendamento
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTreinoIdEmFoco("");
+                setBuscaTreinoAtleta("");
+              }}
+              className="mt-2 rounded-lg border border-green-700 bg-white px-3 py-2 text-sm font-medium text-green-800"
+            >
+              Mostrar todos os treinos
+            </button>
+          </div>
+        )}
+        {usuario.tipo ===
+          "responsavel" && (
+          <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+              Agendando treino para
+            </p>
+
+            <p className="mt-1 font-bold text-green-950">
+              {nomeAtletaGerenciado ?? "Identificando atleta..."}
+            </p>
+          </div>
+        )}
         <Link
           href="/treinos"
           aria-label="Voltar para treinos"
@@ -4143,7 +4885,10 @@ export default function NovoTreino() {
             Treinos salvos
           </button>
         </div>
-          {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
+          {(
+            String(usuario?.tipo || "").toLowerCase() === "atleta" ||
+            String(usuario?.tipo || "").toLowerCase() === "responsavel"
+          ) && (
             <div className="relative mb-4">
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
@@ -4338,11 +5083,79 @@ export default function NovoTreino() {
                 }}
               />
 
-              <div className="flex justify-end mt-2">
+              <div className="mt-3 flex items-center justify-end gap-2">
+                {(() => {
+                  const treinoProgramadoId =
+                    String(
+                      t.treinoProgramadoId ??
+                      t.id ??
+                      ""
+                    );
+
+                  const jaSalvo =
+                    treinosSalvosIds.has(
+                      treinoProgramadoId
+                    );
+
+                  const processando =
+                    salvandoTreinoId ===
+                    treinoProgramadoId;
+
+                  if (jaSalvo) {
+                    return (
+                      <button
+                        type="button"
+                        disabled={
+                          processando
+                        }
+                        onClick={() =>
+                          removerTreinoSalvo(
+                            t
+                          )
+                        }
+                        className={
+                          abaTreinosAtleta ===
+                          "salvos"
+                            ? "rounded border border-red-300 bg-red-50 px-3 py-1 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            : "rounded border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        }
+                      >
+                        {processando
+                          ? "Removendo..."
+                          : abaTreinosAtleta ===
+                              "salvos"
+                            ? "Remover dos salvos"
+                            : "✓ Treino já salvo"}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      disabled={
+                        processando
+                      }
+                      onClick={() =>
+                        salvarTreinoDisponivel(
+                          t
+                        )
+                      }
+                      className="rounded border border-green-800 bg-white px-3 py-1 text-sm font-semibold text-green-800 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {processando
+                        ? "Salvando..."
+                        : "Salvar treino"}
+                    </button>
+                  );
+                })()}
+
                 <button
-                  className="mt-3 bg-green-800 text-white px-3 py-1 rounded text-sm w-fit"
-                  style={{ alignSelf: "flex-end" }}
-                  onClick={() => agendarTreino(t)}
+                  type="button"
+                  className="rounded bg-green-800 px-3 py-1 text-sm text-white"
+                  onClick={() =>
+                    agendarTreino(t)
+                  }
                 >
                   Agendar treino
                 </button>
@@ -4787,8 +5600,25 @@ export default function NovoTreino() {
                           ?.videoPosterUrl ??
                         null
                     );
-                  const nomeFinal = base?.nome ?? ex.nome ?? "";
-                  const nivelFinal = base?.nivel ?? undefined;
+                  
+                    const nomeFinal = base?.nome ?? ex.nome ?? "";
+
+                    const nivelFinalRaw =
+                      ex.nivel ||
+                      base?.nivel ||
+                      nivel ||
+                      "Base";
+
+                    const nivelNormalizado =
+                      normalizarNivelOuTipo(nivelFinalRaw);
+
+                    const nivelFinal =
+                      nivelNormalizado === "avancado"
+                        ? "Avançado"
+                        : nivelNormalizado === "performance"
+                          ? "Performance"
+                          : "Base";
+
                   const descFinal = base?.objetivo ?? base?.descricao ?? ex.descricao ?? "";
                   const ehDoBanco = Boolean(ex.idCatalogo || (ex as any).exercicioPersonalizadoId);
                   return (
@@ -4906,13 +5736,10 @@ export default function NovoTreino() {
                                   )
                                 }
                               />
-                            )}
-
-                            {nivelFinal ? (
-                              <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
-                                {nivelFinal}
-                              </span>
-                            ) : null}
+                            )}                            
+                            <span className="shrink-0 rounded-full border border-green-200 bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-800">
+                              {nivelFinal}
+                            </span>
                           </div>
 
                           {ehDoBanco ? (
@@ -4930,8 +5757,8 @@ export default function NovoTreino() {
                             />
                           )}
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                            <div className="md:col-span-2 flex gap-2 mb-1">
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="col-span-3 mb-1 flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => atualizarExercicio(i, "tipoExecucao", "repeticao")}
@@ -4982,7 +5809,7 @@ export default function NovoTreino() {
                                 </div>
                               </>
                             ) : (
-                              <div className="md:col-span-2">
+                              <div className="col-span-2">
                                 <label className="block text-sm text-zinc-700 mb-1">Duração</label>
                                 <input
                                   type="text"
@@ -4994,7 +5821,7 @@ export default function NovoTreino() {
                               </div>
                             )}
 
-                            <div className={ex.tipoExecucao === "duracao" ? "md:col-span-2" : ""}>
+                            <div className="col-span-1 min-w-0">
                               <label className="block text-sm text-zinc-700 mb-1">Descanso (opcional)</label>
                               <input
                                 type="text"
@@ -5005,7 +5832,7 @@ export default function NovoTreino() {
                               />
                             </div>
 
-                            <div className="md:col-span-2">
+                            <div className="col-span-3">
                               <label className="block text-sm text-zinc-700 mb-1">Descrição (opcional)</label>
                               <textarea
                                 className="w-full rounded-lg border border-zinc-300 px-3 py-2 min-h-[90px]"
@@ -5080,43 +5907,43 @@ export default function NovoTreino() {
                   Exercícios criados por você na aba meus exercícios da página de treino
                 </p>
 
-                <div className="flex flex-col gap-3 w-full mb-4">
+                <div className="mb-3 grid w-full grid-cols-3 gap-2">
                   <input
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                    className="col-span-3 min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600"
                     placeholder="Buscar meus exercícios..."
                     value={filtroEx}
                     onChange={(e) => setFiltroEx(e.target.value)}
                   />
 
                   <select
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                     value={filtroCategoria}
                     onChange={(e) => setFiltroCategoria(e.target.value)}
                   >
                     {OPCOES_CATEGORIA.map((cat) => (
                       <option key={cat} value={cat}>
-                        {cat}
+                        {cat === "Todas as categorias" ? "Categorias" : cat}
                       </option>
                     ))}
                   </select>
 
                   <select
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                     value={filtroNivel}
                     onChange={(e) => setFiltroNivel(e.target.value)}
                   >
-                    <option value="">Todos os níveis</option>
+                    <option value="">Níveis</option>
                     <option value="Base">Base</option>
                     <option value="Avancado">Avançado</option>
                     <option value="Performance">Performance</option>
                   </select>
 
                   <select
-                    className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                    className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                     value={filtroVideo}
                     onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
                   >
-                    <option value="">Com/sem vídeo</option>
+                    <option value="">Vídeos</option>
                     <option value="com">Somente com vídeo</option>
                     <option value="sem">Somente sem vídeo</option>
                   </select>
@@ -5223,28 +6050,28 @@ export default function NovoTreino() {
               </>
                ) : abaExercicios === "catalogo" ? (
                 <>
-                  <div className="flex flex-col gap-3 w-full mb-4">
+                  <div className="mb-3 grid w-full grid-cols-3 gap-2">
                     <input
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                      className="col-span-3 min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600"
                       placeholder="Buscar exercícios do bd..."
                       value={filtroEx}
                       onChange={(e) => setFiltroEx(e.target.value)}
                     />
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroCategoria}
                       onChange={(e) => setFiltroCategoria(e.target.value)}
                     >
                       {OPCOES_CATEGORIA.map((cat) => (
                         <option key={cat} value={cat}>
-                          {cat}
+                          {cat === "Todas as categorias" ? "Categorias" : cat}
                         </option>
                       ))}
                     </select>
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroNivel}
                       onChange={(e) => setFiltroNivel(e.target.value)}
                     >
@@ -5255,7 +6082,7 @@ export default function NovoTreino() {
                     </select>
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroVideo}
                       onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
                     >
@@ -5379,28 +6206,28 @@ export default function NovoTreino() {
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col gap-3 w-full mb-4">
+                  <div className="mb-3 grid w-full grid-cols-3 gap-2">
                     <input
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-emerald-600"
+                      className="col-span-3 min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-600"
                       placeholder="Buscar exercícios personalizados..."
                       value={filtroEx}
                       onChange={(e) => setFiltroEx(e.target.value)}
                     />
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroCategoria}
                       onChange={(e) => setFiltroCategoria(e.target.value)}
                     >
                       {OPCOES_CATEGORIA.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
+                      <option key={cat} value={cat}>
+                        {cat === "Todas as categorias" ? "Categorias" : cat}
+                      </option>
+                    ))}
                     </select>
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroNivel}
                       onChange={(e) => setFiltroNivel(e.target.value)}
                     >
@@ -5411,7 +6238,7 @@ export default function NovoTreino() {
                     </select>
 
                     <select
-                      className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-emerald-600"
+                      className="min-w-0 w-full rounded-lg border border-zinc-300 bg-white px-1.5 py-2 text-xs sm:text-sm outline-none focus:border-emerald-600"
                       value={filtroVideo}
                       onChange={(e) => setFiltroVideo(e.target.value as "" | "com" | "sem")}
                     >
@@ -6048,22 +6875,6 @@ export default function NovoTreino() {
               playsInline
             />
           </div>
-        </div>
-      )}
-      {String(usuario?.tipo || "").toLowerCase() === "atleta" && (
-        <div className="relative mb-4">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
-          <input
-            value={buscaTreinoAtleta}
-            onChange={(e) => setBuscaTreinoAtleta(e.target.value)}
-            placeholder={
-              abaTreinosAtleta === "meu_professor"
-                ? "Pesquisar por treino, professor, clube ou escolinha..."
-                : "Pesquisar por treino ou professor Footera..."
-            }
-            className="w-full rounded-xl border border-green-200 bg-white pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-700/20 focus:border-green-700"
-          />
         </div>
       )}
       <BottomNav />     

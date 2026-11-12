@@ -128,6 +128,10 @@ export async function getPlano(
 
           canceledAt:
             null,
+
+          renovaEm: {
+            gt: new Date(),
+          },
         },
 
         select: {
@@ -290,6 +294,10 @@ export async function resolveUserContext(
       usuario.id
     );
 
+  if (!activeContext) {
+    throw new Error("NO_ACTIVE_CONTEXT");
+  }
+
   const contextoKey =
     getContextoKey(
       activeContext
@@ -310,6 +318,10 @@ export async function resolveUserContext(
 
               canceledAt:
                 null,
+
+              renovaEm: {
+                gt: new Date(),
+              },
             },
 
             orderBy: [
@@ -339,18 +351,10 @@ export async function resolveUserContext(
         )
       : "FREE";
 
-  const tipo =
-    activeContext
-      ?.tipoUsuario ??
-    usuario.tipo;
+  const tipo = activeContext.tipoUsuario;
 
   const tipoUsuarioId =
-    activeContext
-      ?.tipoUsuarioId ??
-    await getProfileIdForRole(
-      usuario.id,
-      tipo,
-    );
+    activeContext.tipoUsuarioId ?? null;
 
   return {
     id:

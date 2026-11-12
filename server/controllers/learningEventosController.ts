@@ -14,6 +14,8 @@ import { sendError } from "../utils/httpError.js";
 import {
   resolveUserContext,
 } from "../services/planResolver.js";
+import { getActiveContext } from "../services/activeContext.js";
+import { canPermission } from "../services/permissions.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "";
 
@@ -666,6 +668,104 @@ async function criarAcessoMetodologia(params: {
   return null;
 }
 
+async function podeGerenciarEventoLearning(
+  aula: any,
+  userId: string
+): Promise<boolean> {
+  if (!userId || !aula) {
+    return false;
+  }
+
+  const contexto = await getActiveContext(userId);
+
+  if (!contexto) {
+    return false;
+  }
+
+  const contextoSalvo = Boolean(
+    aula.contextoKind ||
+    aula.contextoTipo ||
+    aula.contextoPerfilId ||
+    aula.contextoOrganizacaoId ||
+    aula.contextoLegacyOrganizationId
+  );
+
+  // Eventos antigos sem contexto precisam de
+  // revisão de propriedade antes de concedermos
+  // acesso administrativo automaticamente.
+  if (!contextoSalvo) {
+    return false;
+  }
+
+  // Evento criado em contexto pessoal.
+  if (aula.contextoKind === "PERSONAL") {
+    if (contexto.kind !== "PERSONAL") {
+      return false;
+    }
+
+    const perfilId =
+      contexto.profileId ??
+      contexto.tipoUsuarioId ??
+      null;
+
+    const mesmoPerfil =
+      Boolean(
+        perfilId &&
+        aula.contextoPerfilId &&
+        String(aula.contextoPerfilId) ===
+          String(perfilId)
+      );
+
+    return (
+      aula.criadorUsuarioId === userId &&
+      String(aula.contextoTipo ?? "") ===
+        String(contexto.tipoUsuario ?? "") &&
+      mesmoPerfil
+    );
+  }
+
+  // Evento institucional:
+  // não depende da conta que criou a aula.
+  if (
+    aula.contextoKind !== "ORGANIZATION" ||
+    contexto.kind !== "ORGANIZATION"
+  ) {
+    return false;
+  }
+
+  const mesmoTipo =
+    String(aula.contextoTipo ?? "") ===
+    String(contexto.organizationType ?? "");
+
+  const mesmaOrganizacao =
+    Boolean(
+      aula.contextoOrganizacaoId &&
+      contexto.organizationId &&
+      String(aula.contextoOrganizacaoId) ===
+        String(contexto.organizationId)
+    );
+
+  const mesmaOrganizacaoLegada =
+    Boolean(
+      aula.contextoLegacyOrganizationId &&
+      contexto.legacyOrganizationId &&
+      String(aula.contextoLegacyOrganizationId) ===
+        String(contexto.legacyOrganizationId)
+    );
+
+  if (
+    !mesmoTipo ||
+    (!mesmaOrganizacao && !mesmaOrganizacaoLegada)
+  ) {
+    return false;
+  }
+
+  return canPermission(
+    userId,
+    "GERENCIAR_ORGANIZACAO"
+  );
+}
+
 async function montarEventoResponse(params: {
   aula: any;
   userId: string;
@@ -673,10 +773,10 @@ async function montarEventoResponse(params: {
   const { aula, userId } = params;
 
   const isOwner =
-    !!userId &&
-    (aula.criadorUsuarioId === userId ||
-      aula.metodologia?.criadorUsuarioId === userId ||
-      aula.metodologiaAvulsa?.criadorUsuarioId === userId);
+    await podeGerenciarEventoLearning(
+      aula,
+      userId
+    );
 
   const isConvidadoFootEra =
     !!userId &&

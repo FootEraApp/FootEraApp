@@ -262,13 +262,14 @@ export async function excluir(req: AdminReq, res: Response) {
       });
     }
 
-    await prisma.assinatura.delete({
-      where: { id },
-    });
-
-    return res.json({
-      ok: true,
-      id: assinatura.id,
+    return res.status(409).json({
+      ok: false,
+      code: "SUBSCRIPTION_DELETION_REQUIRES_AUDIT",
+      message:
+        "A exclusão definitiva de assinaturas está " +
+        "temporariamente desabilitada para preservar " +
+        "o histórico financeiro. Utilize os fluxos " +
+        "de cancelamento ou desativação.",
     });
   } catch (e: any) {
     console.error("erro excluir assinatura:", e);

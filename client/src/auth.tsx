@@ -16,6 +16,7 @@ import {
 type SessionStatus =
   | "checking"
   | "valid"
+  | "restricted"
   | "invalid";
 
 function useSessionStatus(): SessionStatus {
@@ -41,11 +42,26 @@ function useSessionStatus(): SessionStatus {
         },
       }
     )
-      .then((response) => {
+      .then(async (response) => {
         if (cancelled) return;
 
         if (response.ok) {
-          setStatus("valid");
+          const data = await response.json();
+
+          if (cancelled) return;
+
+          const restricted = data?.somenteGestaoConta === true;
+
+          const store = localStorage.getItem("token")
+            ? localStorage
+            : sessionStorage;
+
+          store.setItem(
+            "somenteGestaoConta",
+            restricted ? "true" : "false",
+          );
+
+          setStatus(restricted ? "restricted" : "valid");
           return;
         }
 
@@ -104,8 +120,16 @@ export function Private({
   const token =
     readToken();
 
-  const [, navigate] =
-    useLocation();
+  const [location, navigate] = useLocation();
+
+  const somenteGestaoConta =
+    localStorage.getItem("somenteGestaoConta") === "true" ||
+    sessionStorage.getItem("somenteGestaoConta") === "true";
+
+  const rotaDeGestao =
+    location === "/configuracoes" ||
+    location.startsWith("/configuracoes/") ||
+    location === "/perfil/recuperar";
 
   useEffect(() => {
     if (token) {
@@ -122,6 +146,10 @@ export function Private({
     );
   }
 
+  if (token && somenteGestaoConta && !rotaDeGestao) {
+    return <Redirect to="/configuracoes" />;
+  }
+
   return <>{children}</>;
 }
 
@@ -135,6 +163,10 @@ export function PublicOnly({
 
   if (status === "checking") {
     return <SessionChecking />;
+  }
+
+  if (status === "restricted") {
+    return <Redirect to="/configuracoes" />;
   }
 
   return status === "valid"
@@ -153,9 +185,11 @@ export function HomeRedirect() {
   return (
     <Redirect
       to={
-        status === "valid"
-          ? "/perfil"
-          : "/login"
+        status === "restricted"
+          ? "/configuracoes"
+          : status === "valid"
+            ? "/perfil"
+            : "/login"
       }
     />
   );

@@ -1304,7 +1304,10 @@ export default function PerfilMarca({
           )}
 
           {aba === "postagens" && (
-            <ProfilePostsSection usuarioId={usuarioId} />
+            <ProfilePostsSection
+              usuarioId={usuarioId}
+              organizacaoId={entidade?.organizacaoId}
+            />
           )}
         </div>
       </div>

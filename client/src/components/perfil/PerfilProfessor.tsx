@@ -2578,7 +2578,10 @@ export default function PerfilProfessor({
       {aba === "postagens" && (
         <div className="mt-4 px-4 grid gap-4">
           <SectionCard title="Postagens">
-            <ProfilePostsSection usuarioId={usuarioPerfilId} />
+            <ProfilePostsSection
+              usuarioId={usuarioPerfilId}
+              papel="Professor"
+            />
           </SectionCard>
         </div>
       )}

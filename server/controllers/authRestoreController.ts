@@ -2,8 +2,21 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../prisma.js";
+import {
+  obterSupervisaoMenor,
+} from "../services/supervisaoMenor.js";
 
-const SECRET = process.env.JWT_SECRET || "footera_secret";
+const SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error(
+      "JWT_SECRET não configurado no ambiente."
+    );
+  }
+
+  return secret;
+})();
 
 export async function restaurarConta(req: Request, res: Response) {
   const { nomeDeUsuario, email, senha } = req.body ?? {};
@@ -37,6 +50,25 @@ export async function restaurarConta(req: Request, res: Response) {
 
   if (!usuario.deletedAt) {
     return res.status(400).json({ ok: false, message: "Sua conta não está na lixeira." });
+  }
+
+  const supervisao =
+    await obterSupervisaoMenor(
+      usuario.id
+    );
+
+  if (
+    supervisao.supervisionado
+  ) {
+    return res
+      .status(403)
+      .json({
+        code:
+          "GUARDIAN_APPROVAL_REQUIRED_FOR_ACCOUNT_RESTORE",
+
+        message:
+          "Esta conta é supervisionada. A restauração precisa ser realizada pelo responsável.",
+      });
   }
 
   const now = Date.now();

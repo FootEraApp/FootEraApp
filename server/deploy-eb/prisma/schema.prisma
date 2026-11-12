@@ -24,50 +24,55 @@ model Usuario {
 
   foto String?
   tipo TipoUsuario
+  aniversarioElegivelApartirDe DateTime?
 
-  papeis                    UsuarioPapel[]
-  membrosOrganizacao        MembroOrganizacao[]
-  contextoOrganizacaoId     String?
-  contextoOrganizacao       Organizacao?          @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
-  organizacoesSeguidas      OrganizacaoSeguidor[]
-  convitesCriados           Convite[]             @relation("ConviteCriador")
-  convitesRecebidos         Convite[]             @relation("ConviteDestinatario")
-  convitesUsados            ConviteUso[]
-  cidade                    String?
-  estado                    String?
-  pais                      String?
-  logradouro                String?
-  cep                       String?
-  cpf                       String?
-  dataNascimento            DateTime?
-  responsavelNome           String?
-  responsavelEmail          String?
-  responsavelTelefone       String?
-  configuracoesPrivacidade  Json?
-  configuracoesNotificacoes Json?
-  dataCriacao               DateTime              @default(now())
-  codigo                    String?
-  verified                  Boolean               @default(false)
-  destaque                  Boolean               @default(false)
-  deletedAt                 DateTime?
-  deleteScheduledAt         DateTime?
-  lastSeenAt                DateTime?
-  lastLoginAt               DateTime?
-  lastLogoutAt              DateTime?
-  parceiro                  Boolean               @default(false)
-  parceiroInfo              Parceiro?
-  EmailVerification         EmailVerification[]
-  assinatura                Assinatura[]
-  administrador             Administrador?
-  tokenVersion              Int                   @default(0)
-  senhaAtualizadaEm         DateTime?
-  status                    AccountStatus         @default(ATIVO)
-  blockedAt                 DateTime?
-  blockedReason             String?
-  reactivatedAt             DateTime?
-  learningProfile           LearningProfile?
-  federacao                 Federacao?
-  marca                     Marca?
+  solicitacoesCorrecaoNascimento SolicitacaoCorrecaoNascimento[]
+  cuponsAniversario          CupomAniversarioUso[]
+  papeis                     UsuarioPapel[]
+  atletasSobResponsabilidade ResponsavelAtleta[]   @relation("ResponsavelAtletaResponsavel")
+  membrosOrganizacao         MembroOrganizacao[]
+  contextoOrganizacaoId      String?
+  contextoOrganizacao        Organizacao?          @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
+  organizacoesSeguidas       OrganizacaoSeguidor[]
+  convitesCriados            Convite[]             @relation("ConviteCriador")
+  convitesRecebidos          Convite[]             @relation("ConviteDestinatario")
+  convitesUsados             ConviteUso[]
+  cidade                     String?
+  estado                     String?
+  pais                       String?
+  logradouro                 String?
+  cep                        String?
+  cpf                        String?
+  dataNascimento             DateTime?
+  responsavelNome            String?
+  responsavelEmail           String?
+  responsavelTelefone        String?
+  configuracoesPrivacidade   Json?
+  configuracoesNotificacoes  Json?
+  dataCriacao                DateTime              @default(now())
+  codigo                     String?
+  verified                   Boolean               @default(false)
+  destaque                   Boolean               @default(false)
+  deletedAt                  DateTime?
+  deleteScheduledAt          DateTime?
+  lastSeenAt                 DateTime?
+  lastLoginAt                DateTime?
+  lastLogoutAt               DateTime?
+  parceiro                   Boolean               @default(false)
+  parceiroInfo               Parceiro?
+  EmailVerification          EmailVerification[]
+  assinatura                 Assinatura[]
+  pagamentoBeneficios        PagamentoBeneficio[]
+  administrador              Administrador?
+  tokenVersion               Int                   @default(0)
+  senhaAtualizadaEm          DateTime?
+  status                     AccountStatus         @default(ATIVO)
+  blockedAt                  DateTime?
+  blockedReason              String?
+  reactivatedAt              DateTime?
+  learningProfile            LearningProfile?
+  federacao                  Federacao?
+  marca                      Marca?
 
   amigosDe                        Amigo[]                       @relation("AmigoUsuario")
   amigos                          Amigo[]                       @relation("UsuarioAmigo")
@@ -110,6 +115,7 @@ model Usuario {
   Pagamento                       Pagamento[]
   Cupom                           Cupom[]
   CupomResgate                    CupomResgate[]
+  reservasCupom                   CupomReserva[]
   LogAuditoria                    LogAuditoria[]
   inscricoesEvento                InscricaoEvento[]
   convitesEvento                  InscricaoEvento[]             @relation("ConvitesEvento")
@@ -168,6 +174,40 @@ model UsuarioPapel {
   @@index([papel, status])
 }
 
+model ResponsavelAtleta {
+  id String @id @default(uuid())
+
+  responsavelUsuarioId String
+  atletaId             String
+
+  status            StatusResponsavelAtleta       @default(ATIVO)
+  origemSolicitacao OrigemSolicitacaoResponsavel?
+
+  principal                Boolean @default(false)
+  podeEditarPerfil         Boolean @default(true)
+  podeGerenciarPrivacidade Boolean @default(true)
+  podeGerenciarTreinos     Boolean @default(true)
+  podeGerenciarConteudo    Boolean @default(true)
+  permitirPerfilPublico    Boolean @default(false)
+  permitirMensagensDiretas Boolean @default(false)
+  permitirMostrarEmail     Boolean @default(false)
+
+  parentesco String?
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  confirmadoEm DateTime?
+  revogadoEm   DateTime?
+
+  responsavel Usuario @relation("ResponsavelAtletaResponsavel", fields: [responsavelUsuarioId], references: [id], onDelete: Cascade)
+
+  atleta Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([responsavelUsuarioId, atletaId])
+  @@index([responsavelUsuarioId, status])
+  @@index([atletaId, status])
+}
+
 model PerfilPontuacaoVisualizacao {
   id                   String   @id @default(uuid())
   viewerUsuarioId      String
@@ -223,27 +263,40 @@ model EmailVerification {
 }
 
 model Assinatura {
-  id                     String           @id @default(uuid())
-  usuarioId              String
-  plano                  String
-  periodicidade          Periodicidade
-  startsAt               DateTime
-  renovaEm               DateTime
-  canceledAt             DateTime?
-  ativo                  Boolean          @default(true)
-  lembreteEnviado        Boolean          @default(false)
-  usuario                Usuario          @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  providerSubscriptionId String?          @unique
-  status                 AssinaturaStatus @default(TRIAL)
-  trialStartsAt          DateTime?
-  trialEndsAt            DateTime?
+  id        String @id @default(uuid())
+  usuarioId String
 
+  contextoKey                  String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+
+  plano                     String
+  periodicidade             Periodicidade
+  startsAt                  DateTime
+  renovaEm                  DateTime
+  canceledAt                DateTime?
+  ativo                     Boolean          @default(true)
+  lembreteEnviado           Boolean          @default(false)
+  providerSubscriptionId    String?          @unique
+  bloqueadoEm               DateTime?
   metodoPreferido           MetodoPagamento?
   metodoPreferidoDefinidoEm DateTime?
+  status                    AssinaturaStatus @default(TRIAL)
+  trialEndsAt               DateTime?
+  trialStartsAt             DateTime?
 
-  bloqueadoEm DateTime?
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  @@unique([usuarioId, plano])
+  @@unique([usuarioId, plano, contextoKey])
+  @@index([contextoKey])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
   @@index([startsAt])
   @@index([canceledAt])
   @@index([status])
@@ -373,6 +426,7 @@ model Organizacao {
 
   membros                  MembroOrganizacao[]
   usuariosComContextoAtivo Usuario[]           @relation("ContextoOrganizacaoAtivo")
+  creatorInstitucional     Creator?            @relation("CreatorDaOrganizacao")
 
   seguidores          OrganizacaoSeguidor[]
   postagens           Postagem[]
@@ -406,6 +460,28 @@ model MembroOrganizacao {
   @@unique([organizacaoId, usuarioId])
   @@index([usuarioId, ativo])
   @@index([organizacaoId, funcao, ativo])
+}
+
+model TransferenciaPropriedade {
+  id String @id @default(uuid())
+
+  organizacaoId       String
+  proprietarioAtualId String
+  destinatarioId      String
+
+  status String @default("PENDENTE")
+
+  mensagem String?
+
+  criadoEm DateTime @default(now())
+  expiraEm DateTime
+
+  respondidoEm DateTime?
+  concluidoEm  DateTime?
+
+  @@index([organizacaoId, status])
+  @@index([destinatarioId, status])
+  @@index([proprietarioAtualId, status])
 }
 
 model OrganizacaoSeguidor {
@@ -536,6 +612,11 @@ model Mensagem {
   postId    String?
   tipo      TipoMensagem    @default(NORMAL)
   usuarioId String?
+  audioKey          String? @unique
+  audioMime         String?
+  audioDuracaoMs    Int?
+  audioTamanhoBytes Int?
+
   atleta    Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id], onDelete: SetNull)
   de        Usuario         @relation("MensagensEnviadas", fields: [deId], references: [id], onDelete: Cascade)
   desafio   DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
@@ -575,6 +656,7 @@ model Atleta {
   clube                         Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha                     Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   usuario                       Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  responsaveis                  ResponsavelAtleta[]
   AtletaElenco                  AtletaElenco[]
   observadores                  AtletaObservado[]          @relation("ObservacaoAtleta")
   EstatisticaAtleta             EstatisticaAtleta?
@@ -590,6 +672,7 @@ model Atleta {
   SubmissaoTreino               SubmissaoTreino[]
   treinosAgendados              TreinoAgendado[]
   treinosLivres                 TreinoLivre[]
+  realizacoesDiarias            TreinoRealizacaoDiaria[]
   treinosRecebidos              TreinoProgramadoRecebido[]
   Video                         Video[]
   VinculoFormacao               VinculoFormacao[]
@@ -826,8 +909,8 @@ model Metodologia {
   nivel            Nivel?
   categorias       Categoria[]              @default([])
   ativo            Boolean                  @default(false)
-  criadorUsuarioId String
-  criadorUsuario   Usuario                  @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  criadorUsuarioId String?
+  criadorUsuario   Usuario?                 @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
   professorId      String?
   clubeId          String?
   escolinhaId      String?
@@ -1083,13 +1166,13 @@ model MetodologiaAssinante {
 }
 
 model MetodologiaAvulsa {
-  id               String  @id @default(uuid())
+  id               String   @id @default(uuid())
   titulo           String
   descricao        String?
   capaUrl          String?
-  ativo            Boolean @default(false)
-  criadorUsuarioId String
-  criadorUsuario   Usuario @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  ativo            Boolean  @default(false)
+  criadorUsuarioId String?
+  criadorUsuario   Usuario? @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
 
   professorId String?
   professor   Professor? @relation(fields: [professorId], references: [id], onDelete: SetNull)
@@ -1237,8 +1320,13 @@ model AulaAoVivo {
   gravacaoAtiva    Boolean @default(true)
   replayDisponivel Boolean @default(false)
 
-  totalMensagens     Int @default(0)
-  totalParticipantes Int @default(0)
+  totalMensagens               Int     @default(0)
+  totalParticipantes           Int     @default(0)
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
 
   criadorUsuarioId   String?
   criadorUsuario     Usuario?              @relation("AulaAoVivoCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
@@ -1283,6 +1371,11 @@ model AulaAoVivo {
   @@index([metodologiaAvulsaId])
   @@index([estruturaAvulsaId])
   @@index([ivsRecordingId])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
 }
 
 model AulaAoVivoAcesso {
@@ -1464,7 +1557,8 @@ model Postagem {
   tipoMidia         TipoMidia?
   dataCriacao       DateTime             @default(now())
   visibilidade      VisibilidadePostagem @default(LOGADO)
-  usuarioId         String
+  usuarioId         String?
+  autorContextoKey  String?
   atletaId          String?
   clubeId           String?
   escolinhaId       String?
@@ -1484,12 +1578,13 @@ model Postagem {
   atleta            Atleta?              @relation(fields: [atletaId], references: [id], onDelete: SetNull)
   clube             Clube?               @relation(fields: [clubeId], references: [id], onDelete: SetNull)
   escolinha         Escolinha?           @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
-  usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario           Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@unique([usuarioId, conteudo, repostOfId])
   @@index([organizacaoId])
   @@index([visibilidade, dataCriacao])
   @@index([repostOfId])
+  @@index([autorContextoKey])
 }
 
 model Midia {
@@ -1549,7 +1644,7 @@ model Escolinha {
   dataCriacao            DateTime                 @default(now())
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
-  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   midias                 Midia[]
   postagens              Postagem[]
   relacoesTreinamento    RelacaoTreinamento[]     @relation("RelacaoEscolinha")
@@ -1589,7 +1684,7 @@ model Comentario {
 
 model Clube {
   id          String   @id @default(uuid())
-  usuarioId   String   @unique
+  usuarioId   String?  @unique
   nome        String   @unique
   cnpj        String?  @unique
   telefone1   String?
@@ -1616,7 +1711,7 @@ model Clube {
   categorias             Categoria[]
   atletas                Atleta[]
   observacoes            AtletaObservado[]        @relation("ObservacaoClube")
-  usuario                Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   Evento                 Evento[]
   Indicacao              Indicacao[]
   midias                 Midia[]
@@ -1720,6 +1815,7 @@ model SubmissaoTreino {
   treinoTituloSnapshot String?
   midiaUrl             String?
   midiaTipo            TipoMidia?
+  estatisticasProcessadasEm DateTime?
   midias               Midia[]           @relation("Midias_SubmissaoTreino")
   atleta               Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
   treinoAgendado       TreinoAgendado    @relation(fields: [treinoAgendadoId], references: [id])
@@ -1824,6 +1920,7 @@ model MembroGrupo {
   id        String     @id @default(uuid())
   grupoId   String
   criadoEm  DateTime   @default(now())
+  ultimaLeituraEm DateTime @default(now())
   tipo      TipoMembro @default(MEMBRO)
   updatedAt DateTime   @updatedAt
   usuarioId String
@@ -1847,6 +1944,11 @@ model MensagemGrupo {
   excluidaPor      String?
   conteudoJson     Json?
   desafioEmGrupoId String?
+  audioKey          String? @unique
+  audioMime         String?
+  audioDuracaoMs    Int?
+  audioTamanhoBytes Int?
+
   desafioEmGrupo   DesafioEmGrupo? @relation(fields: [desafioEmGrupoId], references: [id])
   grupo            Grupo           @relation(fields: [grupoId], references: [id])
   usuario          Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
@@ -1984,6 +2086,22 @@ model TreinoLivre {
   urlEvidencia   String?
   createdAt      DateTime         @default(now())
   RegistroTreino RegistroTreino[]
+}
+
+model TreinoRealizacaoDiaria {
+  id            String   @id @default(uuid())
+  atletaId      String
+  origem        String
+  origemId      String
+  diaReferencia String
+  realizadoEm   DateTime
+  registradoEm  DateTime @default(now())
+
+  atleta Atleta @relation( fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([atletaId, origem, origemId])
+  @@index([atletaId, diaReferencia])
+  @@index([realizadoEm])
 }
 
 model RegistroTreino {
@@ -2697,47 +2815,331 @@ model TreinoRotinaAtribuicao {
   @@index([atletaObservadoId])
 }
 
+
+enum PagamentoBeneficioTipo {
+  ASSINATURA
+  METODOLOGIA
+  METODOLOGIA_AVULSA
+  AULA_AO_VIVO
+  EVENTO
+}
+
+model PagamentoBeneficio {
+  id          String                 @id @default(uuid())
+  pagamentoId String
+  itemKey     String
+  tipo        PagamentoBeneficioTipo
+  recursoId   String
+  usuarioId   String
+
+  contextoKind           String?
+  contextoTipo           String?
+  contextoPerfilId       String?
+  contextoOrganizacaoId  String?
+  motivoRevogacao        String?
+
+  concedidoEm DateTime @default(now())
+  revogadoEm  DateTime?
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@unique([pagamentoId, itemKey])
+  @@index([usuarioId, tipo, recursoId])
+  @@index([pagamentoId])
+  @@index([revogadoEm])
+}
+
 model Pagamento {
-  id            String          @id @default(uuid())
-  usuarioId     String
-  plano         String
-  periodicidade Periodicidade
-  metodo        MetodoPagamento
-  status        PagamentoStatus @default(PENDENTE)
-  valor         Decimal         @db.Decimal(10, 2)
-  moeda         String          @default("BRL")
-  cupomId       String?
-  provider      String?
-  providerRef   String?
-  criadoEm      DateTime        @default(now())
-  pagoEm        DateTime?
-  canceladoEm   DateTime?
-  reembolsadoEm DateTime?
-  updatedAt     DateTime        @updatedAt
-
-  pagadorNome     String?
-  pagadorEmail    String?
-  pagadorCpf      String?
-  pagadorTelefone String?
-
-  cardBrand  String?
-  cardLast4  String?
-  cardExpMes Int?
-  cardExpAno Int?
-
-  pixCopiaECola        String?
-  boletoLinhaDigitavel String?
-
-  meta Json?
-
-  usuario      Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  cupom        Cupom?         @relation(fields: [cupomId], references: [id], onDelete: SetNull)
-  CupomResgate CupomResgate[]
+  id                           String          @id @default(uuid())
+  usuarioId                    String
+  contextoKind                 String?
+  contextoTipo                 String?
+  contextoPerfilId             String?
+  contextoOrganizacaoId        String?
+  contextoLegacyOrganizationId String?
+  plano                        String
+  periodicidade                Periodicidade
+  metodo                       MetodoPagamento
+  status                       PagamentoStatus @default(PENDENTE)
+  valor                        Decimal         @db.Decimal(10, 2)
+  moeda                        String          @default("BRL")
+  cupomId                      String?
+  provider                     String?
+  providerRef                  String?
+  criadoEm                     DateTime        @default(now())
+  pagoEm                       DateTime?
+  canceladoEm                  DateTime?
+  reembolsadoEm                DateTime?
+  updatedAt                    DateTime        @updatedAt
+  pagadorNome                  String?
+  pagadorEmail                 String?
+  pagadorCpf                   String?
+  pagadorTelefone              String?
+  cardBrand                    String?
+  cardLast4                    String?
+  cardExpMes                   Int?
+  cardExpAno                   Int?
+  pixCopiaECola                String?
+  boletoLinhaDigitavel         String?
+  meta                         Json?
+  CupomResgate                 CupomResgate[]
+  cupom                        Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  usuario                      Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  beneficios                   PagamentoBeneficio[]
+  creatorVendas                CreatorVenda[]
+  reservasCupom                CupomReserva[]
+  pendenciaEvento              BillingPendenciaEvento?
+  compensacaoEvento            BillingCompensacaoEvento?
+  autorizacaoEstorno           BillingAutorizacaoEstorno?
+  operacaoCheckout             BillingCheckoutOperacao?
 
   @@unique([provider, providerRef])
   @@index([usuarioId, criadoEm])
   @@index([status])
   @@index([status, criadoEm])
+  @@index([contextoKind])
+  @@index([contextoTipo])
+  @@index([contextoPerfilId])
+  @@index([contextoOrganizacaoId])
+  @@index([contextoLegacyOrganizationId])
+}
+
+enum BillingAutorizacaoEstornoStatus {
+  PENDENTE
+  APROVADA
+  CONSUMIDA
+  REVOGADA
+  EXPIRADA
+}
+
+model BillingAutorizacaoEstorno {
+  id String @id @default(uuid())
+
+  pagamentoId String @unique
+
+  solicitanteId String
+  aprovadorId   String?
+
+  motivo String
+
+  valor       Decimal @db.Decimal(10, 2)
+  moeda       String  @default("BRL")
+  providerRef String
+
+  status BillingAutorizacaoEstornoStatus @default(PENDENTE)
+
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+  aprovadoEm  DateTime?
+  expiraEm    DateTime?
+  consumidoEm DateTime?
+  revogadoEm  DateTime?
+
+  pagamento Pagamento @relation( fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  @@index([status, criadoEm])
+  @@index([solicitanteId])
+  @@index([aprovadorId])
+}
+
+enum BillingCheckoutOperacaoStatus {
+  PREPARADA
+  ENVIO_POSSIVEL
+  CONFIRMADA
+  INCONCLUSIVA
+  FALHA_COMPROVADA
+}
+
+model BillingCheckoutOperacao {
+  id                    String @id @default(uuid())
+  pagamentoId           String @unique
+  usuarioId             String
+  chaveCliente          String
+  chaveOperacao         String @unique
+  modalidade            String
+  status                BillingCheckoutOperacaoStatus @default(PREPARADA)
+
+  fingerprintRequisicao String
+  providerRef           String?
+  ultimoErro            String?
+
+  envioPossivelEm       DateTime?
+  confirmadoEm          DateTime?
+  criadoEm              DateTime @default(now())
+  atualizadoEm          DateTime @updatedAt
+
+  pagamento Pagamento @relation( fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  @@unique([usuarioId, chaveCliente])
+  @@index([status, criadoEm])
+  @@index([usuarioId, criadoEm])
+}
+
+enum BillingPendenciaEventoStatus {
+  PENDENTE_ANALISE
+  EM_ANALISE
+  AGUARDANDO_ESTORNO
+  ESTORNO_CONFIRMADO
+  RESOLVIDA_MANUALMENTE
+}
+
+model BillingPendenciaEvento {
+  id          String @id @default(uuid())
+  pagamentoId String @unique
+  eventoId    String
+
+  motivo String
+  status BillingPendenciaEventoStatus @default(PENDENTE_ANALISE)
+
+  providerRef String
+  valor       Decimal @db.Decimal(10, 2)
+  moeda       String @default("BRL")
+
+  observacao  String?
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  resolvidoEm DateTime?
+
+  pagamento   Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  compensacao BillingCompensacaoEvento?
+
+  @@index([status, criadoEm])
+  @@index([eventoId])
+}
+
+enum BillingCompensacaoEventoStatus {
+  PREPARADA
+  EM_PROCESSAMENTO
+  AGUARDANDO_CONFIRMACAO
+  CONFIRMADA
+  FALHA_REVISAR
+  CANCELADA
+}
+
+model BillingCompensacaoEvento {
+  id String @id @default(uuid())
+
+  pagamentoId String @unique
+  pendenciaId String @unique
+
+  chaveIdempotencia String @unique
+
+  status BillingCompensacaoEventoStatus @default(PREPARADA)
+
+  valor Decimal @db.Decimal(10, 2)
+  moeda String @default("BRL")
+  providerRef String
+
+  tentativas Int @default(0)
+
+  ultimoErro String?
+  confirmadoEm DateTime?
+
+  criadoEm DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  pendencia           BillingPendenciaEvento @relation(fields: [pendenciaId], references: [id], onDelete: Restrict)
+  historicoTentativas BillingCompensacaoTentativa[]
+  consultasRecuperacao BillingCompensacaoConsultaRecuperacao[]
+
+  @@index([status, criadoEm])
+}
+
+enum BillingCompensacaoTentativaStatus {
+  EM_PROCESSAMENTO
+  SIMULACAO_ENCERRADA
+  RESULTADO_DESCONHECIDO
+  CONFIRMACAO_EXTERNA_PENDENTE
+}
+
+model BillingCompensacaoTentativa {
+  id            String @id @default(uuid())
+  compensacaoId String
+
+  numero Int
+  status BillingCompensacaoTentativaStatus @default(EM_PROCESSAMENTO)
+
+  ambiente                 String  @default("QA")
+  operacaoExternaExecutada Boolean @default(false)
+
+  estornoProviderRef          String?   @unique
+  chaveIdempotenciaOperacao   String?   @unique
+  requisicaoEnviadaEm         DateTime?
+  postAutorizacaoConsumidaEm  DateTime?
+
+  iniciadoEm  DateTime  @default(now())
+  encerradoEm DateTime?
+  observacao  String?
+
+  compensacao          BillingCompensacaoEvento                @relation(fields: [compensacaoId], references: [id], onDelete: Restrict)
+  consultasRecuperacao BillingCompensacaoConsultaRecuperacao[]
+
+  @@unique([compensacaoId, numero])
+  @@unique([id, compensacaoId])
+  @@index([status, iniciadoEm])
+}
+
+model BillingCompensacaoConsultaRecuperacao {
+  id            String @id @default(uuid())
+  compensacaoId String
+  tentativaId   String
+
+  ambiente  String @default("QA")
+  simulada  Boolean @default(true)
+
+  tipoEvidencia       String
+  decisao             String
+  motivo              String
+  identidadeConfirmada Boolean @default(false)
+
+  providerRef String
+  estornoId   String?
+  statusEstorno String?
+  valorEstorno Decimal? @db.Decimal(10, 2)
+  moedaEstorno String?
+
+  consultadoEm DateTime @default(now())
+
+  compensacao BillingCompensacaoEvento @relation(fields: [compensacaoId], references: [id], onDelete: Restrict)
+  tentativa BillingCompensacaoTentativa @relation(fields: [tentativaId, compensacaoId], references: [id, compensacaoId], onDelete: Restrict)
+
+  @@index([compensacaoId, consultadoEm])
+  @@index([tentativaId])
+}
+
+enum CupomReservaStatus {
+  RESERVADA
+  CONSUMIDA
+  LIBERADA
+  CONCILIACAO_PENDENTE
+}
+
+model CupomReserva {
+  id String @id @default(uuid())
+
+  cupomId     String
+  usuarioId   String
+  pagamentoId String @unique
+
+  status CupomReservaStatus @default(RESERVADA)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  expiraEm     DateTime
+
+  consumidaEm DateTime?
+  liberadaEm  DateTime?
+
+  cupom Cupom @relation(fields: [cupomId], references: [id], onDelete: Restrict)
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([cupomId, status])
+  @@index([usuarioId, status])
+  @@index([expiraEm])
 }
 
 model Cupom {
@@ -2760,6 +3162,7 @@ model Cupom {
   criadoPor          Usuario? @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
 
   resgates  CupomResgate[]
+  reservas  CupomReserva[]
   Pagamento Pagamento[]
 
   @@index([ativo])
@@ -2779,6 +3182,92 @@ model CupomResgate {
 
   @@unique([cupomId, usuarioId])
   @@index([usuarioId])
+}
+
+enum StatusCorrecaoNascimento {
+  PENDENTE_VERIFICACAO
+  EM_ANALISE
+  APROVADA
+  REJEITADA
+}
+
+model SolicitacaoCorrecaoNascimento {
+  id                 String @id @default(uuid())
+  usuarioId          String
+  dataSolicitada     DateTime
+  motivo             String
+  status             StatusCorrecaoNascimento @default(PENDENTE_VERIFICACAO)
+  verificacaoRef     String?
+  verificadoEm       DateTime?
+  revisadoPorId      String?
+  revisadoEm         DateTime?
+  criadoEm           DateTime @default(now())
+
+  usuario     Usuario @relation( fields: [usuarioId], references: [id], onDelete: Cascade)
+  documento   DocumentoCorrecaoNascimento?
+
+  @@index([usuarioId, status])
+  @@index([status, criadoEm])
+}
+
+enum StatusSegurancaDocumentoNascimento {
+  PENDENTE
+  EM_ANALISE
+  SEGURO
+  AMEACA_DETECTADA
+  FALHA_ANALISE
+}
+
+model DocumentoCorrecaoNascimento {
+  id            String    @id @default(uuid())
+  solicitacaoId String    @unique
+  s3Key         String    @unique
+  mimeType      String
+  tamanhoBytes  Int
+  sha256        String
+  criadoEm      DateTime  @default(now())
+
+  statusSeguranca StatusSegurancaDocumentoNascimento @default(PENDENTE)
+  analisadoEm     DateTime?
+  scannerRef      String?
+
+  scannerReservadoPor String?
+  scannerReservadoAte DateTime?
+
+  expiraEm DateTime?
+
+  solicitacao   SolicitacaoCorrecaoNascimento @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+
+  @@index([statusSeguranca, scannerReservadoAte])
+  @@index([statusSeguranca, criadoEm])
+  @@index([expiraEm])
+}
+
+enum CupomAniversarioStatus {
+  RESERVADO
+  CONSUMIDO
+  LIBERADO
+  CONCILIACAO_PENDENTE
+}
+
+model CupomAniversarioUso {
+  id          String @id @default(uuid())
+  usuarioId   String
+  ano         Int
+  codigo      String @default("20PARABENS")
+
+  pagamentoId String? @unique
+
+  status      CupomAniversarioStatus    @default(RESERVADO)
+
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  consumidoEm DateTime?
+
+  usuario Usuario @relation( fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ano])
+  @@index([status, criadoEm])
 }
 
 model EventoElenco {
@@ -2838,10 +3327,27 @@ model UsageCounter {
 }
 
 model EventoPagamento {
-  id              String   @id @default(cuid())
-  providerEventId String   @unique
+  id              String @id @default(cuid())
+  providerEventId String @unique
   tipo            String
+
+  status          EventoPagamentoStatus @default(RECEBIDO)
+  tentativas      Int @default(0)
+  ultimoErro      String?
+  processandoEm   DateTime?
+  concluidoEm     DateTime?
+
   recebidoEm      DateTime @default(now())
+  atualizadoEm    DateTime @updatedAt
+
+  @@index([status, processandoEm])
+}
+
+enum EventoPagamentoStatus {
+  RECEBIDO
+  PROCESSANDO
+  CONCLUIDO
+  FALHOU
 }
 
 model AuditLog {
@@ -2999,6 +3505,7 @@ model Notificacao {
   createdAt DateTime        @default(now())
   tipo      NotificacaoTipo @default(GENERICA)
   actorId   String?
+  agrupamentoKey String? @unique
   actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
   usuario   Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
@@ -3083,10 +3590,13 @@ model LoginEvent {
 }
 
 model Creator {
-  id        String  @id @default(uuid())
-  usuarioId String  @unique
-  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
+  usuarioId String?  @unique
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
+  organizacaoId String? @unique
+
+  organizacao  Organizacao? @relation("CreatorDaOrganizacao", fields: [organizacaoId], references: [id], onDelete: Restrict)
   nomePublico  String?
   headline     String?
   bio          String?
@@ -3129,6 +3639,9 @@ model CreatorVenda {
   metodologiaAvulsaId String?
   metodologiaAvulsa   MetodologiaAvulsa? @relation(fields: [metodologiaAvulsaId], references: [id], onDelete: SetNull)
 
+  pagamentoId         String?
+  pagamento           Pagamento?         @relation( fields: [pagamentoId], references: [id], onDelete: Restrict)
+
   valorBruto        Decimal @db.Decimal(10, 2)
   percentualFootera Decimal @default(0.15) @db.Decimal(5, 4)
   valorFootera      Decimal @db.Decimal(10, 2)
@@ -3150,6 +3663,7 @@ model CreatorVenda {
   @@index([metodologiaId])
   @@index([metodologiaAvulsaId])
   @@index([status])
+  @@index([pagamentoId])
 }
 
 model CreatorUsoLearning {
@@ -3180,8 +3694,8 @@ model LearningProfile {
 
 model Federacao {
   id            String       @id @default(uuid())
-  usuarioId     String       @unique
-  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId     String?      @unique
+  usuario       Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   organizacaoId String?      @unique
   organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
@@ -3210,8 +3724,8 @@ model Federacao {
 
 model Marca {
   id            String       @id @default(uuid())
-  usuarioId     String       @unique
-  usuario       Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId     String?      @unique
+  usuario       Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   organizacaoId String?      @unique
   organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
@@ -3311,6 +3825,51 @@ model PushDeviceToken {
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId])
+}
+
+model ExclusaoDocumentoNascimentoPendente {
+  id                 String    @id @default(uuid())
+  s3Key              String    @unique
+  motivo             String
+  tentativas         Int       @default(0)
+  ultimoErro         String?
+  proximaTentativaEm DateTime  @default(now())
+
+  // Reserva exclusiva do worker
+  reservadoPor        String?
+  reservadoAte        DateTime?
+
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  @@index([proximaTentativaEm])
+  @@index([reservadoAte])
+}
+
+model ExclusaoAudioMensagemPendente {
+  id                 String   @id @default(uuid())
+  audioKey           String   @unique
+  criadoEm           DateTime @default(now())
+  tentativas         Int      @default(0)
+  proximaTentativaEm DateTime @default(now())
+  ultimoErro         String?
+  reservadoPor       String?
+  reservadoAte       DateTime?
+
+  @@index([proximaTentativaEm])
+  @@index([reservadoAte])
+}
+
+enum StatusResponsavelAtleta {
+  PENDENTE
+  ATIVO
+  REVOGADO
+}
+
+enum OrigemSolicitacaoResponsavel {
+  ATLETA
+  RESPONSAVEL
+  CADASTRO_MENOR
 }
 
 enum StatusUsuarioPapel {
@@ -3500,6 +4059,7 @@ enum TipoUsuario {
   Federacao
   Marca
   Creator
+  Responsavel
 }
 
 enum TipoMidia {
@@ -3529,6 +4089,7 @@ enum TipoTreino {
 
 enum TipoMensagem {
   NORMAL
+  AUDIO
   DESAFIO
   POST
   USUARIO
@@ -3555,6 +4116,8 @@ enum NotificacaoTipo {
   INDICACAO_RESPONDIDA
   COLABORACAO_OLHEIRO
   COLABORACAO_RESPONDIDA
+  RESPONSAVEL_SOLICITACAO
+  RESPONSAVEL_VINCULO
 }
 
 enum TipoMembro {
@@ -3786,4 +4349,37 @@ enum TipoMensagemLive {
   TEXTO
   SISTEMA
   ALERTA
+}
+
+enum BillingComunicacaoCanal {
+  APP
+  EMAIL
+}
+
+enum BillingComunicacaoStatus {
+  PENDENTE
+  PROCESSANDO
+  ENVIADO
+  FALHOU
+}
+
+model BillingComunicacao {
+  id           String                   @id @default(uuid())
+  assinaturaId String
+  cicloKey     String
+  evento       String
+  canal        BillingComunicacaoCanal
+  status       BillingComunicacaoStatus @default(PENDENTE)
+
+  tentativas         Int       @default(0)
+  enviadoEm          DateTime?
+  proximaTentativaEm DateTime?
+  ultimoErro         String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([assinaturaId, cicloKey, evento, canal])
+  @@index([status, proximaTentativaEm])
+  @@index([assinaturaId])
 }

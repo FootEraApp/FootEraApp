@@ -99,38 +99,47 @@ self.addEventListener(
   (event) => {
     event.notification.close();
 
-    const destino =
-      normalizarDestino(
-        event.notification?.data?.url
-      );
+    const destino = normalizarDestino(
+      event.notification?.data?.url
+    );
+
+    const urlCompleta = new URL(
+      destino,
+      self.location.origin
+    ).href;
 
     event.waitUntil(
-      clients
-        .matchAll({
+      (async () => {
+        const janelas = await clients.matchAll({
           type: "window",
           includeUncontrolled: true,
-        })
-        .then((clientList) => {
-          for (
-            const client of clientList
-          ) {
-            if ("focus" in client) {
-              client.navigate(
-                destino
-              );
+        });
 
-              return client.focus();
-            }
+        for (const janela of janelas) {
+          if (new URL(janela.url).origin !== self.location.origin) {
+            continue;
           }
 
-          if (
-            clients.openWindow
-          ) {
-            return clients.openWindow(
-              destino
+          try {
+            const navegada =
+              await janela.navigate(urlCompleta);
+
+            if (navegada) {
+              await navegada.focus();
+              return;
+            }
+          } catch (error) {
+            console.warn(
+              "[push] Erro ao navegar:",
+              error
             );
           }
-        })
+        }
+
+        if (clients.openWindow) {
+          await clients.openWindow(urlCompleta);
+        }
+      })()
     );
   }
 );

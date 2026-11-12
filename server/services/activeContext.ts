@@ -96,6 +96,7 @@ function ehPapelPessoalSelecionavel(
     canonico === TipoUsuario.Olheiro ||
     canonico === TipoUsuario.Creator ||
     canonico === TipoUsuario.Learning ||
+    canonico === TipoUsuario.Responsavel ||
     canonico === TipoUsuario.Admin
   );
 }
@@ -169,6 +170,9 @@ function labelPapel(
 
     case TipoUsuario.Learning:
       return "Learning";
+
+    case TipoUsuario.Responsavel:
+      return "Responsável";
 
     case TipoUsuario.Admin:
       return "Administrador";
@@ -434,7 +438,8 @@ export async function listarActiveContexts(
           id: true,
           nome: true,
           tipo: true,
-
+          deletedAt: true,
+          blockedAt: true,
           administrador: {
             select: {
               id: true,
@@ -486,9 +491,20 @@ export async function listarActiveContexts(
       }),
     ]);
 
-  if (!usuario) {
+  if (
+    !usuario ||
+    usuario.deletedAt !== null ||
+    usuario.blockedAt !== null
+  ) {
     return [];
   }
+
+  const possuiHistoricoDePapeis =
+    await prisma.usuarioPapel.count({
+      where: {
+        usuarioId,
+      },
+    }) > 0;
 
   const papeisPessoais =
     new Set<TipoUsuario>();
@@ -502,13 +518,13 @@ export async function listarActiveContexts(
       );
 
     if (
-    ehPapelPessoalSelecionavel(
-        papel
-    )
+      ehPapelPessoalSelecionavel(papel) &&
+      (
+        papel !== TipoUsuario.Admin ||
+        Boolean(usuario.administrador)
+      )
     ) {
-    papeisPessoais.add(
-        papel
-    );
+      papeisPessoais.add(papel);
     }
   }
 
@@ -518,7 +534,7 @@ export async function listarActiveContexts(
     );
 
   if (
-    papeis.length === 0 &&
+    !possuiHistoricoDePapeis &&
     ehPapelPessoalSelecionavel(
       papelAtual
     )
@@ -559,16 +575,29 @@ export async function listarActiveContexts(
     }
   }
 
-  const contextosOrganizacao =
-    await Promise.all(
-      membros.map(
-        (membro) =>
-          montarContextoOrganizacao(
-            usuario,
-            membro,
-          )
-      )
-    );
+  const membrosComPapelValido = membros.filter((membro) => {
+    if (
+      membro.funcao ===
+      FuncaoMembroOrganizacao.PROFESSOR
+    ) {
+      return papeisPessoais.has(TipoUsuario.Professor);
+    }
+
+    if (
+      membro.funcao ===
+      FuncaoMembroOrganizacao.MEMBRO
+    ) {
+      return papeisPessoais.has(TipoUsuario.Atleta);
+    }
+
+    return true;
+  });
+
+  const contextosOrganizacao = await Promise.all(
+    membrosComPapelValido.map((membro) =>
+      montarContextoOrganizacao(usuario, membro)
+    )
+  );
 
   return [
     ...contextosPessoais,
@@ -593,14 +622,22 @@ export async function getActiveContext(
         id: true,
         nome: true,
         tipo: true,
-        contextoOrganizacaoId:
-          true,
+        deletedAt: true,
+        blockedAt: true,
+        contextoOrganizacaoId: true,
       },
     });
 
-  if (!usuario) {
+  if (
+    !usuario ||
+    usuario.deletedAt !== null ||
+    usuario.blockedAt !== null
+  ) {
     return null;
   }
+
+  const contextosValidos =
+    await listarActiveContexts(usuarioId);
 
   if (
     usuario.contextoOrganizacaoId
@@ -625,10 +662,16 @@ export async function getActiveContext(
       membro.organizacao
         ?.ativo
     ) {
-      return montarContextoOrganizacao(
-        usuario,
-        membro,
+      const contextoPermitido = contextosValidos.find(
+        (contexto) =>
+          contexto.kind === "ORGANIZATION" &&
+          contexto.organizationId ===
+            usuario.contextoOrganizacaoId
       );
+
+      if (contextoPermitido) {
+        return contextoPermitido;
+      }
     }
   }
 
@@ -675,16 +718,32 @@ export async function getActiveContext(
       membros[0];
 
     if (escolhido) {
-      return montarContextoOrganizacao(
-        usuario,
-        escolhido,
+      const contextoPermitido = contextosValidos.find(
+        (contexto) =>
+          contexto.kind === "ORGANIZATION" &&
+          contexto.organizationId === escolhido.organizacaoId
       );
+
+      if (contextoPermitido) {
+        return contextoPermitido;
+      }
     }
   }
 
-  return montarContextoPessoal(
-    usuario,
-    usuario.tipo,
+  const contextosDisponiveis = contextosValidos;
+
+  const contextoPessoalAtual =
+    contextosDisponiveis.find(
+      (contexto) =>
+        contexto.kind === "PERSONAL" &&
+        contexto.tipoUsuario ===
+          papelCanonico(usuario.tipo)
+    );
+
+  return (
+    contextoPessoalAtual ??
+    contextosDisponiveis[0] ??
+    null
   );
 }
 
@@ -701,6 +760,27 @@ export async function definirActiveContext(
     String(
       contextKey || ""
     ).trim();
+
+  const conta = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: {
+      id: true,
+      deletedAt: true,
+      blockedAt: true,
+    },
+  });
+
+  if (
+    !conta ||
+    conta.deletedAt !== null ||
+    conta.blockedAt !== null
+  ) {
+    throw new ActiveContextError(
+      403,
+      "ACCOUNT_NOT_AVAILABLE",
+      "Esta conta não está disponível para troca de perfil.",
+    );
+  }
 
   if (
     key.startsWith(
@@ -879,6 +959,24 @@ export async function definirActiveContext(
       );
     }
 
+    const contextosPermitidos =
+      await listarActiveContexts(usuarioId);
+
+    const contextoPermitido =
+      contextosPermitidos.find(
+        (contexto) =>
+          contexto.kind === "ORGANIZATION" &&
+          contexto.organizationId === organizacaoId
+      );
+
+    if (!contextoPermitido) {
+      throw new ActiveContextError(
+        403,
+        "ORGANIZATION_CONTEXT_NOT_ALLOWED",
+        "Este contexto organizacional não está disponível para o usuário.",
+      );
+    }
+
     await prisma.usuario.update({
       where: {
         id:
@@ -904,10 +1002,7 @@ export async function definirActiveContext(
         },
       });
 
-    return montarContextoOrganizacao(
-      usuario,
-      membro,
-    );
+    return contextoPermitido;
   }
 
   throw new ActiveContextError(

@@ -2,17 +2,32 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { StatusCref, TipoUsuario, AuthProvider, NotificacaoTipo } from "@prisma/client";
+import {
+  StatusCref,
+  TipoUsuario,
+  AuthProvider,
+  NotificacaoTipo,
+  StatusUsuarioPapel,
+  StatusResponsavelAtleta,
+} from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { validateGoogleCredential } from "../services/googleTokenService.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
 import { calcularIdadePorNascimento, categoriaAtletaPorIdade } from "../utils/categoriaAtleta.js";
 import {
-  getProfileIdForRole,
-} from "../services/roles.js";
+  obterSupervisaoMenor,
+} from "../services/supervisaoMenor.js";
 import { resolveUserContext } from "../services/planResolver.js";
 
-const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
+const JWT_SECRET: jwt.Secret = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error("JWT_SECRET não configurado.");
+  }
+
+  return secret;
+})();
 
 function stringParaTipoUsuario(tipo: string): TipoUsuario | null {
   const t = String(tipo || "").trim().toUpperCase();
@@ -161,10 +176,21 @@ async function montarRespostaAuth(usuarioId: string) {
     throw new Error("Usuário não encontrado após autenticação.");
   }
 
-  const contexto =
-    await resolveUserContext(
-      usuario.id
-    );
+  let contexto:
+    Awaited<ReturnType<typeof resolveUserContext>> | null = null;
+
+  try {
+    contexto = await resolveUserContext(usuario.id);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.message !== "NO_ACTIVE_CONTEXT"
+    ) {
+      throw error;
+    }
+  }
+
+  const somenteGestaoConta = contexto === null;
 
   const token = gerarJwt(usuario);
 
@@ -183,21 +209,18 @@ async function montarRespostaAuth(usuarioId: string) {
     token,
     nomeDeUsuario: usuario.nomeDeUsuario,
     id: usuario.id,
-    tipo:
-      contexto.tipo,
-    tipoUsuarioId:
-      contexto.tipoUsuarioId,
-    activeContext:
-      contexto.activeContext,
-    isAdmin:
-      contexto.isAdmin === true,
+
+    tipo: contexto?.tipo ?? null,
+    tipoUsuarioId: contexto?.tipoUsuarioId ?? null,
+    activeContext: contexto?.activeContext ?? null,
+    isAdmin: contexto?.isAdmin === true,
+    somenteGestaoConta,
+
     usuario: {
       id: usuario.id,
       nomeDeUsuario: usuario.nomeDeUsuario,
-      tipo:
-        contexto.tipo,
-      activeContext:
-        contexto.activeContext,
+      tipo: contexto?.tipo ?? null,
+      activeContext: contexto?.activeContext ?? null,
       email: usuario.email,
       verified: usuario.verified,
     },
@@ -360,6 +383,21 @@ export async function googleLogin(req: Request, res: Response) {
         });
       }
 
+      if (!usuarioMesmoEmail.googleSub) {
+        const supervisao = await obterSupervisaoMenor(
+          usuarioMesmoEmail.id
+        );
+
+        if (supervisao.supervisionado) {
+          return res.status(403).json({
+            ok: false,
+            code: "GUARDIAN_APPROVAL_REQUIRED_FOR_GOOGLE_LINK",
+            message:
+              "A vinculação de uma conta Google a este perfil precisa ser autorizada pelo responsável principal.",
+          });
+        }
+      }
+
       const novoProvider =
         usuarioMesmoEmail.authProvider ===
         AuthProvider.LOCAL
@@ -413,7 +451,7 @@ export async function googleLogin(req: Request, res: Response) {
           "Conta Google vinculada e login realizado com sucesso.",
       });
     }
-    
+
     const preToken =
       crypto.randomBytes(32).toString("hex");
 
@@ -613,19 +651,49 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       .slice(-7)}`;
   }
 
-  function dataNascimentoPermitida(valor?: string | null) {
-    if (!valor) return false;
+  function dataNascimentoPermitida(
+    valor?: string | null
+  ): boolean {
+    if (
+      typeof valor !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+    ) {
+      return false;
+    }
 
-    const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return false;
+    const nascimento = new Date(
+      `${valor}T00:00:00.000Z`
+    );
 
-    const min = new Date("1900-01-01T00:00:00.000Z");
-    const hoje = new Date();
+    if (
+      Number.isNaN(nascimento.getTime()) ||
+      nascimento.toISOString().slice(0, 10) !== valor
+    ) {
+      return false;
+    }
 
-    data.setHours(0, 0, 0, 0);
-    hoje.setHours(23, 59, 59, 999);
+    const partes = new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).formatToParts(new Date());
 
-    return data >= min && data <= hoje;
+    const parte = (tipo: string) =>
+      partes.find(
+        (p) => p.type === tipo
+      )?.value ?? "";
+
+    const hojeBrasil =
+      `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+    return (
+      valor >= "1900-01-01" &&
+      valor <= hojeBrasil
+    );
   }
 
   try {
@@ -760,7 +828,12 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     }
 
     const dataNascFinal =
-      precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+      precisaNascimento && dataNascimento
+        ? new Date(
+            `${dataNascimento}T00:00:00.000Z`
+          )
+        : null;
+
     const idadeCalcInicial = dataNascFinal ? calcularIdade(dataNascFinal) : null;
 
     const exigeMaisDe16Anos =
@@ -787,22 +860,52 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
 
+    const responsavelModo =
+      String(
+        responsavel?.modo ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
     const responsavelNomeFinal =
-      String(responsavel?.nome ?? "").trim();
+      String(
+        responsavel?.nome ??
+        ""
+      ).trim();
 
     const responsavelEmailFinal =
-      String(responsavel?.email ?? "")
+      String(
+        responsavel?.email ??
+        ""
+      )
         .trim()
         .toLowerCase();
 
     const responsavelTelefoneFinal =
-      String(responsavel?.telefone ?? "").trim() || null;
+      String(
+        responsavel?.telefone ??
+        ""
+      ).trim() ||
+      null;
+
+    const responsavelSenhaFinal =
+      String(
+        responsavel?.senha ??
+        ""
+      );
 
     if (precisaResponsavel) {
-      if (!responsavelNomeFinal) {
-        return res.status(400).json({
-          error: "Informe o nome do responsável legal.",
-        });
+      if (
+        responsavelModo !== "existente" &&
+        responsavelModo !== "novo"
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Escolha como o responsável será vinculado.",
+          });
       }
 
       if (
@@ -810,9 +913,63 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
           responsavelEmailFinal
         )
       ) {
-        return res.status(400).json({
-          error: "Informe um e-mail válido do responsável legal.",
-        });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um e-mail válido do responsável.",
+          });
+      }
+
+      /*
+      * Criança e responsável não podem
+      * compartilhar a mesma conta/e-mail.
+      */
+      if (
+        responsavelEmailFinal ===
+        emailNorm
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "O e-mail do responsável precisa ser diferente do e-mail do atleta.",
+          });
+      }
+
+      if (!responsavelSenhaFinal) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe a senha do responsável.",
+          });
+      }
+
+      if (
+        responsavelModo === "novo"
+      ) {
+        if (!responsavelNomeFinal) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "Informe o nome do responsável.",
+            });
+        }
+
+        if (
+          !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(
+            responsavelSenhaFinal
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "A senha do responsável deve ter pelo menos 8 caracteres, uma letra e um número.",
+            });
+        }
       }
 
       if (
@@ -821,10 +978,236 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
           responsavelTelefoneFinal
         )
       ) {
-        return res.status(400).json({
-          error:
-            "Informe um telefone válido do responsável legal ou deixe em branco.",
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um telefone válido do responsável ou deixe em branco.",
+          });
+      }
+    }
+
+    let responsavelUsuarioId:
+      string | null =
+      null;
+
+    if (precisaResponsavel) {
+      if (
+        responsavelModo ===
+        "existente"
+      ) {
+        const usuarioResponsavel =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+              senhaHash: true,
+              localLoginEnabled:
+                true,
+              deletedAt: true,
+              blockedAt: true,
+            },
+          });
+
+        if (
+          !usuarioResponsavel ||
+          usuarioResponsavel.deletedAt ||
+          usuarioResponsavel.blockedAt
+        ) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "Conta do responsável não encontrada ou indisponível.",
+            });
+        }
+
+        if (
+          !usuarioResponsavel.localLoginEnabled ||
+          !usuarioResponsavel.senhaHash
+        ) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_GOOGLE_ONLY",
+
+              error:
+                "Esta conta do responsável usa somente login com Google. Entre nessa conta e configure uma senha antes de vinculá-la por este formulário.",
+            });
+        }
+
+        const senhaValida =
+          await bcrypt.compare(
+            responsavelSenhaFinal,
+            usuarioResponsavel.senhaHash
+          );
+
+        if (!senhaValida) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "E-mail ou senha do responsável inválidos.",
+            });
+        }
+
+        responsavelUsuarioId =
+          usuarioResponsavel.id;
+
+        await prisma.usuarioPapel.upsert({
+          where: {
+            usuarioId_papel: {
+              usuarioId:
+                usuarioResponsavel.id,
+
+              papel:
+                TipoUsuario.Responsavel,
+            },
+          },
+
+          update: {
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            desativadoEm:
+              null,
+
+            perfilCompletoEm:
+              new Date(),
+          },
+
+          create: {
+            usuarioId:
+              usuarioResponsavel.id,
+
+            papel:
+              TipoUsuario.Responsavel,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            perfilCompletoEm:
+              new Date(),
+          },
         });
+      }
+
+      if (
+        responsavelModo ===
+        "novo"
+      ) {
+        const existente =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        if (existente) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_EMAIL_ALREADY_EXISTS",
+
+              error:
+                "Já existe uma conta FootEra com este e-mail. Use a opção 'Já tenho uma conta FootEra'.",
+            });
+        }
+
+        const usernameResponsavel =
+          await gerarUsernameDisponivel(
+            responsavelNomeFinal ||
+              responsavelEmailFinal
+                .split("@")[0]
+          );
+
+        const senhaResponsavelHash =
+          await bcrypt.hash(
+            responsavelSenhaFinal,
+            10
+          );
+
+        const novoResponsavel =
+          await prisma.usuario.create({
+            data: {
+              nome:
+                responsavelNomeFinal,
+
+              email:
+                responsavelEmailFinal,
+
+              nomeDeUsuario:
+                usernameResponsavel,
+
+              senhaHash:
+                senhaResponsavelHash,
+
+              tipo:
+                TipoUsuario.Responsavel,
+
+              authProvider:
+                AuthProvider.LOCAL,
+
+              localLoginEnabled:
+                true,
+
+              responsavelTelefone:
+                responsavelTelefoneFinal,
+
+              verified:
+                false,
+
+              papeis: {
+                create: {
+                  papel:
+                    TipoUsuario.Responsavel,
+
+                  status:
+                    StatusUsuarioPapel.ATIVO,
+
+                  ativadoEm:
+                    new Date(),
+
+                  perfilCompletoEm:
+                    new Date(),
+                },
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        responsavelUsuarioId =
+          novoResponsavel.id;
       }
     }
 
@@ -841,6 +1224,9 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
+        aniversarioElegivelApartirDe: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ),
         responsavelNome:
           precisaResponsavel ? responsavelNomeFinal : null,
         responsavelEmail:
@@ -902,6 +1288,80 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
               id: true,
             },
           });
+
+        if (
+          precisaResponsavel &&
+          responsavelUsuarioId
+        ) {
+          await prisma.responsavelAtleta.upsert({
+            where: {
+              responsavelUsuarioId_atletaId:
+                {
+                  responsavelUsuarioId,
+
+                  atletaId:
+                    atleta.id,
+                },
+            },
+
+            update: {
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              revogadoEm:
+                null,
+            },
+
+            create: {
+              responsavelUsuarioId,
+
+              atletaId:
+                atleta.id,
+
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              parentesco:
+                "Responsável legal",
+            },
+          });
+        }
 
         await prisma.pontuacaoAtleta.create({
           data: { atletaId: atleta.id },
@@ -1249,6 +1709,17 @@ export async function googleLinkAccount(req: any, res: Response) {
 
     if (!usuarioAtual) {
       return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    const supervisao = await obterSupervisaoMenor(userId);
+
+    if (supervisao.supervisionado) {
+      return res.status(403).json({
+        ok: false,
+        code: "GUARDIAN_APPROVAL_REQUIRED_FOR_GOOGLE_LINK",
+        message:
+          "A vinculação Google desta conta precisa ser realizada pelo responsável principal.",
+      });
     }
 
     const novoProvider =

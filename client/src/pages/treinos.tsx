@@ -8,6 +8,7 @@ import {
 } from "../context/UserContext.js";
 import TreinosAtletas from "./treino/treinos-atletas.js";
 import TreinosInstrutores from "./treino/treinos-instrutores.js";
+import TreinosResponsavel from "./treino/treinos-responsavel.js";
 
 type Tipo =
   | "admin"
@@ -20,6 +21,7 @@ type Tipo =
   | "federacao"
   | "marca"
   | "learning"
+  | "responsavel"
   ;
 
 export default function Treinos() {
@@ -111,6 +113,9 @@ export default function Treinos() {
 
             learning:
               "learning",
+
+            responsavel:
+              "responsavel",
           };
 
         return (
@@ -164,6 +169,15 @@ export default function Treinos() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (
+    tipo ===
+    "responsavel"
+  ) {
+    return (
+      <TreinosResponsavel />
     );
   }
 

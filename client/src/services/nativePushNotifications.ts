@@ -51,11 +51,21 @@ function normalizarDestinoPush(
 function abrirDestinoPush(
   raw?: unknown
 ) {
-  const destino =
-    normalizarDestinoPush(raw);
+  const destino = normalizarDestinoPush(raw);
 
-  window.location.href =
-    destino;
+  // Mantém o caminho e os parâmetros da notificação.
+  // O perfil será responsável por validar o papel solicitado.
+  const atual =
+    window.location.pathname +
+    window.location.search +
+    window.location.hash;
+
+  if (atual === destino) {
+    window.location.reload();
+    return;
+  }
+
+  window.location.assign(destino);
 }
 
 function getToken() {
@@ -252,8 +262,6 @@ export async function inicializarPushAndroidNativo() {
   if (listenersInstalados) {
     return true;
   }
-
-  await PushNotifications.removeAllListeners();
 
   PushNotifications.addListener("registration", async (token) => {
     try {

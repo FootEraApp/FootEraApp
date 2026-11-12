@@ -26,6 +26,7 @@ import {
   getDeltaPontuacaoPerfil,
   confirmarVisualizacaoPontuacaoPerfil,
   atualizarPosicaoAtletaMe,
+  atualizarPosicaoAtletaGerenciado,
 } from "../controllers/perfilController.js";
 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import multer from "multer";
@@ -85,6 +86,12 @@ router.patch(
   "/me/posicao",
   authenticateToken,
   atualizarPosicaoAtletaMe
+);
+
+router.patch(
+  "/atletas/:atletaId/posicao",
+  authenticateToken,
+  atualizarPosicaoAtletaGerenciado
 );
 
 router.get(

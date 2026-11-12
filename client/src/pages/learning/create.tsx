@@ -1757,6 +1757,10 @@ export default function LearningCreatePage() {
         })),
       };
 
+      // Em uma edição, nunca enviar o campo "ativo".
+      // A publicação é controlada pelo backend e pelo administrador.
+      const { ativo: _ativoCriacao, ...payloadEdicao } = payloadBase;
+
       if (!editMetodologiaId) {
         if (destinoMetodologia === "LEARNING") {
           await createMetodologiaCompleta(payloadBase);
@@ -1779,7 +1783,6 @@ export default function LearningCreatePage() {
       if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
         await updateMetodologiaAvulsa(editMetodologiaId, {
           ...payloadBase,
-          ativo: false,
           precoAssinaturaMensal: Number(precoAssinaturaMensal),
         });
 
@@ -1792,7 +1795,6 @@ export default function LearningCreatePage() {
       if (origemAtual !== "avulsa" && destinoMetodologia === "LEARNING") {
         await updateMetodologia(editMetodologiaId, {
           ...payloadBase,
-          ativo: false,
         });
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
@@ -1868,7 +1870,6 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: false,
       });
 
       const metodologiaId = editMetodologiaId || metodologiaResp?.item?.id;

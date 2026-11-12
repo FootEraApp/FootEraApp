@@ -6,6 +6,9 @@ import {
   StatusCref,
   NotificacaoTipo,
   StatusUsuarioPapel,
+  StatusResponsavelAtleta,
+  AuthProvider,
+  CreatorTipo,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -46,6 +49,17 @@ function absUrl(p?: string | null) {
   if (/^https?:\/\//i.test(p)) return p;
   const base = p.startsWith("/uploads") ? API_BASE_URL : FRONTEND_URL;
   return `${base}${p}`;
+}
+
+function verificationEmailHtml(link: string) {
+  return `
+    <div style="font-family:Arial,sans-serif">
+      <h2>Confirme seu e-mail</h2>
+      <p>Para finalizar seu cadastro na FootEra, clique no botão abaixo:</p>
+      <p><a href="${link}" style="background:#0a5f2e;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Validar e-mail</a></p>
+      <p>Ou copie e cole este link no navegador:<br/>${link}</p>
+    </div>
+  `;
 }
 
 async function issueEmailVerification(params: {
@@ -121,15 +135,15 @@ export const checarUsername = async (req: Request, res: Response) => {
   res.json({ ok: true, disponivel: !existe });
 };
 
-export const deletarUsuario = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    await prisma.usuario.delete({ where: { id } });
-    return res.json({ message: "Usuário deletado com sucesso!" });
-  } catch (error) {
-    console.error("Erro ao deletar usuário:", error);
-    return res.status(500).json({ message: "Erro interno" });
-  }
+export const deletarUsuario = async (
+  _req: Request,
+  res: Response
+) => {
+  return res.status(409).json({
+    code: "ACCOUNT_DELETION_UNDER_REVIEW",
+    message:
+      "A exclusão definitiva de contas está temporariamente indisponível enquanto verificamos a preservação dos dados financeiros e institucionais.",
+  });
 };
 
 export async function buscarPerfisPublico(req: Request, res: Response) {
@@ -688,19 +702,44 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     headline,
   } = body;
 
-  function dataNascimentoPermitida(valor?: string | null) {
-    if (!valor) return false;
+  function dataNascimentoPermitida(
+    valor?: string | null
+  ): boolean {
+    if (
+      typeof valor !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+    ) {
+      return false;
+    }
 
-    const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return false;
+    const nascimento = new Date(
+      `${valor}T00:00:00.000Z`
+    );
 
-    const min = new Date("1900-01-01T00:00:00.000Z");
-    const hoje = new Date();
+    if (
+      Number.isNaN(nascimento.getTime()) ||
+      nascimento.toISOString().slice(0, 10) !== valor
+    ) {
+      return false;
+    }
 
-    data.setHours(0, 0, 0, 0);
-    hoje.setHours(23, 59, 59, 999);
+    const partes = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
 
-    return data >= min && data <= hoje;
+    const parte = (tipo: string) =>
+      partes.find((p) => p.type === tipo)?.value ?? "";
+
+    const hojeBrasil =
+      `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+    return (
+      valor >= "1900-01-01" &&
+      valor <= hojeBrasil
+    );
   }
 
   try {
@@ -721,7 +760,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     }
 
     const dataNascFinal =
-      precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+      precisaNascimento && dataNascimento
+        ? new Date(`${dataNascimento}T00:00:00.000Z`)
+        : null;
 
     const idadeCalcInicial = dataNascFinal
       ? calcularIdadePorNascimento(dataNascFinal)
@@ -747,36 +788,121 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       idadeCalcInicial !== null &&
       idadeCalcInicial < 12;
 
-    const responsavelNomeFinal = String(responsavel?.nome ?? "").trim();
+    const responsavelModo =
+      String(
+        responsavel?.modo ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
 
-    const responsavelEmailFinal = String(responsavel?.email ?? "")
-      .trim()
-      .toLowerCase();
+    const responsavelNomeFinal =
+      String(
+        responsavel?.nome ??
+        ""
+      ).trim();
+
+    const responsavelEmailFinal =
+      String(
+        responsavel?.email ??
+        ""
+      )
+        .trim()
+        .toLowerCase();
 
     const responsavelTelefoneFinal =
-      String(responsavel?.telefone ?? "").trim() || null;
+      String(
+        responsavel?.telefone ??
+        ""
+      ).trim() ||
+      null;
+
+    const responsavelSenhaFinal =
+      String(
+        responsavel?.senha ??
+        ""
+      );
 
     if (precisaResponsavel) {
-      if (!responsavelNomeFinal) {
-        return res.status(400).json({
-          error: "Informe o nome do responsável legal.",
-        });
+      if (
+        responsavelModo !==
+          "existente" &&
+        responsavelModo !==
+          "novo"
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Escolha como o responsável será vinculado.",
+          });
       }
 
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(responsavelEmailFinal)) {
-        return res.status(400).json({
-          error: "Informe um e-mail válido do responsável legal.",
-        });
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+          responsavelEmailFinal
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um e-mail válido do responsável.",
+          });
+      }
+
+      if (
+        !responsavelSenhaFinal
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe a senha do responsável.",
+          });
+      }
+
+      if (
+        responsavelModo ===
+        "novo"
+      ) {
+        if (
+          !responsavelNomeFinal
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "Informe o nome do responsável.",
+            });
+        }
+
+        if (
+          !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(
+            responsavelSenhaFinal
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                "A senha do responsável deve ter pelo menos 8 caracteres, uma letra e um número.",
+            });
+        }
       }
 
       if (
         responsavelTelefoneFinal &&
-        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(responsavelTelefoneFinal)
+        !/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/.test(
+          responsavelTelefoneFinal
+        )
       ) {
-        return res.status(400).json({
-          error:
-            "Informe um telefone válido do responsável legal ou deixe em branco.",
-        });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Informe um telefone válido do responsável ou deixe em branco.",
+          });
       }
     }
 
@@ -827,6 +953,232 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
 
     const senhaHash = await bcrypt.hash(String(senha), 10);
 
+    let responsavelUsuarioId:
+      string | null =
+      null;
+
+    if (precisaResponsavel) {
+      if (
+        responsavelModo ===
+        "existente"
+      ) {
+        const usuarioResponsavel =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+              senhaHash: true,
+              localLoginEnabled:
+                true,
+              deletedAt: true,
+              blockedAt: true,
+            },
+          });
+
+        if (
+          !usuarioResponsavel ||
+          usuarioResponsavel
+            .deletedAt ||
+          usuarioResponsavel
+            .blockedAt
+        ) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "Conta do responsável não encontrada ou indisponível.",
+            });
+        }
+
+        if (
+          !usuarioResponsavel
+            .localLoginEnabled ||
+          !usuarioResponsavel
+            .senhaHash
+        ) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_GOOGLE_ONLY",
+
+              error:
+                "Esta conta do responsável não possui login por senha. Entre com Google nessa conta ou defina uma senha primeiro.",
+            });
+        }
+
+        const senhaValida =
+          await bcrypt.compare(
+            responsavelSenhaFinal,
+            usuarioResponsavel
+              .senhaHash
+          );
+
+        if (!senhaValida) {
+          return res
+            .status(401)
+            .json({
+              error:
+                "E-mail ou senha do responsável inválidos.",
+            });
+        }
+
+        responsavelUsuarioId =
+          usuarioResponsavel.id;
+
+        await prisma.usuarioPapel.upsert({
+          where: {
+            usuarioId_papel: {
+              usuarioId:
+                usuarioResponsavel.id,
+
+              papel:
+                TipoUsuario.Responsavel,
+            },
+          },
+
+          update: {
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            desativadoEm:
+              null,
+
+            perfilCompletoEm:
+              new Date(),
+          },
+
+          create: {
+            usuarioId:
+              usuarioResponsavel.id,
+
+            papel:
+              TipoUsuario.Responsavel,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            perfilCompletoEm:
+              new Date(),
+          },
+        });
+      }
+
+      if (
+        responsavelModo ===
+        "novo"
+      ) {
+        const existente =
+          await prisma.usuario.findFirst({
+            where: {
+              email: {
+                equals:
+                  responsavelEmailFinal,
+
+                mode:
+                  "insensitive",
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        if (existente) {
+          return res
+            .status(409)
+            .json({
+              code:
+                "RESPONSAVEL_EMAIL_ALREADY_EXISTS",
+
+              error:
+                "Já existe uma conta FootEra com este e-mail. Use a opção 'Já tenho uma conta FootEra'.",
+            });
+        }
+
+        const usernameResponsavel =
+          await gerarUsernameDisponivel(
+            responsavelNomeFinal ||
+              responsavelEmailFinal
+                .split("@")[0]
+          );
+
+        const senhaResponsavelHash =
+          await bcrypt.hash(
+            responsavelSenhaFinal,
+            10
+          );
+
+        const novoResponsavel =
+          await prisma.usuario.create({
+            data: {
+              nome:
+                responsavelNomeFinal,
+
+              email:
+                responsavelEmailFinal,
+
+              nomeDeUsuario:
+                usernameResponsavel,
+
+              senhaHash:
+                senhaResponsavelHash,
+
+              tipo:
+                TipoUsuario.Responsavel,
+
+              localLoginEnabled:
+                true,
+
+              authProvider:
+                AuthProvider.LOCAL,
+
+              responsavelTelefone:
+                responsavelTelefoneFinal,
+
+              papeis: {
+                create: {
+                  papel:
+                    TipoUsuario.Responsavel,
+
+                  status:
+                    StatusUsuarioPapel.ATIVO,
+
+                  ativadoEm:
+                    new Date(),
+
+                  perfilCompletoEm:
+                    new Date(),
+                },
+              },
+            },
+
+            select: {
+              id: true,
+            },
+          });
+
+        responsavelUsuarioId =
+          novoResponsavel.id;
+      }
+    }
+
     const usuario = await prisma.usuario.create({
       data: {
         nome: nomeFinal,
@@ -845,6 +1197,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         responsavelTelefone: precisaResponsavel
           ? responsavelTelefoneFinal
           : null,
+        aniversarioElegivelApartirDe: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ),
         papeis: {
           create: {
             papel: tipoEnum,
@@ -896,6 +1251,106 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
             id: true,
           },
         });
+
+        if (
+          precisaResponsavel &&
+          responsavelUsuarioId
+        ) {
+          await prisma.responsavelAtleta.upsert({
+            where: {
+              responsavelUsuarioId_atletaId:
+                {
+                  responsavelUsuarioId,
+
+                  atletaId:
+                    atleta.id,
+                },
+            },
+
+            update: {
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              revogadoEm:
+                null,
+            },
+
+            create: {
+              responsavelUsuarioId,
+
+              atletaId:
+                atleta.id,
+
+              status:
+                StatusResponsavelAtleta.ATIVO,
+
+              principal:
+                true,
+
+              podeEditarPerfil:
+                true,
+
+              podeGerenciarPrivacidade:
+                true,
+
+              podeGerenciarTreinos:
+                true,
+
+              podeGerenciarConteudo:
+                true,
+
+              confirmadoEm:
+                new Date(),
+
+              parentesco:
+                "Responsável legal",
+            },
+          });
+
+          await prisma.usuario.update({
+            where: {
+              id:
+                usuario.id,
+            },
+
+            data: {
+              configuracoesPrivacidade: {
+                perfilVisivel:
+                  false,
+
+                visibilidadePerfil:
+                  "PRIVADO",
+
+                permitirMensagens:
+                  false,
+
+                mostrarEmail:
+                  false,
+
+                mostrarOnline:
+                  false,
+              },
+            },
+          });
+        }
 
         if (
           tipo === "ATLETA" &&
@@ -1148,103 +1603,128 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
 
       case TipoUsuario.Federacao: {
-        const federacao = await prisma.federacao.create({
-          data: {
-            usuarioId: usuario.id,
-            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
-            cnpj: cnpjClube || cnpjEscolinha || null,
-            telefone1: telefone1Clube || telefone1Escolinha || null,
-            telefone2: telefone2Clube || telefone2Escolinha || null,
-            email: emailClube || emailEscolinha || emailNorm,
-            siteOficial: siteOficialClube || siteOficialEscolinha || null,
-            sede: sedeClube || sedeEscolinha || null,
-            cidade: cidadeClube || cidadeEscolinha || cidade || null,
-            estado: estadoClube || estadoEscolinha || estado || null,
-            pais: paisClube || paisEscolinha || pais || null,
-            cep: cepClube || cepEscolinha || null,
-            descricao: descricao ?? null,
-          },
-          select: { id: true },
-        });
+        const federacao = await prisma.$transaction(
+          async (tx) => {
+            const novaFederacao = await tx.federacao.create({
+              data: {
+                usuarioId: usuario.id,
+                nome:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
 
-        await prisma.creator.upsert({
-          where: { usuarioId: usuario.id },
-          update: {
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-          },
-          create: {
-            usuarioId: usuario.id,
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-            nomePublico: nomeOrganizacao || usuario.nome,
-            headline: "Canal oficial FootEra",
-          },
-        });
+                cnpj: cnpjClube || cnpjEscolinha || null,
+                telefone1: telefone1Clube || telefone1Escolinha || null,
+                telefone2: telefone2Clube || telefone2Escolinha || null,
+                email: emailClube || emailEscolinha || emailNorm,
+                siteOficial:
+                  siteOficialClube || siteOficialEscolinha || null,
+                sede: sedeClube || sedeEscolinha || null,
+                cidade:
+                  cidadeClube || cidadeEscolinha || cidade || null,
+                estado:
+                  estadoClube || estadoEscolinha || estado || null,
+                pais: paisClube || paisEscolinha || pais || null,
+                cep: cepClube || cepEscolinha || null,
+                descricao: descricao ?? null,
+              },
+              select: {
+                id: true,
+              },
+            });
 
-        await garantirOrganizacaoLegada({
-          tipo:
-            "FEDERACAO",
+            const organizacao = await garantirOrganizacaoLegada({
+              tipo: "FEDERACAO",
+              ownerId: novaFederacao.id,
+              proprietarioUsuarioId: usuario.id,
+              tx,
+            });
 
-          ownerId:
-            federacao.id,
+            await tx.creator.create({
+              data: {
+                usuarioId: null,
+                organizacaoId: organizacao.id,
+                tipo: CreatorTipo.INSTITUCIONAL,
+                ativo: true,
+                instituicaoOficial: true,
+                verificado: false,
+                nomePublico:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
+                headline: "Canal oficial FootEra",
+              },
+            });
 
-          proprietarioUsuarioId:
-            usuario.id,
-        });
+            return novaFederacao;
+          }
+        );
 
         tipoUsuarioId = federacao.id;
         break;
       }
 
       case TipoUsuario.Marca: {
-        const marca = await prisma.marca.create({
-          data: {
-            usuarioId: usuario.id,
-            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
-            cnpj: cnpjClube || cnpjEscolinha || null,
-            telefone1: telefone1Clube || telefone1Escolinha || null,
-            telefone2: telefone2Clube || telefone2Escolinha || null,
-            email: emailClube || emailEscolinha || emailNorm,
-            siteOficial: siteOficialClube || siteOficialEscolinha || null,
-            cidade: cidadeClube || cidadeEscolinha || cidade || null,
-            estado: estadoClube || estadoEscolinha || estado || null,
-            pais: paisClube || paisEscolinha || pais || null,
-            cep: cepClube || cepEscolinha || null,
-            descricao: descricao ?? null,
-          },
-          select: { id: true },
-        });
+        const marca = await prisma.$transaction(
+          async (tx) => {
+            const novaMarca = await tx.marca.create({
+              data: {
+                usuarioId: usuario.id,
+                nome:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
 
-        await prisma.creator.upsert({
-          where: { usuarioId: usuario.id },
-          update: {
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-          },
-          create: {
-            usuarioId: usuario.id,
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-            nomePublico: nomeOrganizacao || usuario.nome,
-            headline: "Canal oficial FootEra",
-          },
-        });
+                cnpj: cnpjClube || cnpjEscolinha || null,
+                telefone1: telefone1Clube || telefone1Escolinha || null,
+                telefone2: telefone2Clube || telefone2Escolinha || null,
+                email: emailClube || emailEscolinha || emailNorm,
+                siteOficial:
+                  siteOficialClube || siteOficialEscolinha || null,
+                cidade:
+                  cidadeClube || cidadeEscolinha || cidade || null,
+                estado:
+                  estadoClube || estadoEscolinha || estado || null,
+                pais: paisClube || paisEscolinha || pais || null,
+                cep: cepClube || cepEscolinha || null,
+                descricao: descricao ?? null,
+              },
+              select: {
+                id: true,
+              },
+            });
 
-        await garantirOrganizacaoLegada({
-          tipo:
-            "MARCA",
+            const organizacao = await garantirOrganizacaoLegada({
+              tipo: "MARCA",
+              ownerId: novaMarca.id,
+              proprietarioUsuarioId: usuario.id,
+              tx,
+            });
 
-          ownerId:
-            marca.id,
+            await tx.creator.create({
+              data: {
+                usuarioId: null,
+                organizacaoId: organizacao.id,
+                tipo: CreatorTipo.INSTITUCIONAL,
+                ativo: true,
+                instituicaoOficial: true,
+                verificado: false,
+                nomePublico:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
+                headline: "Canal oficial FootEra",
+              },
+            });
 
-          proprietarioUsuarioId:
-            usuario.id,
-        });
+            return novaMarca;
+          }
+        );
+
         tipoUsuarioId = marca.id;
         break;
       }

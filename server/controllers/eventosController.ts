@@ -550,7 +550,7 @@ export async function listarDoClube(req: Request, res: Response) {
 
   const eventos = await prisma.evento.findMany({
     where,
-    orderBy: { dataEvento: "asc" }, 
+    orderBy: { dataEvento: "asc" },
   });
 
   const items = eventos.map((ev) => ({
@@ -573,7 +573,7 @@ export async function listarDaEscolinha(req: Request, res: Response) {
 
     const eventos = await prisma.evento.findMany({
       where: { escolinhaId },
-      orderBy: { dataEvento: "asc" }, 
+      orderBy: { dataEvento: "asc" },
     });
 
     return res.json(eventos);
@@ -1215,136 +1215,219 @@ export async function participarEvento(
       });
     }
 
-    const existente =
-      await prisma.inscricaoEvento.findUnique({
-        where: {
-          eventoId_usuarioId: {
-            eventoId,
-            usuarioId,
-          },
-        },
-      });
 
-    if (
-      existente &&
-      existente.status !==
-        "CANCELADA"
-    ) {
+    // Serializa inscricoes do mesmo evento no PostgreSQL.
+    // A contagem e a inscricao ocorrem na mesma transacao.
+    const resultado = await prisma.$transaction(
+      async (tx) => {
+        const linhas = await tx.$queryRaw<
+          Array<{ id: string }>
+        >`
+          SELECT "id"
+          FROM "Evento"
+          WHERE "id" = ${eventoId}
+          FOR UPDATE
+        `;
+
+        if (linhas.length !== 1) {
+          return {
+            tipo: "EVENTO_INDISPONIVEL" as const,
+          };
+        }
+
+        // Reconsulta depois de obter o bloqueio.
+        const eventoAtual = await tx.evento.findUnique({
+          where: { id: eventoId },
+        });
+
+        const agoraTx = new Date();
+
+        if (
+          !eventoAtual ||
+          eventoAtual.status !== "ABERTO" ||
+          eventoAtual.dataEvento <= agoraTx ||
+          (eventoAtual.inscricaoInicio &&
+            agoraTx < eventoAtual.inscricaoInicio) ||
+          (eventoAtual.inscricaoFim &&
+            agoraTx > eventoAtual.inscricaoFim)
+        ) {
+          return {
+            tipo: "EVENTO_INDISPONIVEL" as const,
+          };
+        }
+
+        const existenteAtual =
+          await tx.inscricaoEvento.findUnique({
+            where: {
+              eventoId_usuarioId: {
+                eventoId,
+                usuarioId,
+              },
+            },
+          });
+
+        // Repetir a solicitacao nao cria outra inscricao.
+        if (
+          existenteAtual &&
+          existenteAtual.status !== "CANCELADA"
+        ) {
+          return {
+            tipo: "JA_INSCRITO" as const,
+            status: existenteAtual.status,
+          };
+        }
+
+        const totalAtual =
+          await tx.inscricaoEvento.count({
+            where: {
+              eventoId,
+              status: {
+                not: "CANCELADA",
+              },
+            },
+          });
+
+        if (
+          eventoAtual.vagas != null &&
+          totalAtual >= eventoAtual.vagas
+        ) {
+          return {
+            tipo: "SEM_VAGAS" as const,
+          };
+        }
+
+        if (eventoAtual.linkInscricao) {
+          return {
+            tipo: "LINK_EXTERNO" as const,
+            link: eventoAtual.linkInscricao,
+          };
+        }
+
+        const valorAtual = Number(
+          eventoAtual.valorInscricao ?? 0
+        );
+
+        // Eventos pagos nunca geram inscricao gratuita.
+        // Validade financeira continua a cargo do billing.
+        if (
+          !Number.isFinite(valorAtual) ||
+          valorAtual < 0
+        ) {
+          return {
+            tipo: "VALOR_INVALIDO" as const,
+          };
+        }
+
+        if (valorAtual > 0) {
+          return {
+            tipo: "PAGAMENTO_NECESSARIO" as const,
+            valor: valorAtual,
+          };
+        }
+
+        const inscricaoAtual =
+          await tx.inscricaoEvento.upsert({
+            where: {
+              eventoId_usuarioId: {
+                eventoId,
+                usuarioId,
+              },
+            },
+            create: {
+              eventoId,
+              usuarioId,
+              status: "CONFIRMADA",
+            },
+            update: {
+              status: "CONFIRMADA",
+            },
+          });
+
+        const totalDepois =
+          await tx.inscricaoEvento.count({
+            where: {
+              eventoId,
+              status: {
+                not: "CANCELADA",
+              },
+            },
+          });
+
+        return {
+          tipo: "INSCRITO" as const,
+          status: inscricaoAtual.status,
+          totalInscritos: totalDepois,
+          vagasDisponiveis:
+            eventoAtual.vagas == null
+              ? null
+              : Math.max(
+                  0,
+                  eventoAtual.vagas - totalDepois
+                ),
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 15000,
+      }
+    );
+
+    if (resultado.tipo === "EVENTO_INDISPONIVEL") {
+      return res.status(409).json({
+        code: "EVENT_NOT_AVAILABLE",
+        message:
+          "Este evento nao esta disponivel para inscricoes.",
+      });
+    }
+
+    if (resultado.tipo === "JA_INSCRITO") {
       return res.json({
         ok: true,
         inscrito: true,
-        status:
-          existente.status,
+        status: resultado.status,
       });
     }
 
-    const total =
-      await prisma.inscricaoEvento.count({
-        where: {
-          eventoId,
-
-          status: {
-            not:
-              "CANCELADA",
-          },
-        },
-      });
-
-    if (
-      evento.vagas != null &&
-      total >= evento.vagas
-    ) {
+    if (resultado.tipo === "SEM_VAGAS") {
       return res.status(409).json({
         code: "EVENT_FULL",
         message:
-          "As vagas deste evento estão esgotadas.",
+          "As vagas deste evento estao esgotadas.",
       });
     }
-    
-    if (
-      evento.linkInscricao
-    ) {
+
+    if (resultado.tipo === "LINK_EXTERNO") {
       return res.json({
         ok: true,
         external: true,
-        linkInscricao:
-          evento.linkInscricao,
+        linkInscricao: resultado.link,
       });
     }
 
-    const valor =
-      Number(
-        evento.valorInscricao ??
-          0
-      );
-
-    if (
-      Number.isFinite(valor) &&
-      valor > 0
-    ) {
-      return res.status(402).json({
-        code:
-          "PAYMENT_REQUIRED",
-
+    if (resultado.tipo === "VALOR_INVALIDO") {
+      return res.status(409).json({
+        code: "EVENT_INVALID_AMOUNT",
         message:
-          "Este evento possui inscrição paga.",
-
-        eventoId,
-        valor,
+          "O valor de inscricao deste evento e invalido.",
       });
     }
 
-    const inscricao =
-      await prisma.inscricaoEvento.upsert({
-        where: {
-          eventoId_usuarioId: {
-            eventoId,
-            usuarioId,
-          },
-        },
-
-        create: {
-          eventoId,
-          usuarioId,
-          status:
-            "CONFIRMADA",
-        },
-
-        update: {
-          status:
-            "CONFIRMADA",
-        },
+    if (resultado.tipo === "PAGAMENTO_NECESSARIO") {
+      return res.status(402).json({
+        code: "PAYMENT_REQUIRED",
+        message:
+          "Este evento possui inscricao paga.",
+        eventoId,
+        valor: resultado.valor,
       });
-
-    const totalInscritos =
-      await prisma.inscricaoEvento.count({
-        where: {
-          eventoId,
-
-          status: {
-            not:
-              "CANCELADA",
-          },
-        },
-      });
+    }
 
     return res.status(201).json({
       ok: true,
       inscrito: true,
-
-      status:
-        inscricao.status,
-
-      totalInscritos,
-
-      vagasDisponiveis:
-        evento.vagas == null
-          ? null
-          : Math.max(
-              0,
-              evento.vagas -
-                totalInscritos
-            ),
+      status: resultado.status,
+      totalInscritos: resultado.totalInscritos,
+      vagasDisponiveis: resultado.vagasDisponiveis,
     });
   } catch (error) {
     console.error(
@@ -1373,11 +1456,19 @@ function mapEventoToAgendaItem(ev: any) {
 
 export async function minhaAgenda(req: any, res: Response) {
   try {
-    const { alvoId, from, to } = req.query as {
-      alvoId?: string;
-      from?: string;
-      to?: string;
-    };
+    const {
+      alvoId,
+      atletaId:
+        atletaIdQuery,
+      from,
+      to,
+    } =
+      req.query as {
+        alvoId?: string;
+        atletaId?: string;
+        from?: string;
+        to?: string;
+      };
 
     const agora = new Date();
     const fromDate = parseDate(from) || agora;
@@ -1386,6 +1477,11 @@ export async function minhaAgenda(req: any, res: Response) {
     const usuarioId =
       String(
         req.user?.id || ""
+      ).trim();
+
+    const atletaIdSolicitado =
+      String(
+        atletaIdQuery ?? ""
       ).trim();
 
     const activeContext =
@@ -1492,6 +1588,213 @@ export async function minhaAgenda(req: any, res: Response) {
   ) {
     where.creatorUsuarioId =
       usuarioId;
+  }
+
+  if (
+    activeContext?.kind ===
+      "PERSONAL" &&
+    tipoContexto ===
+      "responsavel" &&
+    usuarioId &&
+    atletaIdSolicitado
+  ) {
+    const vinculo =
+      await prisma.responsavelAtleta.findUnique({
+        where: {
+          responsavelUsuarioId_atletaId:
+            {
+              responsavelUsuarioId:
+                usuarioId,
+
+              atletaId:
+                atletaIdSolicitado,
+            },
+        },
+
+        include: {
+          atleta: {
+            select: {
+              id: true,
+              usuarioId: true,
+            },
+          },
+        },
+      });
+
+    if (
+      !vinculo ||
+      vinculo.status !==
+        "ATIVO"
+    ) {
+      return res
+        .status(403)
+        .json({
+          code:
+            "ATLETA_ACCESS_DENIED",
+
+          error:
+            "Você não possui acesso à agenda deste atleta.",
+        });
+    }
+
+    const atletaId =
+      vinculo.atleta.id;
+
+    const atletaUsuarioId =
+      vinculo.atleta
+        .usuarioId;
+
+    const eventoWhereAtleta: any = {
+      status:
+        EventoStatus.ABERTO,
+
+      dataEvento: {
+        gte:
+          fromDate,
+      },
+    };
+
+    if (toDate) {
+      eventoWhereAtleta
+        .dataEvento.lte =
+        toDate;
+    }
+
+    const [
+      convocacoes,
+      inscricoes,
+    ] =
+      await Promise.all([
+        prisma.eventoConvocado.findMany({
+          where: {
+            atletaId,
+
+            evento:
+              eventoWhereAtleta,
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento:
+                  true,
+              },
+            },
+          },
+        }),
+
+        prisma.inscricaoEvento.findMany({
+          where: {
+            usuarioId:
+              atletaUsuarioId,
+
+            status: {
+              not:
+                "CANCELADA",
+            },
+
+            evento:
+              eventoWhereAtleta,
+          },
+
+          include: {
+            evento: {
+              select: {
+                id: true,
+                tipo: true,
+                titulo: true,
+                dataEvento:
+                  true,
+              },
+            },
+          },
+        }),
+      ]);
+
+    const mapa =
+      new Map<
+        string,
+        {
+          id: string;
+          tipo: any;
+          titulo: string;
+          inicio: Date;
+          fim: null;
+        }
+      >();
+
+    for (
+      const item of
+        convocacoes
+    ) {
+      mapa.set(
+        item.evento.id,
+        {
+          id:
+            item.evento.id,
+
+          tipo:
+            item.evento.tipo ??
+            "EVENTO",
+
+          titulo:
+            item.evento
+              .titulo,
+
+          inicio:
+            item.evento
+              .dataEvento,
+
+          fim:
+            null,
+        }
+      );
+    }
+
+    for (
+      const item of
+        inscricoes
+    ) {
+      mapa.set(
+        item.evento.id,
+        {
+          id:
+            item.evento.id,
+
+          tipo:
+            item.evento.tipo ??
+            "EVENTO",
+
+          titulo:
+            item.evento
+              .titulo,
+
+          inicio:
+            item.evento
+              .dataEvento,
+
+          fim:
+            null,
+        }
+      );
+    }
+
+    return res.json(
+      Array.from(
+        mapa.values()
+      ).sort(
+        (a, b) =>
+          new Date(
+            a.inicio
+          ).getTime() -
+          new Date(
+            b.inicio
+          ).getTime()
+      )
+    );
   }
 
     if (

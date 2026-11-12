@@ -21,7 +21,7 @@ export default function LearningHeader({
   rightAction,
 }: Props) {
   return (
-    <div className="flex items-center gap-3 mb-5">
+    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
       <Link
         href={backHref}
         className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white border border-slate-200 text-slate-700"
@@ -30,7 +30,9 @@ export default function LearningHeader({
       </Link>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[30px] font-extrabold text-[#193b2e]">{title}</div>
+        <div className="text-[25px] sm:text-[30px] font-extrabold leading-tight text-[#193b2e]">
+          {title}
+        </div>
         {subtitle ? <div className="text-sm text-slate-500">{subtitle}</div> : null}
       </div>
 

@@ -1,20 +1,19 @@
-import { prisma } from "../prisma.js";
 
-export async function purgeDeletedAccounts() {
-  const now = new Date();
+/**
+ * Purga física temporariamente desabilitada.
+ *
+ * Não remover este bloqueio até concluir:
+ * - Auditoria de relacionamentos Prisma
+ * - Preservação de dados financeiros
+ * - Preservação de organizações transferidas
+ * - Proteção de dados e vínculos de menores
+ * - Política de retenção e anonimização
+ */
+export async function purgeDeletedAccounts(): Promise<number> {
+  console.warn(
+    "[purgeDeletedAccounts] Purga física desabilitada. " +
+    "Aguardando conclusão da auditoria de integridade."
+  );
 
-  const users = await prisma.usuario.findMany({
-    where: {
-      deletedAt: { not: null },
-      deleteScheduledAt: { lte: now },
-    },
-    select: { id: true },
-    take: 200, 
-  });
-
-  for (const u of users) {
-    await prisma.usuario.delete({ where: { id: u.id } });
-  }
-
-  return users.length;
+  return 0;
 }

@@ -2,9 +2,19 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
 import {
+  FuncaoMembroOrganizacao,
+  StatusResponsavelAtleta,
   StatusUsuarioPapel,
   TipoUsuario,
 } from "@prisma/client";
+import { audit } from "../services/audit.js";
+import {
+  desativarPapeisPeloAdmin,
+  ExclusaoPapelError,
+} from "../services/exclusaoContaService.js";
+import {
+  diagnosticarExclusaoConta,
+} from "../services/diagnosticoExclusaoConta.js";
 
 function normalizaTipo(
   raw: string
@@ -62,6 +72,9 @@ function normalizaTipo(
 
     creator:
       TipoUsuario.Creator,
+
+    responsavel:
+      TipoUsuario.Responsavel,
   };
 
   return map[t] ?? null;
@@ -835,6 +848,17 @@ export async function getAdminUserDetail(req: Request, res: Response) {
     nomeDeUsuario: u.nomeDeUsuario,
     email: u.email ?? null,
     tipo: u.tipo,
+    dataNascimento: u.dataNascimento ?? null,
+    cidade: u.cidade ?? null,
+    estado: u.estado ?? null,
+    pais: u.pais ?? null,
+    cep: u.cep ?? null,
+    logradouro: u.logradouro ?? null,
+    responsavelTelefone: u.responsavelTelefone ?? null,
+    papeisDetalhados: registrosPapel.map((registro) => ({
+      papel: registro.papel,
+      status: registro.status,
+    })),
     papeis,
     foto: resolveFoto(u),
     criadoEm:
@@ -1115,164 +1139,356 @@ export async function removeUserContent(req: Request, res: Response) {
     escopo: "posts" | "comentarios" | "todos";
   };
   if (escopo === "posts" || escopo === "todos")
-    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
+    await prisma.postagem.deleteMany({
+      where: {
+        usuarioId: id,
+        organizacaoId: null,
+      },
+    });
   if (escopo === "comentarios" || escopo === "todos")
     await prisma.comentario.deleteMany({ where: { usuarioId: id } });
   res.json({ ok: true });
 }
 
-export async function hardDeleteUsuario(req: Request, res: Response) {
-  const { id } = req.params;
-
+export async function hardDeleteUsuario(
+  req: Request,
+  res: Response
+) {
   try {
-    const requesterId =
-      String(
-        (req as any).userId ??
-          (req as any).user?.id ??
-          (req as any).authUser?.id ??
-          ""
-      ).trim();
-    if (requesterId && requesterId === id) {
-      return res.status(400).json({ message: "Você não pode excluir sua própria conta." });
+    const usuarioId = String(req.params.id ?? "").trim();
+    const confirmacao = String(req.body?.confirm ?? "").trim();
+    const motivo = String(req.body?.motivo ?? "").trim();
+
+    if (!usuarioId) {
+      return res.status(400).json({
+        message: "ID do usuário é obrigatório.",
+      });
     }
 
-    const exists =
-      await prisma.usuario.findUnique({
-        where: {
-          id,
-        },
+    if (confirmacao !== "Excluir Conta Footera") {
+      return res.status(400).json({
+        message: 'Digite exatamente "Excluir Conta Footera".',
+      });
+    }
 
-        select: {
-          id:
-            true,
+    if (motivo.length < 10) {
+      return res.status(400).json({
+        message: "Informe um motivo de pelo menos 10 caracteres.",
+      });
+    }
 
-          email:
-            true,
+    if (req.userId === usuarioId) {
+      return res.status(403).json({
+        message: "Você não pode excluir sua própria conta pelo Admin.",
+      });
+    }
 
-          administrador: {
-            select: {
-              usuarioId:
-                true,
-
-              cargo:
-                true,
-
-              nivel:
-                true,
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        deletedAt: true,
+        dataNascimento: true,
+        atleta: {
+          select: {
+            idade: true,
+            responsaveis: {
+              where: {
+                status: StatusResponsavelAtleta.ATIVO,
+              },
+              select: { id: true },
+              take: 1,
             },
           },
         },
-      });
-    if (!exists) return res.status(404).json({ message: "Usuário não encontrado." });
-
-    if (exists.administrador) {
-      const cargo =
-        String(
-          exists.administrador
-            .cargo ??
-            ""
-        )
-          .trim()
-          .toLowerCase()
-          .replace(
-            /\s+/g,
-            " "
-          );
-
-      const nivel =
-        String(
-          exists.administrador
-            .nivel ??
-            ""
-        )
-          .trim()
-          .toLowerCase();
-
-      const isByCargo =
-        cargo === "owner" ||
-        cargo === "superadmin" ||
-        cargo === "super admin";
-
-      const isByNivel =
-        nivel ===
-        "performance";
-
-      const isByEnv =
-        Boolean(
-          process.env
-            .SUPERADMIN_EMAIL
-        ) &&
-        exists.email
-          ?.toLowerCase() ===
-          process.env
-            .SUPERADMIN_EMAIL!
-            .toLowerCase();
-
-      if (
-        isByCargo ||
-        isByNivel ||
-        isByEnv
-      ) {
-        return res.status(403).json({
-          message:
-            "Não é permitido excluir permanentemente o super admin.",
-        });
-      }
-
-      const totalAdmins =
-        await prisma.administrador.count();
-
-      if (
-        totalAdmins <= 1
-      ) {
-        return res.status(400).json({
-          message:
-            "Não é possível excluir o último administrador.",
-        });
-      }
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.solicitacaoTreino.deleteMany({
-        where: { OR: [{ remetenteId: id }, { destinatarioId: id }] },
-      });
-
-      if ((tx as any).amigo) {
-        await (tx as any).amigo.deleteMany({
-          where: { OR: [{ usuarioId: id }, { amigoId: id }] },
-        });
-      }
-
-      if ((tx as any).notificacao) {
-        await (tx as any).notificacao.deleteMany({
-          where: { OR: [{ usuarioId: id }, { actorId: id }] },
-        });
-      }
-
-      if ((tx as any).comentario) await (tx as any).comentario.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).curtida) await (tx as any).curtida.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).compartilhamento) await (tx as any).compartilhamento.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).postagem) await (tx as any).postagem.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).favoritoUsuario) await (tx as any).favoritoUsuario.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).atleta) await (tx as any).atleta.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).professor) await (tx as any).professor.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).clube) await (tx as any).clube.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).escolinha) await (tx as any).escolinha.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).olheiro) await (tx as any).olheiro.deleteMany({ where: { usuarioId: id } });
-      if ((tx as any).administrador) await (tx as any).administrador.deleteMany({ where: { usuarioId: id } });
-
-      await tx.usuarioPapel.deleteMany({
-        where: {
-          usuarioId:
-            id,
-        },
-      });
-
-      await tx.usuario.delete({ where: { id } });
+        clube: { select: { id: true } },
+        escolinha: { select: { id: true } },
+        marca: { select: { id: true } },
+        federacao: { select: { id: true } },
+      },
     });
 
-    return res.json({ ok: true });
-  } catch (e: any) {
-    return sendError(res, e, "Falha ao excluir permanentemente. Veja o log do servidor para a tabela que bloqueou (FK).");
+    if (!usuario) {
+      return res.status(404).json({
+        message: "Usuário não encontrado.",
+      });
+    }
+
+    if (usuario.deletedAt) {
+      return res.status(409).json({
+        code: "ACCOUNT_ALREADY_SCHEDULED",
+        message: "Esta conta já está na lixeira.",
+      });
+    }
+
+    const [administrador, organizacoesProprietario] =
+      await Promise.all([
+        prisma.administrador.findUnique({
+          where: { usuarioId },
+          select: { id: true },
+        }),
+        prisma.membroOrganizacao.findMany({
+          where: {
+            usuarioId,
+            ativo: true,
+            funcao: FuncaoMembroOrganizacao.PROPRIETARIO,
+          },
+          select: {
+            organizacaoId: true,
+            organizacao: {
+              select: {
+                id: true,
+                nome: true,
+                tipo: true,
+                ativo: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+    if (administrador) {
+      return res.status(409).json({
+        code: "ADMIN_ACCOUNT_PROTECTED",
+        message:
+          "Esta conta possui acesso administrativo. Utilize o procedimento específico de remoção de administradores.",
+      });
+    }
+
+    const organizacoesPendentes = organizacoesProprietario.map(
+      (membro) => ({
+        organizacaoId: membro.organizacaoId,
+        nome: membro.organizacao.nome,
+        tipo: membro.organizacao.tipo,
+        motivo: "PROPRIETARIO",
+        ativo: membro.organizacao.ativo,
+        orientacao:
+          "Transfira a propriedade ou solicite o encerramento institucional.",
+      }),
+    );
+
+    const vinculosLegados = [
+      usuario.clube && {
+        tipo: "CLUBE",
+        legadoId: usuario.clube.id,
+      },
+      usuario.escolinha && {
+        tipo: "ESCOLA",
+        legadoId: usuario.escolinha.id,
+      },
+      usuario.marca && {
+        tipo: "MARCA",
+        legadoId: usuario.marca.id,
+      },
+      usuario.federacao && {
+        tipo: "FEDERACAO",
+        legadoId: usuario.federacao.id,
+      },
+    ].filter(
+      (item): item is {
+        tipo: string;
+        legadoId: string;
+      } => Boolean(item)
+    );
+
+    const possuiVinculosLegados = Boolean(
+      usuario.clube ||
+      usuario.escolinha ||
+      usuario.marca ||
+      usuario.federacao
+    );
+
+    if (
+      organizacoesPendentes.length > 0 ||
+      possuiVinculosLegados
+    ) {
+      return res.status(409).json({
+        code: "ORGANIZATION_OWNER",
+        message:
+          "Existem responsabilidades institucionais pendentes antes da exclusão.",
+        details: {
+          organizacoes: organizacoesPendentes,
+          vinculosLegados,
+          possuiVinculosLegados,
+          orientacao:
+            "Resolva todas as propriedades institucionais antes de solicitar a exclusão.",
+        },
+      });
+    }
+
+    let idade: number | null = null;
+
+    if (usuario.dataNascimento) {
+      const nascimento = usuario.dataNascimento;
+      const hoje = new Date();
+
+      idade = hoje.getFullYear() - nascimento.getFullYear();
+
+      const aindaNaoFezAniversario =
+        hoje.getMonth() < nascimento.getMonth() ||
+        (hoje.getMonth() === nascimento.getMonth() &&
+          hoje.getDate() < nascimento.getDate());
+
+      if (aindaNaoFezAniversario) idade--;
+    } else {
+      idade = usuario.atleta?.idade ?? null;
+    }
+
+    if (
+      idade !== null &&
+      idade < 12 &&
+      (usuario.atleta?.responsaveis.length ?? 0) > 0
+    ) {
+      return res.status(409).json({
+        code: "SUPERVISED_ATHLETE",
+        message:
+          "Esta conta pertence a um atleta menor supervisionado. Utilize o fluxo específico de autorização.",
+      });
+    }
+
+    const agora = new Date();
+    const prazo = new Date(
+      agora.getTime() + 30 * 24 * 60 * 60 * 1000
+    );
+
+    const resultado = await prisma.usuario.updateMany({
+      where: {
+        id: usuarioId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: agora,
+        deleteScheduledAt: prazo,
+        lastLogoutAt: agora,
+        tokenVersion: { increment: 1 },
+      },
+    });
+
+    if (resultado.count !== 1) {
+      return res.status(409).json({
+        message:
+          "O estado da conta foi alterado. Atualize a página.",
+      });
+    }
+
+    try {
+      await audit(req, {
+        acao: "CONTA_MOVIDA_PARA_LIXEIRA_ADMIN",
+        entidade: "Usuario",
+        entidadeId: usuarioId,
+        descricao:
+          "Administrador solicitou exclusão programada de conta.",
+        meta: {
+          motivo,
+          deleteScheduledAt: prazo.toISOString(),
+        },
+      });
+    } catch (erroAuditoria) {
+      console.error(
+        "[admin] Falha ao registrar auditoria de exclusão:",
+        erroAuditoria
+      );
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message:
+        "Conta enviada para a lixeira por 30 dias. Nenhum registro foi excluído fisicamente.",
+      deleteScheduledAt: prazo.toISOString(),
+    });
+  } catch (error) {
+    console.error(
+      "[admin] Erro ao solicitar exclusão:",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Não foi possível solicitar a exclusão da conta.",
+    });
+  }
+}
+
+export async function excluirPapeisUsuarioAdmin(
+  req: Request,
+  res: Response,
+) {
+  const usuarioId = String(req.params.id ?? "").trim();
+  const papeis = req.body?.papeis;
+
+  const confirmacao = String(
+    req.body?.confirm ?? ""
+  ).trim();
+
+  if (confirmacao !== "Desativar Papéis FootEra") {
+    return res.status(400).json({
+      code: "CONFIRMATION_REQUIRED",
+      message:
+        'Digite exatamente "Desativar Papéis FootEra" para confirmar.',
+    });
+  }
+
+  if (
+    !usuarioId ||
+    !Array.isArray(papeis) ||
+    !papeis.every((papel) => typeof papel === "string")
+  ) {
+    return res.status(400).json({
+      code: "INVALID_REQUEST",
+      message: "Informe o usuário e uma lista válida de papéis.",
+    });
+  }
+
+  if (req.userId === usuarioId) {
+    return res.status(403).json({
+      code: "ADMIN_SELF_CHANGE_DENIED",
+      message:
+        "Não remova seus próprios papéis por esta operação administrativa.",
+    });
+  }
+
+  try {
+    const resultado = await desativarPapeisPeloAdmin(
+      usuarioId,
+      papeis,
+    );
+
+    try {
+      await audit(req, {
+        acao: "PAPEIS_DESATIVADOS_ADMIN",
+        entidade: "Usuario",
+        entidadeId: usuarioId,
+        descricao:
+          "Superadministrador desativou papéis de um usuário.",
+        meta: {
+          papeisRemovidos: resultado.papeisRemovidos,
+        },
+      });
+    } catch (auditError) {
+      console.error(
+        "[admin] Falha ao registrar auditoria:",
+        auditError,
+      );
+    }
+
+    return res.json(resultado);
+  } catch (error) {
+    if (error instanceof ExclusaoPapelError) {
+      return res.status(error.status).json({
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    console.error(
+      "[admin] Erro ao excluir papéis:",
+      error,
+    );
+
+    return res.status(500).json({
+      code: "ROLE_DELETION_FAILED",
+      message:
+        "Não foi possível concluir a exclusão dos papéis.",
+    });
   }
 }

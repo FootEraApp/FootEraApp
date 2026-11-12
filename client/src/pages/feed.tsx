@@ -466,9 +466,28 @@ function cleanText(s?: string | null) {
   return String(s ?? "").replace(/\u200B/g, "").trim();
 }
 
-function username(u?: any) {
-  const h = u?.nomeDeUsuario ? `@${u.nomeDeUsuario}` : "";
-  return h || u?.nome || "Usuário";
+function papelDoContexto(
+  contextoKey?: string | null
+) {
+  const key =
+    String(
+      contextoKey ?? ""
+    ).trim();
+
+  if (
+    !key.startsWith(
+      "personal:"
+    )
+  ) {
+    return null;
+  }
+
+  const papel =
+    key.slice(
+      "personal:".length
+    );
+
+  return papel || null;
 }
 
 function getPostAutor(
@@ -490,44 +509,91 @@ function getPostAutor(
 
       tipo:
         null as string | null,
+
+      href:
+        "#",
     };
   }
 
-  if (post.organizacao) {
+  if (
+    post.organizacao
+  ) {
+    const organizacao =
+      post.organizacao as any;
+
+    const fotoOrganizacao =
+      organizacao.logo ??
+      organizacao.foto ??
+      organizacao.avatarUrl ??
+      null;
+
+    const perfilUsuarioId =
+      String(
+        organizacao
+          .perfilUsuarioId ??
+        ""
+      ).trim();
+
+    const perfilPapel =
+      String(
+        organizacao
+          .perfilPapel ??
+        ""
+      ).trim();
+
+    const href =
+      perfilUsuarioId &&
+      perfilPapel
+        ? `/perfil/${encodeURIComponent(
+            perfilUsuarioId
+          )}?papel=${encodeURIComponent(
+            perfilPapel
+          )}`
+        : `/organizacao/${encodeURIComponent(
+            organizacao.id
+          )}`;
+
     return {
       isOrganization:
         true,
 
       id:
-        post.organizacao.id,
+        organizacao.id,
 
       nome:
-        post.organizacao.nome ||
+        organizacao.nome ||
         "Organização",
 
-      /*
-       * Por enquanto usamos o
-       * fallback do Avatar.
-       *
-       * Depois podemos trazer o logo
-       * institucional real.
-       */
       foto:
-        null,
+        fotoOrganizacao,
 
       tipo:
-        post.organizacao.tipo ??
+        perfilPapel ||
+        organizacao.tipo ||
         null,
+
+      href,
     };
   }
+
+  const papel =
+    papelDoContexto(
+      post.autorContextoKey
+    ) ??
+    post.usuario?.tipo ??
+    null;
+
+  const usuarioId =
+    post.usuario?.id ??
+    post.usuarioId ??
+    "";
 
   return {
     isOrganization:
       false,
 
     id:
-      post.usuario?.id ??
-      "",
+      usuarioId,
 
     nome:
       post.usuario?.nome ??
@@ -538,8 +604,18 @@ function getPostAutor(
       null,
 
     tipo:
-      post.usuario?.tipo ??
-      null,
+      papel,
+
+    href:
+      papel
+        ? `/perfil/${encodeURIComponent(
+            usuarioId
+          )}?papel=${encodeURIComponent(
+            papel
+          )}`
+        : `/perfil/${encodeURIComponent(
+            usuarioId
+          )}`,
   };
 }
 
@@ -1301,35 +1377,31 @@ function PaginaFeed(): JSX.Element {
               className="max-w-xl mx-auto bg-white rounded-2xl shadow-md p-4 space-y-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  {autor.isOrganization ? (
+                <div className="flex min-w-0 items-center gap-3">
+                  <Link
+                    href={autor.href}
+                    title={`Ver perfil de ${autor.nome}`}
+                    className="shrink-0"
+                  >
                     <Avatar
                       foto={autor.foto}
                       alt={autor.nome}
-                      className="w-10 h-10"
+                      className="w-10 h-10 cursor-pointer"
                     />
-                  ) : (
-                    <Link
-                      href={`/perfil/${autor.id}`}
-                      title={`Ver perfil de ${autor.nome}`}
-                      className="shrink-0"
-                    >
-                      <Avatar
-                        foto={autor.foto}
-                        alt={autor.nome}
-                        className="w-10 h-10 cursor-pointer"
-                      />
-                    </Link>
-                  )}
+                  </Link>
 
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold">
+                      <Link
+                        href={autor.href}
+                        title={`Ver perfil de ${autor.nome}`}
+                        className="truncate font-semibold hover:underline"
+                      >
                         {autor.nome}
-                      </p>
+                      </Link>
 
                       {autor.isOrganization && (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                           Organização
                         </span>
                       )}
@@ -1345,12 +1417,17 @@ function PaginaFeed(): JSX.Element {
                     </p>
                   </div>
                 </div>
+
                 {((post as any).usuarioId === Storage.usuarioId ||
                   post?.usuario?.id === Storage.usuarioId) && (
                   <button
-                    onClick={() => handleApagar(post.id)}
+                    onClick={() =>
+                      handleApagar(
+                        post.id
+                      )
+                    }
                     title="Apagar postagem"
-                    className="text-red-600 hover:text-red-800 p-2"
+                    className="shrink-0 p-2 text-red-600 hover:text-red-800"
                   >
                     <FaTrash />
                   </button>
@@ -1415,7 +1492,11 @@ function PaginaFeed(): JSX.Element {
                                 return (
                                   <div className="border rounded-xl p-3 bg-white">
                                     <div className="flex items-center gap-2 mb-1">
-                                      {rootAutor.isOrganization ? (
+                                      <Link
+                                        href={rootAutor.href}
+                                        title={`Ver perfil de ${rootAutor.nome}`}
+                                        className="shrink-0"
+                                      >
                                         <Avatar
                                           foto={
                                             rootAutor.foto
@@ -1423,29 +1504,19 @@ function PaginaFeed(): JSX.Element {
                                           alt={
                                             rootAutor.nome
                                           }
-                                          className="w-7 h-7"
+                                          className="w-7 h-7 cursor-pointer"
                                         />
-                                      ) : (
-                                        <Link
-                                          href={`/perfil/${rootAutor.id}`}
-                                          title={`Ver perfil de ${rootAutor.nome}`}
-                                          className="shrink-0"
-                                        >
-                                          <Avatar
-                                            foto={
-                                              rootAutor.foto
-                                            }
-                                            alt={
-                                              rootAutor.nome
-                                            }
-                                            className="w-7 h-7 cursor-pointer"
-                                          />
-                                        </Link>
-                                      )}
+                                      </Link>
 
-                                      <span className="font-semibold text-sm">
+                                      <Link
+                                        href={
+                                          rootAutor.href
+                                        }
+                                        title={`Ver perfil de ${rootAutor.nome}`}
+                                        className="font-semibold text-sm hover:underline"
+                                      >
                                         {rootAutor.nome}
-                                      </span>
+                                      </Link>
 
                                       {rootAutor.isOrganization && (
                                         <span className="text-[10px] font-semibold text-emerald-700">

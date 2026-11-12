@@ -4,11 +4,14 @@ import { getIO } from "../socket.js";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
 import webpush from "web-push";
-import { NotificacaoTipo } from "@prisma/client";
+import { NotificacaoTipo, Prisma } from "@prisma/client";
 import fs from "fs";
 import path from "path";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging, type SendResponse } from "firebase-admin/messaging";
+import {
+  contarMensagensNaoLidas,
+} from "../services/mensagensNaoLidasService.js";
 
 async function getNotifPrefs(userId: string) {
   const u = await prisma.usuario.findUnique({
@@ -111,6 +114,30 @@ function categoriaHabilitadaPorPreferencia(
       },
   prefs: any
 ) {
+  
+  const tipo =
+    typeof params === "string"
+      ? params.toUpperCase()
+      : String(params?.tipo ?? "").toUpperCase();
+
+  const tituloNotificacao =
+    typeof params === "string"
+      ? ""
+      : String(params?.titulo ?? "").toLowerCase();
+
+  if (
+    tituloNotificacao.includes("transferência de propriedade")
+  ) {
+    return true;
+  }
+
+  if (
+    tipo === "RESPONSAVEL_SOLICITACAO" ||
+    tipo === "RESPONSAVEL_VINCULO"
+  ) {
+    return true;
+  }
+
   const texto =
     typeof params === "string" || params == null
       ? String(params || "").toLowerCase()
@@ -268,41 +295,149 @@ export async function criarNotificacaoEEnviarPush(params: {
   usuarioId: string;
   titulo: string;
   mensagem: string;
-  tipo?: string | null;
+  tipo?: NotificacaoTipo | null;
   link?: string | null;
   actorId?: string | null;
+  agrupamentoKey?: string;
 }) {
-  const not = await prisma.notificacao.create({
-    data: {
-      usuarioId: params.usuarioId,
-      titulo: params.titulo,
-      mensagem: params.mensagem,
-      tipo: params.tipo || "NOTIFICACAO",
-      link: params.link || "/notificacoes",
-      actorId: params.actorId || null,
-      lida: false,
-    } as any,
-  });
+  const tipo = params.tipo ?? NotificacaoTipo.GENERICA;
+  const link = params.link ?? "/notificacoes";
 
-  await recomputeAndEmitBadge(params.usuarioId);
-
-  await enviarPushParaUsuario({
+  const dados = {
     usuarioId: params.usuarioId,
     titulo: params.titulo,
     mensagem: params.mensagem,
-    tipo: params.tipo,
-    link: params.link,
-    notificacaoId: not.id,
-  });
+    tipo,
+    link,
+    actorId: params.actorId ?? null,
+  };
 
-  await enviarPushNativoParaUsuario({
-    usuarioId: params.usuarioId,
-    titulo: params.titulo,
-    mensagem: params.mensagem,
-    tipo: params.tipo,
-    link: params.link,
-    notificacaoId: not.id,
-  });
+  let enviarPush = true;
+
+  let not;
+
+  if (!params.agrupamentoKey) {
+    // Notificações normais continuam independentes.
+    not = await prisma.notificacao.create({
+      data: {
+        ...dados,
+        lida: false,
+      },
+    });
+  } else {
+    const agrupamentoKey = params.agrupamentoKey;
+
+    try {
+      // Primeira mensagem da conversa:
+      // cria um único aviso.
+      not = await prisma.notificacao.create({
+        data: {
+          ...dados,
+          agrupamentoKey,
+          lida: false,
+        },
+      });
+    } catch (erro) {
+      const chaveJaExiste =
+        erro instanceof Prisma.PrismaClientKnownRequestError &&
+        erro.code === "P2002";
+
+      if (!chaveJaExiste) {
+        throw erro;
+      }
+
+      // Se o aviso anterior já foi lido,
+      // reativa esse mesmo registro.
+      const reativacao =
+        await prisma.notificacao.updateMany({
+          where: {
+            agrupamentoKey,
+            lida: true,
+          },
+          data: {
+            titulo: params.titulo,
+            mensagem: params.mensagem,
+            actorId: params.actorId ?? null,
+            link,
+            lida: false,
+            createdAt: new Date(),
+          },
+        });
+
+      // Só envia outro push quando começa
+      // um novo ciclo de notificação.
+      enviarPush = reativacao.count > 0;
+
+      if (!enviarPush) {
+        // Já existe um aviso não lido:
+        // atualiza o texto, sem criar outro
+        // e sem enviar outro push.
+        await prisma.notificacao.updateMany({
+          where: {
+            agrupamentoKey,
+            lida: false,
+          },
+          data: {
+            titulo: params.titulo,
+            mensagem: params.mensagem,
+            actorId: params.actorId ?? null,
+            link,
+            createdAt: new Date(),
+          },
+        });
+      }
+
+      not = await prisma.notificacao.findUniqueOrThrow({
+        where: {
+          agrupamentoKey,
+        },
+      });
+    }
+  }
+
+  try {
+    await recomputeAndEmitBadge(params.usuarioId);
+  } catch (erro) {
+    console.warn(
+      "[Notificacoes] Falha ao atualizar badge:",
+      erro
+    );
+  }
+
+  // Não repete push enquanto o mesmo
+  // aviso permanecer não lido.
+  if (enviarPush) {
+    const resultados = await Promise.allSettled([
+      enviarPushParaUsuario({
+        usuarioId: params.usuarioId,
+        titulo: params.titulo,
+        mensagem: params.mensagem,
+        tipo,
+        link,
+        notificacaoId: not.id,
+      }),
+
+      enviarPushNativoParaUsuario({
+        usuarioId: params.usuarioId,
+        titulo: params.titulo,
+        mensagem: params.mensagem,
+        tipo,
+        link,
+        notificacaoId: not.id,
+      }),
+    ]);
+
+    for (const [index, resultado] of resultados.entries()) {
+      if (resultado.status === "rejected") {
+        console.warn(
+          index === 0
+            ? "[Notificacoes] Falha no push web:"
+            : "[Notificacoes] Falha no FCM:",
+          resultado.reason
+        );
+      }
+    }
+  }
 
   return not;
 }
@@ -375,7 +510,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
           ],
         },
       }),
-      prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
+      contarMensagensNaoLidas(userId),
       prisma.notificacao.findMany({
         where: { usuarioId: userId, lida: false },
         select: {
@@ -399,7 +534,7 @@ export async function getBadge(req: AuthenticatedRequest, res: Response) {
       )
     ).length;
         const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
-        const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
+        const mensagensCount = prefs.notifMensagens ? unreadMsgs.total : 0;
         const notificacoesCount = totalNotifs;
         const totalNotificacoes = notificacoesCount + solicitacoesCount;
 
@@ -435,7 +570,7 @@ export async function recomputeAndEmitBadge(userId: string) {
         ],
       },
     }),
-    prisma.mensagem.count({ where: { paraId: userId, lida: false } }),
+    contarMensagensNaoLidas(userId),
     prisma.notificacao.findMany({
       where: { usuarioId: userId, lida: false },
       select: {
@@ -460,7 +595,7 @@ export async function recomputeAndEmitBadge(userId: string) {
   ).length;
 
   const solicitacoesCount = prefs.notifTreinos ? pendSolic : 0;
-  const mensagensCount = prefs.notifMensagens ? unreadMsgs : 0;
+  const mensagensCount = prefs.notifMensagens ? unreadMsgs.total : 0;
 
   getIO()
     ?.to(

@@ -110,6 +110,16 @@ interface TreinoAgendado {
   } | null;
 }
 
+type LimiteDiarioTreinos = {
+  date: string;
+  atletaId: string;
+  exempt: boolean;
+  unlimited: boolean;
+  allowed: number | null;
+  used: number;
+  remaining: number | null;
+};
+
 interface Desafio {
   id: string;
   titulo: string;
@@ -138,9 +148,9 @@ type MetodologiaCatalogo = {
   capaUrl?: string | null;
   nivel?: string | null;
   publicoAlvo?: MetodologiaPublicoAlvo;
-  pontosTotal?: number | null; 
+  pontosTotal?: number | null;
   pontosBadge?: string | null;
-  pontosPorSemanaLabel?: string | null; 
+  pontosPorSemanaLabel?: string | null;
   totalAssinantes?: number | null;
   mediaAvaliacao?: number | null;
   totalAvaliacoes?: number | null;
@@ -288,12 +298,12 @@ function getStartWindowInfo(t: TreinoAgendado) {
     const end = new Date(d.getTime() + 60 * 60 * 1000);
 
     const canStart = now >= start && now <= end;
-    const isLate = now > end; 
+    const isLate = now > end;
     return { canStart, isLate };
   }
 
   const canStart = sameDay(d, hoje);
-  const isLate = now > endOfDay(d); 
+  const isLate = now > endOfDay(d);
   return { canStart, isLate };
 }
 
@@ -412,7 +422,7 @@ function SoccerFieldIcon(props: SVGProps<SVGSVGElement>) {
 
 function StarsRating({ value }: { value: number }) {
   const v = Math.max(0, Math.min(5, Number(value || 0)));
-  const half = Math.round(v * 2) / 2; 
+  const half = Math.round(v * 2) / 2;
   const full = Math.floor(half);
   const hasHalf = half - full === 0.5;
 
@@ -790,7 +800,19 @@ function PausaEntreExercicios({
 }
 
 
-export default function TreinosAtletas() {
+export default function TreinosAtletas({
+  atletaGerenciadoId,
+  atletaGerenciadoUsuarioId,
+}: {
+  atletaGerenciadoId?:
+    string | null;
+
+  atletaGerenciadoUsuarioId?:
+    string | null;
+
+  atletaGerenciadoNome?:
+    string | null;
+}) {
   const [location, navigate] = useLocation();
 
   const authContext =
@@ -812,7 +834,7 @@ export default function TreinosAtletas() {
       .trim()
       .toLowerCase();
 
-  const atletaAtivo =
+  const ehAtletaProprio =
     activeContext?.kind ===
       "PERSONAL" &&
     activeTipoUsuario ===
@@ -821,7 +843,140 @@ export default function TreinosAtletas() {
       authContext
         ?.activeTipoUsuarioId
     );
-  
+
+  const ehResponsavelGerenciando =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    activeTipoUsuario ===
+      "responsavel" &&
+    Boolean(
+      atletaGerenciadoId
+    );
+
+  const atletaAtivo =
+    ehAtletaProprio ||
+    ehResponsavelGerenciando;
+
+  const [limiteDiario, setLimiteDiario] =
+    useState<LimiteDiarioTreinos | null>(null);
+
+  const [carregandoLimiteDiario, setCarregandoLimiteDiario] =
+    useState(true);
+
+  const [erroLimiteDiario, setErroLimiteDiario] =
+    useState(false);
+
+  async function carregarLimiteDiario() {
+    if (!atletaAtivo) {
+      setLimiteDiario(null);
+      setCarregandoLimiteDiario(false);
+      return;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+      setLimiteDiario(null);
+      setCarregandoLimiteDiario(false);
+      setErroLimiteDiario(true);
+      return;
+    }
+
+    setCarregandoLimiteDiario(true);
+
+    try {
+      const query = atletaGerenciadoId
+        ? `?atletaId=${encodeURIComponent(
+            atletaGerenciadoId
+          )}`
+        : "";
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/treinos/limite-diario${query}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const dados = await resposta.json().catch(() => null);
+
+      if (!resposta.ok) {
+        throw new Error(
+          dados?.message ??
+            "Não foi possível consultar o limite diário."
+        );
+      }
+
+      setLimiteDiario(dados as LimiteDiarioTreinos);
+      setErroLimiteDiario(false);
+    } catch (error) {
+      console.warn(
+        "[TREINOS] Falha ao consultar limite diário:",
+        error
+      );
+
+      setLimiteDiario(null);
+      setErroLimiteDiario(true);
+    } finally {
+      setCarregandoLimiteDiario(false);
+    }
+  }
+
+  useEffect(() => {
+    void carregarLimiteDiario();
+  }, [
+    atletaAtivo,
+    atletaGerenciadoId,
+    activeContext?.key,
+  ]);
+
+  useEffect(() => {
+    const atualizar = () => {
+      void carregarLimiteDiario();
+    };
+
+    window.addEventListener(
+      "treino:concluido",
+      atualizar
+    );
+
+    window.addEventListener(
+      "focus",
+      atualizar
+    );
+
+    return () => {
+      window.removeEventListener(
+        "treino:concluido",
+        atualizar
+      );
+
+      window.removeEventListener(
+        "focus",
+        atualizar
+      );
+    };
+  }, [
+    atletaAtivo,
+    atletaGerenciadoId,
+    activeContext?.key,
+  ]);
+
+  const atletaGerenciadoQuery =
+    atletaGerenciadoId
+      ? `&atletaId=${encodeURIComponent(
+          atletaGerenciadoId
+        )}`
+      : "";
+
+  const atletaGerenciadoQueryInicio =
+    atletaGerenciadoId
+      ? `?atletaId=${encodeURIComponent(
+          atletaGerenciadoId
+        )}`
+      : "";
   const {
     requireAuth,
   } = useAuthGate();
@@ -831,7 +986,7 @@ export default function TreinosAtletas() {
     return new URLSearchParams(raw);
   }, [location]);
 
-  const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId"); 
+  const openAgendadoByProgramadoId = qs.get("openAgendadoByProgramadoId");
   const openAgendadoId =
   qs.get(
     "openAgendadoId"
@@ -1333,15 +1488,23 @@ function navegarPeloMenu(rota: string) {
           return;
         }
 
-        const response = await fetch(
-          `${API.BASE_URL}/api/perfil/me/posicao-atual`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
-        );
+        const urlPosicao =
+          atletaGerenciadoUsuarioId
+            ? `${API.BASE_URL}/api/perfil/${encodeURIComponent(
+                atletaGerenciadoUsuarioId
+              )}/posicao-atual`
+            : `${API.BASE_URL}/api/perfil/me/posicao-atual`;
+
+        const response =
+          await fetch(
+            urlPosicao,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
 
         const data =
           await response
@@ -1387,23 +1550,34 @@ function navegarPeloMenu(rota: string) {
         true
       );
 
-      const response =
-        await fetch(
-          `${API.BASE_URL}/api/perfil/me/posicao`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-              "Content-Type":
-                "application/json",
-            },
-            body:
-              JSON.stringify({
-                posicao,
-              }),
-          }
-        );
+      const urlPosicao =
+      atletaGerenciadoId
+        ? `${API.BASE_URL}/api/perfil/atletas/${encodeURIComponent(
+            atletaGerenciadoId
+          )}/posicao`
+        : `${API.BASE_URL}/api/perfil/me/posicao`;
+
+    const response =
+      await fetch(
+        urlPosicao,
+        {
+          method:
+            "PATCH",
+
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              posicao,
+            }),
+        }
+      );
 
       const data =
         await response
@@ -1479,13 +1653,13 @@ function navegarPeloMenu(rota: string) {
     carregarMetodologias();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mainTab, buscaMetodologia, filtroPublico, filtroTipo, filtroNivel]);
-  
+
   useEffect(() => {
     if (!easterEggMsg) return;
 
     const id = window.setTimeout(() => {
       setEasterEggMsg(null);
-    }, 3500); 
+    }, 3500);
 
     return () => window.clearTimeout(id);
   }, [easterEggMsg]);
@@ -1542,6 +1716,15 @@ function navegarPeloMenu(rota: string) {
       qs.set("from", from.toISOString());
       qs.set("to", to.toISOString());
 
+      if (
+        atletaGerenciadoId
+      ) {
+        qs.set(
+          "atletaId",
+          atletaGerenciadoId
+        );
+      }
+
       const r = await fetch(`${API.BASE_URL}/api/eventos/minha-agenda?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1585,10 +1768,12 @@ function navegarPeloMenu(rota: string) {
       const monthProximo = `${proximo.getFullYear()}-${String(proximo.getMonth() + 1).padStart(2, "0")}`;
 
       const [resAtual, resProximo] = await Promise.all([
-        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}`, {
+        fetch(
+          `${API.BASE_URL}/api/treinos/agendados?month=${monthAtual}${atletaGerenciadoQuery}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}`, {
+        fetch(
+          `${API.BASE_URL}/api/treinos/agendados?month=${monthProximo}${atletaGerenciadoQuery}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -1652,7 +1837,7 @@ function navegarPeloMenu(rota: string) {
                     const exPers =
                       ex.exercicioPersonalizado ??
                       ex.exercicio_personalizado ??
-                      ex.exercicioPersonalizadoRef ?? 
+                      ex.exercicioPersonalizadoRef ??
                       null;
 
                     const resolvedId =
@@ -1700,7 +1885,7 @@ function navegarPeloMenu(rota: string) {
                         videoDemonstrativoUrl: resolvedVideo,
                         imgDemonstrativaUrl: resolvedImg,
                         descricao:
-                          exNormal?.descricao ?? 
+                          exNormal?.descricao ??
                           exNormal?.objetivo ??
                           exTemp?.descricao ??
                           exPers?.descricao ??
@@ -1897,6 +2082,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }, [
     atletaAtivo,
     activeContext?.key,
+    atletaGerenciadoId,
   ]);
 
   useEffect(() => {
@@ -1929,6 +2115,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   }, [
     atletaAtivo,
     activeContext?.key,
+    atletaGerenciadoId,
   ]);
 
   useEffect(() => {
@@ -2246,7 +2433,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   ) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2273,7 +2460,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
         await fetch(
           `${API.BASE_URL}/api/treinos/agendados/${encodeURIComponent(
             id
-          )}/iniciar`,
+          )}/iniciar${atletaGerenciadoQueryInicio}`,
           {
             method: "POST",
 
@@ -2389,7 +2576,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   async function finalizarEEnviar(treino: TreinoAgendado) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2408,14 +2595,28 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
       if (!token) return;
 
       const r = await fetch(
-        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/complete`,
+        `${API.BASE_URL}/api/treinos/agendados/${treino.id}/complete${atletaGerenciadoQueryInicio}`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      if (!r.ok) throw new Error("não foi possível finalizar");
+      if (!r.ok) {
+        const erro = await r.json().catch(() => null);
+
+        if (erro?.code === "DAILY_TRAINING_LIMIT_REACHED") {
+          toast.error(
+            erro.message ??
+              "Você atingiu o limite de 3 treinos por dia."
+          );
+          return;
+        }
+
+        throw new Error(
+          erro?.message ?? "Não foi possível finalizar."
+        );
+      }
 
       await concluirItemDaMetodologiaSeHouver(treino.id);
 
@@ -2438,6 +2639,10 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
       }
 
       setFullscreenId(null);
+
+      window.dispatchEvent(
+        new Event("treino:concluido")
+      );
     } catch (err) {
       console.error("Erro ao finalizar treino:", err);
       toast.error("Erro ao enviar treino.");
@@ -2448,7 +2653,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2498,7 +2703,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     try {
       const token = getToken();
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${t.id}`, {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${t.id}${atletaGerenciadoQueryInicio}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2529,7 +2734,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
   async function removerTreinoAgendado(id: string) {
     if (!atletaAtivo) {
       toast.error(
-        "Use seu perfil de Atleta para realizar esta ação."
+        "Selecione seu perfil de Atleta ou um atleta sob sua responsabilidade."
       );
 
       return;
@@ -2539,7 +2744,7 @@ const tituloDiaAgenda = dataAgendaSelecionada.toLocaleDateString("pt-BR", {
 
     try {
       const token = getToken();
-      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}`, {
+      const r = await fetch(`${API.BASE_URL}/api/treinos/agendados/${id}${atletaGerenciadoQueryInicio}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -2658,7 +2863,7 @@ function fecharPlayerExercicio() {
 }
 
 return (
-  <div>=
+  <div>
     <div
       aria-hidden={!playerMidiaAberto}
       className={`grid overflow-hidden transition-all duration-500 ease-in-out ${
@@ -2969,7 +3174,7 @@ return (
                     </button>
                   </div>
             </div>
-        
+
             {canVerElenco && (
               <Link
                 href="/treinos/elenco"
@@ -3292,10 +3497,90 @@ return (
                                 </div>
                               </div>
                             </div>
-
                     </section>
 
                    <div className="border-t border-gray-200" />
+
+                    {atletaAtivo && (
+                      <section className="mb-5 rounded-2xl border border-green-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="font-bold text-green-950">
+                              Treinos feitos hoje
+                            </h3>
+
+                            <p className="text-xs text-gray-500">
+                              {limiteDiario?.unlimited
+                                ? "Plano PRO ou Learning"
+                                : "Acompanhe seu progresso diário"}
+                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-2xl font-extrabold text-green-900">
+                              {carregandoLimiteDiario
+                                ? "..."
+                                : erroLimiteDiario || !limiteDiario
+                                  ? "—"
+                                  : limiteDiario.unlimited
+                                    ? `${limiteDiario.used}`
+                                    : `${limiteDiario.used}/${limiteDiario.allowed}`}
+                            </div>
+
+                            <div className="text-[11px] text-gray-500">
+                              {limiteDiario?.unlimited
+                                ? "Treinos realizados"
+                                : "Treinos realizados / limite"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {!carregandoLimiteDiario &&
+                          !erroLimiteDiario &&
+                          limiteDiario &&
+                          !limiteDiario.unlimited && (
+                            <>
+                              <div className="mt-4 grid grid-cols-3 gap-2">
+                                {[1, 2, 3].map((numero) => (
+                                  <div
+                                    key={numero}
+                                    className={`h-2.5 rounded-full ${
+                                      limiteDiario.used >= numero
+                                        ? "bg-green-600"
+                                        : "bg-gray-200"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+
+                              <p className="mt-3 text-sm text-gray-600">
+                                {limiteDiario.remaining === 0
+                                  ? "Você atingiu seus 3 treinos de hoje. Volte amanhã ou conheça os planos PRO e Learning."
+                                  : `Você ainda pode realizar ${limiteDiario.remaining} ${
+                                      limiteDiario.remaining === 1
+                                        ? "treino"
+                                        : "treinos"
+                                    } hoje.`}
+                              </p>
+                            </>
+                          )}
+
+                        {!carregandoLimiteDiario &&
+                          !erroLimiteDiario &&
+                          limiteDiario?.unlimited && (
+                            <p className="mt-3 text-sm text-green-700">
+                              Você possui treinos ilimitados com seu plano.
+                            </p>
+                          )}
+
+                        {!carregandoLimiteDiario && erroLimiteDiario && (
+                          <p className="mt-3 text-sm text-gray-500">
+                            Não foi possível consultar seu progresso diário.
+                          </p>
+                        )}
+                      </section>
+                    )}
+
                     <section>
                       <div className="mb-3">
                         <h2 className="text-xl font-bold text-gray-900">Meus Treinos</h2>
@@ -3477,7 +3762,7 @@ return (
                                   </div>
                                 )}
                           </>
-                        
+
                     </section>
                   </div>
                 )}
@@ -3522,7 +3807,15 @@ return (
             <nav className="flex-1 space-y-2 overflow-y-auto p-4">
               <button
                 type="button"
-                onClick={() => navegarPeloMenu("/treinos/novo")}
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/novo?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/novo"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-800">
@@ -3542,7 +3835,15 @@ return (
 
               <button
                 type="button"
-                onClick={() => navegarPeloMenu("/treinos/livre/novo")}
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/livre/novo?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/livre/novo"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
@@ -3562,7 +3863,15 @@ return (
 
               <button
                 type="button"
-                onClick={() => navegarPeloMenu("/treinos/livre/historico")}
+                onClick={() =>
+                  navegarPeloMenu(
+                    atletaGerenciadoId
+                      ? `/treinos/livre/historico?atletaId=${encodeURIComponent(
+                          atletaGerenciadoId
+                        )}`
+                      : "/treinos/livre/historico"
+                  )
+                }
                 className="flex w-full items-center gap-3 rounded-xl border border-green-100 p-4 text-left transition hover:border-green-300 hover:bg-green-50"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
@@ -3607,7 +3916,7 @@ return (
       )}
 
       {fullscreenId && (
-        <div className="fixed inset-0 z-40 bg-white flex flex-col">
+         <div className="fixed inset-0 z-[100] bg-white flex flex-col">
           <div className="sticky top-0 z-10 px-4 py-3 border-b bg-white/95 backdrop-blur">
             {(() => {
               const atual = ordenados.find((t) => t.id === fullscreenId);

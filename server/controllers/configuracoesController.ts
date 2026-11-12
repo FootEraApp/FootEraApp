@@ -1,8 +1,75 @@
-import { Request, Response } from "express";
+import {
+  Request,
+  Response,
+} from "express";
+import {
+  StatusResponsavelAtleta,
+} from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { activateScheduledMaintenanceIfDue } from "../services/maintenanceScheduler.js";
+import {
+  activateScheduledMaintenanceIfDue,
+} from "../services/maintenanceScheduler.js";
+import {
+  audit,
+} from "../services/audit.js";
+import {
+  diagnosticarExclusaoConta,
+} from "../services/diagnosticoExclusaoConta.js";
 
 const REQUIRED_PHRASE = "Excluir Conta Footera";
+
+function calcularIdadeUsuario(
+  nascimento:
+    | Date
+    | string
+    | null
+    | undefined
+) {
+  if (!nascimento) {
+    return null;
+  }
+
+  const data =
+    new Date(
+      nascimento
+    );
+
+  if (
+    Number.isNaN(
+      data.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  const hoje =
+    new Date();
+
+  let idade =
+    hoje.getFullYear() -
+    data.getFullYear();
+
+  const aindaNaoFez =
+    hoje.getMonth() <
+      data.getMonth() ||
+    (
+      hoje.getMonth() ===
+        data.getMonth() &&
+      hoje.getDate() <
+        data.getDate()
+    );
+
+  if (
+    aindaNaoFez
+  ) {
+    idade--;
+  }
+
+  return Math.max(
+    0,
+    idade
+  );
+}
 
 export const getConfiguracoes = async (
   req: Request,
@@ -157,30 +224,309 @@ export const atualizarConfiguracoes = async (
   }
 };
 
-export async function solicitarExclusaoConta(req: Request, res: Response) {
-  const userId = req.userId; 
-  const { confirm } = req.body ?? {};
+export async function solicitarExclusaoConta(
+  req: Request,
+  res: Response
+) {
+  try {
+    const userId =
+      req.userId;
 
-  if (!userId) return res.status(401).json({ message: "Não autenticado." });
-  if ((confirm ?? "").trim() !== REQUIRED_PHRASE) {
-    return res.status(400).json({ message: `Digite exatamente "${REQUIRED_PHRASE}".` });
+    const {
+      confirm,
+    } =
+      req.body ??
+      {};
+
+    if (!userId) {
+      return res
+        .status(401)
+        .json({
+          message:
+            "Não autenticado.",
+        });
+    }
+
+    if (
+      String(
+        confirm ?? ""
+      ).trim() !==
+      REQUIRED_PHRASE
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            `Digite exatamente "${REQUIRED_PHRASE}".`,
+        });
+    }
+
+    /*
+     * Verifica se esta conta é de
+     * atleta menor supervisionado.
+     */
+    const usuario =
+      await prisma.usuario.findUnique({
+        where: {
+          id:
+            userId,
+        },
+
+        select: {
+          id: true,
+          deletedAt: true,
+          dataNascimento:
+            true,
+          clube: { select: { id: true } },
+          escolinha: { select: { id: true } },
+          marca: { select: { id: true } },
+          federacao: { select: { id: true } },
+          atleta: {
+            select: {
+              id: true,
+
+              idade: true,
+
+              responsaveis: {
+                where: {
+                  status:
+                    StatusResponsavelAtleta.ATIVO,
+                },
+
+                select: {
+                  id: true,
+                },
+
+                take: 1,
+              },
+            },
+          },
+        },
+      });
+
+    if (!usuario) {
+      return res
+        .status(404)
+        .json({
+          message:
+            "Usuário não encontrado.",
+        });
+    }
+
+    if (usuario.deletedAt) {
+      return res.status(409).json({
+        code: "ACCOUNT_ALREADY_SCHEDULED",
+        message:
+          "Sua conta já está em processo de exclusão. Utilize o fluxo de restauração.",
+      });
+    }
+
+    const diagnostico =
+      await diagnosticarExclusaoConta(userId);
+
+    if (!diagnostico.encontrado) {
+      return res.status(404).json({
+        code: "ACCOUNT_NOT_FOUND",
+        message: "Conta não encontrada.",
+      });
+    }
+
+    if (diagnostico.excluido) {
+      return res.status(409).json({
+        code: "ACCOUNT_ALREADY_SCHEDULED",
+        message: "Esta conta já está na lixeira.",
+      });
+    }
+
+    if (!diagnostico.podeSolicitarExclusao) {
+      return res.status(409).json({
+        code: "ACCOUNT_DELETE_BLOCKED",
+        message:
+          "Sua conta possui responsabilidades que precisam ser resolvidas antes da exclusão.",
+        details: diagnostico,
+      });
+    }
+
+    if (!diagnostico.diagnosticoCompleto) {
+      return res.status(503).json({
+        code: "ACCOUNT_DELETE_AUDIT_PENDING",
+        message:
+          "A exclusão de contas está temporariamente " +
+          "indisponível enquanto concluímos a verificação " +
+          "de todas as responsabilidades e pendências.",
+      });
+    }
+
+    if (
+      usuario.atleta
+    ) {
+      const idade =
+        calcularIdadeUsuario(
+          usuario
+            .dataNascimento
+        ) ??
+        usuario
+          .atleta
+          .idade ??
+        null;
+
+      const possuiResponsavelAtivo =
+        usuario
+          .atleta
+          .responsaveis
+          .length >
+        0;
+
+      /*
+       * Menor de 12 com responsável:
+       * a própria criança não pode
+       * excluir a conta.
+       */
+      if (
+        idade !== null &&
+        idade < 12 &&
+        possuiResponsavelAtivo
+      ) {
+        return res
+          .status(403)
+          .json({
+            code:
+              "GUARDIAN_REQUIRED_FOR_ACCOUNT_DELETE",
+
+            message:
+              "Sua conta é supervisionada. A exclusão deve ser solicitada pelo responsável.",
+          });
+      }
+    }
+
+    const now =
+      new Date();
+
+    const in30 =
+      new Date(
+        now.getTime() +
+        30 *
+          24 *
+          60 *
+          60 *
+          1000
+      );
+
+    const resultado = await prisma.usuario.updateMany({
+      where: {
+        id: userId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: now,
+        deleteScheduledAt: in30,
+        tokenVersion: {
+          increment: 1,
+        },
+        lastLogoutAt: now,
+      },
+    });
+
+    if (resultado.count !== 1) {
+      return res.status(409).json({
+        code: "ACCOUNT_STATE_CHANGED",
+        message:
+          "O estado da conta foi alterado. Atualize a página.",
+      });
+    }
+
+    try {
+      await audit(req, {
+        acao: "CONTA_MOVIDA_PARA_LIXEIRA",
+        entidade: "Usuario",
+        entidadeId: userId,
+        descricao: "Usuário solicitou exclusão da própria conta.",
+        meta: {
+          deleteScheduledAt: in30.toISOString(),
+        },
+      });
+    } catch (erroAuditoria) {
+      console.error(
+        "[solicitarExclusaoConta] Falha ao registrar auditoria:",
+        erroAuditoria
+      );
+    }
+
+    return res
+      .status(200)
+      .json({
+        message:
+          "Conta movida para lixeira. Você tem 30 dias para reativar antes da exclusão definitiva.",
+
+        deleteScheduledAt:
+          in30,
+      });
+  } catch (error) {
+    console.error(
+      "[configurações] erro ao solicitar exclusão da conta:",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        message:
+          "Não foi possível solicitar a exclusão da conta.",
+      });
   }
+}
+export async function consultarDiagnosticoExclusaoConta(
+  req: Request,
+  res: Response,
+) {
+  try {
+    const usuarioId = String(req.userId ?? "").trim();
 
-  const now = new Date();
-  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    if (!usuarioId) {
+      return res.status(401).json({
+        code: "UNAUTHENTICATED",
+        message: "Faça login para continuar.",
+      });
+    }
 
-  await prisma.usuario.update({
-    where: { id: userId },
-    data: {
-      deletedAt: now,
-      deleteScheduledAt: in30,
-      tokenVersion: { increment: 1 },
-      lastLogoutAt: now,
-    },
-  });
+    const diagnostico =
+      await diagnosticarExclusaoConta(usuarioId);
 
-  return res.status(200).json({
-    message: "Conta movida para lixeira. Você tem 30 dias para reativar antes da exclusão definitiva.",
-    deleteScheduledAt: in30,
-  });
+    if (!diagnostico.encontrado) {
+      return res.status(404).json({
+        code: "ACCOUNT_NOT_FOUND",
+        message: "Conta não encontrada.",
+      });
+    }
+
+    if (diagnostico.excluido) {
+      return res.status(409).json({
+        code: "ACCOUNT_ALREADY_SCHEDULED",
+        message: "Esta conta já está na lixeira.",
+      });
+    }
+
+    // Mesmo sem pendências de propriedade/Admin,
+    // o endpoint DELETE ainda executa suas demais
+    // verificações, incluindo menores supervisionados.
+    return res.status(200).json({
+      ok: true,
+      diagnostico,
+      verificacaoParcial: true,
+      message: diagnostico.impedimentos.length > 0
+        ? "Foram encontradas pendências ou obrigações que precisam de análise."
+        : "Nenhuma pendência foi identificada nas verificações implementadas. A auditoria de exclusão ainda não está concluída.",
+    });
+  } catch (error) {
+    console.error(
+      "[consultarDiagnosticoExclusaoConta]",
+      error,
+    );
+
+    return res.status(500).json({
+      code: "DELETE_DIAGNOSIS_FAILED",
+      message:
+        "Não foi possível consultar as pendências da conta.",
+    });
+  }
 }

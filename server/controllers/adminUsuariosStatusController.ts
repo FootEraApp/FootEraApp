@@ -40,13 +40,20 @@ export async function reativarUsuario(req: Request, res: Response) {
   const u = await prisma.usuario.findUnique({ where: { id } });
   if (!u) return res.status(404).send("Usuário não encontrado.");
 
+  if (u.deletedAt) {
+    return res.status(409).json({
+      code: "ACCOUNT_IN_TRASH",
+      message:
+        "Esta conta está na lixeira. Utilize a função Restaurar conta, e não Reativar usuário.",
+    });
+  }
+
   const updated = await prisma.usuario.update({
     where: { id },
     data: {
       status: "ATIVO",
       blockedAt: null,
       blockedReason: null,
-      deletedAt: null,
       reactivatedAt: new Date(),
       tokenVersion: { increment: 1 }, 
     },

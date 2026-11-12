@@ -49,12 +49,13 @@ import {
   alternarFavoritoTreino,
   removerFavoritoTreino,
   iniciarTreinoPublico,
+  obterLimiteDiarioTreinos,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
 import { requireCapability, requireOrgSeat } from "server/middlewares/guards.js";
 import { uploadToS3 } from "server/middlewares/s3Upload.js";
-import { listarMinhaBiblioteca } from "../controllers/treinosBibliotecaController.js";
+import { listarMinhaBiblioteca, removerDaMinhaBiblioteca } from "../controllers/treinosBibliotecaController.js";
 import {
   createTreinoProgramado as criarTreinoProgramadoCompat,
   updateTreino as atualizarTreinoProgramadoCompat,
@@ -67,6 +68,10 @@ import {
 const router = Router();
 router.use(authenticateToken);
 
+router.get(
+  "/limite-diario",
+  obterLimiteDiarioTreinos
+);
 router.get("/sessoes", listarSessoesTreino);
 router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);
@@ -174,12 +179,14 @@ router.post(
   "/biblioteca",
   salvarTreinoNaBiblioteca
 );
-
 router.get(
   "/biblioteca",
   listarMinhaBiblioteca
 );
-
+router.delete(
+  "/biblioteca/:treinoProgramadoId",
+  removerDaMinhaBiblioteca
+);
 router.post(
   "/",
   requireAdminOrTreinoOwner,

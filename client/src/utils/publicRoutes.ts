@@ -64,6 +64,7 @@ const DEEP_LINK_PATHS = [
   /^\/metodologia\/[^/]+\/?$/i,
   /^\/desafio\/[^/]+\/?$/i,
   /^\/join\/[^/]+\/?$/i,
+  /^\/perfil\/?$/i,
   /^\/perfil\/[^/]+\/?$/i,
   /^\/eventos\/[^/]+\/?$/i,
   /^\/metodologias\/[^/]+\/?$/i,

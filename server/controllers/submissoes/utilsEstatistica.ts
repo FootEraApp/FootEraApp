@@ -1,6 +1,6 @@
-import { PrismaClient, TipoTreino, TreinoAgendadoStatus, TreinoStatus } from "@prisma/client";
 
-const prisma = new PrismaClient();
+import { TipoTreino } from "@prisma/client";
+import { prisma } from "../../prisma.js";
 
 export async function aplicarEstatisticasPosSubmissao(
   submissaoId: string,
@@ -12,72 +12,114 @@ export async function aplicarEstatisticasPosSubmissao(
     const sub = await tx.submissaoTreino.findUnique({
       where: { id: submissaoId },
       include: {
-        atleta: { select: { usuarioId: true } }, 
-        treinoAgendado: { include: { treinoProgramado: true } },
+        treinoAgendado: {
+          include: {
+            treinoProgramado: true,
+          },
+        },
       },
     });
-    if (!sub) return;
+
+    if (!sub) {
+      throw new Error("SUBMISSAO_NAO_ENCONTRADA");
+    }
+
+    if (
+      sub.atletaId !== atletaId ||
+      sub.treinoAgendadoId !== treinoAgendadoId
+    ) {
+      throw new Error("SUBMISSAO_ATLETA_MISMATCH");
+    }
+
+    if (sub.aprovado !== true) {
+      return { processado: false };
+    }
+
+    // Apenas uma transação consegue alterar
+    // NULL para a data de processamento.
+    const reserva = await tx.submissaoTreino.updateMany({
+      where: {
+        id: submissaoId,
+        estatisticasProcessadasEm: null,
+      },
+      data: {
+        estatisticasProcessadasEm: new Date(),
+      },
+    });
+
+    if (reserva.count === 0) {
+      return { processado: false };
+    }
 
     const tp = sub.treinoAgendado?.treinoProgramado;
-    const minutos = Number(duracaoMinutos ?? sub.duracaoMinutos ?? tp?.duracao ?? 0) || 0;
-    const pontos = Number(tp?.pontuacao ?? 0) || 0;
+
+    const minutos = Number(
+      duracaoMinutos ??
+      sub.duracaoMinutos ??
+      tp?.duracao ??
+      0
+    );
+
+    // Preserva a pontuação já calculada
+    // no controller, inclusive penalidades.
+    const pontos = Number(
+      sub.pontosCreditados ??
+      sub.pontuacaoSnapshot ??
+      tp?.pontuacao ??
+      0
+    );
 
     await tx.submissaoTreino.update({
-      where: { id: sub.id },
+      where: { id: submissaoId },
       data: {
-        aprovado: true,
-        treinoTituloSnapshot: tp?.nome ?? sub?.treinoAgendado?.titulo ?? "Treino",
-        tipoTreinoSnapshot: (tp?.tipoTreino ?? null) as TipoTreino | null,
-        duracaoMinutos: minutos,
-        pontuacaoSnapshot: pontos,
-        pontosCreditados: pontos,
+        treinoTituloSnapshot:
+          sub.treinoTituloSnapshot ??
+          tp?.nome ??
+          sub.treinoAgendado?.titulo ??
+          "Treino",
+        tipoTreinoSnapshot:
+          (sub.tipoTreinoSnapshot ??
+            tp?.tipoTreino ??
+            null) as TipoTreino | null,
+        duracaoMinutos:
+          sub.duracaoMinutos ??
+          Math.max(0, Math.round(minutos)),
+        pontuacaoSnapshot:
+          sub.pontuacaoSnapshot ?? pontos,
+        pontosCreditados:
+          sub.pontosCreditados ?? pontos,
       },
     });
 
-    const realAgendadoId = sub.treinoAgendadoId; 
-    if (realAgendadoId) {
-      await tx.treinoAgendado.update({
-        where: { id: realAgendadoId },
-        data: {
-          status: TreinoAgendadoStatus.CONCLUIDO,
-          execucaoStatus: TreinoStatus.COMPLETED,
-          finishedAt: new Date(),
-          duracaoSegundos: Math.round(minutos * 60),
-        },
-      });
-    }
+    if (tp?.id) {
+      // Recalcula em vez de acrescentar +1
+      // indiscriminadamente.
+      const realizacoes =
+        await tx.submissaoTreino.count({
+          where: {
+            aprovado: true,
+            treinoAgendado: {
+              treinoProgramadoId: tp.id,
+            },
+          },
+        });
 
-    const usuarioId = sub.atleta?.usuarioId;
-    if (usuarioId && realAgendadoId) {
-      await tx.treinoUsuario.upsert({
-        where: { treinoId_usuarioId: { treinoId: realAgendadoId, usuarioId } },
-        update: { status: TreinoStatus.COMPLETED, completedAt: new Date() },
-        create: {
-          treinoId: realAgendadoId,
-          usuarioId,
-          status: TreinoStatus.COMPLETED,
-          startedAt: new Date(),
-          completedAt: new Date(),
-        },
-      });
-    }
-
-    const treinoProgramadoId = tp?.id;
-    if (treinoProgramadoId) {
       await tx.estatisticaTreino.upsert({
-        where: { treinoId: treinoProgramadoId },
-        update: { realizacoes: { increment: 1 }, ultimoRealizadoEm: new Date() },
-        create: { treinoId: treinoProgramadoId, realizacoes: 1, ultimoRealizadoEm: new Date() },
+        where: { treinoId: tp.id },
+        create: {
+          treinoId: tp.id,
+          realizacoes,
+          ultimoRealizadoEm: new Date(),
+        },
+        update: {
+          realizacoes,
+          ultimoRealizadoEm: new Date(),
+        },
       });
     }
 
     await tx.estatisticaAtleta.upsert({
       where: { atletaId },
-      update: {
-        totalTreinos: { increment: 1 },
-        horasTreinadas: { increment: minutos / 60 },
-        totalPontos: { increment: pontos },
-      },
       create: {
         atletaId,
         totalTreinos: 1,
@@ -89,18 +131,17 @@ export async function aplicarEstatisticasPosSubmissao(
         mental: 0,
         totalDesafios: 0,
       },
-    });
-
-    await tx.pontuacaoAtleta.upsert({
-      where: { atletaId },
-      update: { pontuacaoPerformance: { increment: pontos }, pontuacaoTotal: { increment: pontos } },
-      create: {
-        atletaId,
-        pontuacaoPerformance: pontos,
-        pontuacaoTotal: pontos,
-        pontuacaoDisciplina: 0,
-        pontuacaoResponsabilidade: 0,
+      update: {
+        totalTreinos: { increment: 1 },
+        horasTreinadas: {
+          increment: minutos / 60,
+        },
+        totalPontos: { increment: pontos },
       },
     });
+
+    // PontuacaoAtleta é calculada pelo serviço
+    // recomputePontuacaoAtleta, não incrementada aqui.
+    return { processado: true };
   });
 }

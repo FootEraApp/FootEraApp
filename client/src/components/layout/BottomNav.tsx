@@ -1,32 +1,12 @@
-// client/src/components/layout/BottomNav
-import {
-  useEffect,
-  useState,
-  useContext,
-} from "react";
-import {
-  useLocation,
-} from "wouter";
-import {
-  Volleyball,
-  User,
-  CirclePlus,
-  Search,
-  House,
-  Eye,
-  Bell,
-} from "lucide-react";
+// client/src/components/layout/BottomNav.tsx
+import { useContext, useEffect, useState } from "react";
+import { useLocation } from "wouter";
+import { Volleyball, CirclePlus, Search, House, Eye, Bell } from "lucide-react";
 import Storage from "../../utils/storage.js";
-import {
-  API,
-} from "../../config.js";
+import { API } from "../../config.js";
 import socket from "../../services/socket.js";
-import {
-  useAuthGate,
-} from "../../context/AuthGateContext.js";
-import {
-  UserContext,
-} from "../../context/UserContext.js";
+import { useAuthGate } from "../../context/AuthGateContext.js";
+import { UserContext } from "../../context/UserContext.js";
 import ActiveContextSwitcher from "../context/ActiveContextSwitcher.js";
 
 type ActiveKey =
@@ -47,54 +27,17 @@ export default function BottomNav({
   className?: string;
   showCreate?: boolean;
 }) {
-  const [, setLocation] =
-    useLocation();
-
-  const {
-    requireAuth,
-  } = useAuthGate();
-
-  const userContext =
-    useContext(
-      UserContext
-    );
-
-  const activeContext =
-    userContext
-      ?.activeContext ??
-    null;
-
-
-
-
-
-
-
-  const tipoUsuario =
-    activeContext
-      ?.tipoUsuario ??
-    "";
-
-  const isOlheiro =
-    String(tipoUsuario)
-      .toLowerCase() ===
-    "olheiro";
-
-  const [
-    badgeCount,
-    setBadgeCount,
-  ] = useState(0);
+  const [, setLocation] = useLocation();
+  const { requireAuth } = useAuthGate();
+  const userContext = useContext(UserContext);
+  const activeContext = userContext?.activeContext ?? null;
+  const tipoUsuario = activeContext?.tipoUsuario ?? "";
+  const isOlheiro = String(tipoUsuario).toLowerCase() === "olheiro";
+  const [badgeCount, setBadgeCount] = useState(0);
 
   useEffect(() => {
-    const token =
-      Storage.token;
+    const token = Storage.token;
 
-    /*
-     * Visitante não possui badge.
-     * Depois de login pelo Auth Gate,
-     * authVersion muda e este effect
-     * roda novamente com o novo token.
-     */
     if (!token) {
       setBadgeCount(0);
       return;
@@ -102,224 +45,107 @@ export default function BottomNav({
 
     let alive = true;
 
-    const carregarBadge =
-      async () => {
-        try {
-          const r =
-            await fetch(
-              `${API.BASE_URL}/api/notificacoes/badge`,
-              {
-                headers: {
-                  Authorization:
-                    `Bearer ${token}`,
-                },
-              }
-            );
+    const carregarBadge = async () => {
+      try {
+        const r = await fetch(`${API.BASE_URL}/api/notificacoes/badge`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-          if (
-            !alive ||
-            !r.ok
-          ) {
-            return;
-          }
+        if (!alive || !r.ok) return;
 
-          const data =
-            await r
-              .json()
-              .catch(
-                () => null
-              );
+        const data = await r.json().catch(() => null);
 
-          if (
-            alive &&
-            data
-          ) {
-            setBadgeCount(
-              Number(
-                data.total ??
-                  data.totalNotificacoes ??
-                  0
-              )
-            );
-          }
-        } catch {
-          // Badge não deve quebrar navegação.
+        if (alive && data) {
+          setBadgeCount(Number(data.total ?? data.totalNotificacoes ?? 0));
         }
-      };
+      } catch {
+        // Badge não deve quebrar navegação.
+      }
+    };
 
     void carregarBadge();
 
-    const parseBadge = (
-      d: any
-    ): number => {
-      if (
-        typeof d ===
-        "number"
-      ) {
-        return d;
-      }
-
-      return Number(
-        d?.total ??
-          d?.totalNotificacoes ??
-          0
-      );
+    const parseBadge = (data: any): number => {
+      if (typeof data === "number") return data;
+      return Number(data?.total ?? data?.totalNotificacoes ?? 0);
     };
 
-    const onDomBadge = (
-      e: Event
-    ) => {
-      setBadgeCount(
-        parseBadge(
-          (
-            e as CustomEvent
-          ).detail
-        )
-      );
+    const onDomBadge = (event: Event) => {
+      setBadgeCount(parseBadge((event as CustomEvent).detail));
     };
 
-    const onSocketBadge = (
-      data: any
-    ) => {
-      setBadgeCount(
-        parseBadge(data)
-      );
+    const onSocketBadge = (data: any) => {
+      setBadgeCount(parseBadge(data));
     };
 
-    window.addEventListener(
-      "badge:update",
-      onDomBadge as EventListener
-    );
-
-    socket.on(
-      "badge:update",
-      onSocketBadge
-    );
+    window.addEventListener("badge:update", onDomBadge);
+    socket.on("badge:update", onSocketBadge);
 
     return () => {
       alive = false;
-
-      window.removeEventListener(
-        "badge:update",
-        onDomBadge as EventListener
-      );
-
-      socket.off(
-        "badge:update",
-        onSocketBadge
-      );
+      window.removeEventListener("badge:update", onDomBadge);
+      socket.off("badge:update", onSocketBadge);
     };
-  }, [
-    userContext?.isLoggedIn,
-  ]);
+  }, [userContext?.isLoggedIn]);
 
   const baseItem =
     "inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors";
+  const activeItem = "bg-white/15";
+  const iconClass = "w-5 h-5";
 
-  const activeItem =
-    "bg-white/15";
-
-  const iconClass =
-    "w-5 h-5";
-
-  const irPublico = (
-    path: string
-  ) => {
-    setLocation(path);
-  };
-
-  const irPrivado = (
-    path: string,
-    message: string
-  ) => {
-    if (
-      requireAuth({
-        message,
-        returnTo: path,
-      })
-    ) {
+  const irPrivado = (path: string, message: string) => {
+    if (requireAuth({ message, returnTo: path })) {
       setLocation(path);
     }
   };
 
+  const abrirPerfil = () => {
+    const isPersonalCreator =
+      activeContext?.kind === "PERSONAL" &&
+      String(tipoUsuario).toLowerCase() === "creator";
+    const usuarioId = String(userContext?.user?.id ?? Storage.usuarioId ?? "").trim();
+    const destino =
+      isPersonalCreator && usuarioId
+        ? `/creator/profile?id=${encodeURIComponent(usuarioId)}`
+        : "/perfil";
 
+    irPrivado(destino, "Entre na FootEra para acessar seu perfil.");
+  };
 
   return (
-    <>
-
-
-      <nav
+    <nav
       className={`fixed bottom-0 left-0 right-0 z-50 bg-green-900 text-white px-6 py-2 flex justify-around items-center shadow-md ${className}`}
     >
-      {/* Feed é público */}
       <button
         type="button"
-        onClick={() =>
-          irPublico(
-            "/feed"
-          )
-        }
-        className={`${baseItem} ${
-          active ===
-          "feed"
-            ? activeItem
-            : "hover:opacity-90"
-        }`}
+        onClick={() => setLocation("/feed")}
+        className={`${baseItem} ${active === "feed" ? activeItem : "hover:opacity-90"}`}
         aria-label="Feed"
       >
-        <House
-          className={
-            iconClass
-          }
-        />
+        <House className={iconClass} />
       </button>
 
-      {/* Explorar ainda é uma rota privada nesta etapa */}
       <button
         type="button"
         onClick={() =>
-          irPrivado(
-            "/explorar",
-            "Entre na FootEra para acessar o Explorar."
-          )
+          irPrivado("/explorar", "Entre na FootEra para acessar o Explorar.")
         }
-        className={`${baseItem} ${
-          active ===
-          "explorar"
-            ? activeItem
-            : "hover:opacity-90"
-        }`}
+        className={`${baseItem} ${active === "explorar" ? activeItem : "hover:opacity-90"}`}
         aria-label="Explorar"
       >
-        <Search
-          className={
-            iconClass
-          }
-        />
+        <Search className={iconClass} />
       </button>
 
       {showCreate ? (
         <button
           type="button"
           onClick={() =>
-            irPrivado(
-              "/post",
-              "Entre na FootEra para criar uma publicação."
-            )
+            irPrivado("/post", "Entre na FootEra para criar uma publicação.")
           }
-          className={`${baseItem} ${
-            active ===
-            "post"
-              ? activeItem
-              : "hover:opacity-90"
-          }`}
+          className={`${baseItem} ${active === "post" ? activeItem : "hover:opacity-90"}`}
           aria-label="Nova postagem"
         >
-          <CirclePlus
-            className={
-              iconClass
-            }
-          />
+          <CirclePlus className={iconClass} />
         </button>
       ) : (
         <span className="w-8 h-8" />
@@ -328,32 +154,16 @@ export default function BottomNav({
       <button
         type="button"
         onClick={() =>
-          irPrivado(
-            "/notificacoes",
-            "Entre na FootEra para acessar suas notificações."
-          )
+          irPrivado("/notificacoes", "Entre na FootEra para acessar suas notificações.")
         }
-        className={`${baseItem} relative ${
-          active ===
-          "notificacoes"
-            ? activeItem
-            : "hover:opacity-90"
-        }`}
+        className={`${baseItem} relative ${active === "notificacoes" ? activeItem : "hover:opacity-90"}`}
         aria-label="Notificações"
       >
-        <Bell
-          className={
-            iconClass
-          }
-        />
+        <Bell className={iconClass} />
 
-        {badgeCount >
-          0 && (
+        {badgeCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white leading-none">
-            {badgeCount >
-            9
-              ? "9+"
-              : badgeCount}
+            {badgeCount > 9 ? "9+" : badgeCount}
           </span>
         )}
       </button>
@@ -362,61 +172,30 @@ export default function BottomNav({
         <button
           type="button"
           onClick={() =>
-            irPrivado(
-              "/olheiros",
-              "Entre na FootEra para acessar a área de olheiros."
-            )
+            irPrivado("/olheiros", "Entre na FootEra para acessar a área de olheiros.")
           }
-          className={`${baseItem} ${
-            active ===
-            "olheiros"
-              ? activeItem
-              : "hover:opacity-90"
-          }`}
+          className={`${baseItem} ${active === "olheiros" ? activeItem : "hover:opacity-90"}`}
           aria-label="Olheiros"
         >
-          <Eye
-            className={
-              iconClass
-            }
-          />
+          <Eye className={iconClass} />
         </button>
       ) : (
         <button
           type="button"
           onClick={() =>
-            irPrivado(
-              "/treinos",
-              "Entre na FootEra para acessar seus treinos."
-            )
+            irPrivado("/treinos", "Entre na FootEra para acessar seus treinos.")
           }
-          className={`${baseItem} ${
-            active ===
-            "treinos"
-              ? activeItem
-              : "hover:opacity-90"
-          }`}
+          className={`${baseItem} ${active === "treinos" ? activeItem : "hover:opacity-90"}`}
           aria-label="Treinos"
         >
-          <Volleyball
-            className={
-              iconClass
-            }
-          />
+          <Volleyball className={iconClass} />
         </button>
       )}
 
       <ActiveContextSwitcher
         active={active === "perfil"}
-        onProfileClick={() =>
-          irPrivado(
-            "/perfil",
-            "Entre na FootEra para acessar seu perfil."
-          )
-        }
+        onProfileClick={abrirPerfil}
       />
-      
     </nav>
-    </>
   );
 }

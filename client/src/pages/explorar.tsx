@@ -1,5 +1,5 @@
 // client/src/pages/explorar
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useContext } from "react";
 import axios from "axios";
 import { Link } from "wouter";
 import {
@@ -25,6 +25,9 @@ import Storage from "../../../server/utils/storage.js";
 import BottomNav from "@/components/layout/BottomNav.js";
 import Avatar from "../components/shared/Avatar.js";
 import { useAuthGate } from "../context/AuthGateContext.js";
+import {
+  UserContext,
+} from "../context/UserContext.js";
 
 const ENABLE_EVENTOS_TAB = false;
 
@@ -122,7 +125,7 @@ type OutroItem = {
   usuario?: UsuarioBasic;
   perfilVerificado?: boolean;
   isPro?: boolean;
-  tipoOutro: "Learning" | "Marca" | "Federacao";
+  tipoOutro: "Learning" | "Marca" | "Federacao" | "Responsavel";
 };
 
 type DadosExplorar = {
@@ -135,16 +138,30 @@ type DadosExplorar = {
   federacoes: OutroItem[];
   marcas: OutroItem[];
   learning: OutroItem[];
+  responsaveis: OutroItem[];
 };
 
 type Filtros = {
-  categoria?: string;
-  posicoes?: string[];
-  estado?: string;
-  cidade?: string;
-  independente?: boolean | null;
-  pontuacaoMin?: number | null;
-  pontuacaoMax?: number | null;
+  categoria?:
+    string[];
+
+  posicoes?:
+    string[];
+
+  estado?:
+    string[];
+
+  cidade?:
+    string[];
+
+  independente?:
+    boolean | null;
+
+  pontuacaoMin?:
+    number | null;
+
+  pontuacaoMax?:
+    number | null;
 };
 
 type FiltrosProfissionais = {
@@ -160,10 +177,21 @@ type FiltrosOrgs = {
   temSite?: boolean | null;
 };
 
+type TipoFiltroOutro =
+  | "Learning"
+  | "Marca"
+  | "Federacao"
+  | "Responsavel";
+
 type FiltrosOutros = {
-  tipo?: "Todos" | "Learning" | "Marca" | "Federacao";
-  estado?: string;
-  cidade?: string;
+  tipo?:
+    TipoFiltroOutro[];
+
+  estado?:
+    string;
+
+  cidade?:
+    string;
 };
 
 type RankItem = {
@@ -183,7 +211,8 @@ type PapelPerfilExplorar =
   | "Olheiro"
   | "Learning"
   | "Federacao"
-  | "Marca";
+  | "Marca"
+  | "Responsavel";
 
 function criarHrefPerfil(usuarioId: string, papel: PapelPerfilExplorar) {
   return `/perfil/${encodeURIComponent(usuarioId)}?papel=${encodeURIComponent(papel)}`;
@@ -614,6 +643,33 @@ function Explorar() {
   const [ordenacaoPorAba, setOrdenacaoPorAba] =
     useState<OrdenacaoPorAba>(ORDENACAO_INICIAL);
   const { requireAuth } = useAuthGate();
+  const userContext =
+    useContext(
+      UserContext
+    );
+
+  const activeContext =
+    userContext
+      ?.activeContext ??
+    null;
+
+  const usandoPapelAtleta =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    String(
+      activeContext.tipoUsuario ??
+      ""
+    ) ===
+      "Atleta";
+
+  const usandoPapelResponsavel =
+    activeContext?.kind ===
+      "PERSONAL" &&
+    String(
+      activeContext.tipoUsuario ??
+      ""
+    ) ===
+      "Responsavel";
 
   const abaOrdenavel: AbaOrdenavel | null = aba === "eventos" ? null : aba;
 
@@ -642,19 +698,43 @@ function Explorar() {
     federacoes: [],
     learning: [],
     marcas: [],
+    responsaveis: [],
   });
 
   const [showFilters, setShowFilters] = useState(false);
-  const [filtros, setFiltros] = useState<Filtros>({
-    independente: null,
-    pontuacaoMin: null,
-    pontuacaoMax: null,
-  });
-  const [draft, setDraft] = useState<Filtros>({
-    independente: null,
-    pontuacaoMin: null,
-    pontuacaoMax: null,
-  });
+  const [filtros, setFiltros] =
+    useState<Filtros>({
+      categoria: [],
+      posicoes: [],
+      estado: [],
+      cidade: [],
+
+      independente:
+        null,
+
+      pontuacaoMin:
+        null,
+
+      pontuacaoMax:
+        null,
+    });
+
+  const [draft, setDraft] =
+    useState<Filtros>({
+      categoria: [],
+      posicoes: [],
+      estado: [],
+      cidade: [],
+
+      independente:
+        null,
+
+      pontuacaoMin:
+        null,
+
+      pontuacaoMax:
+        null,
+    });
   const [filtrosProf, setFiltrosProf] = useState<FiltrosProfissionais>({
     papel: "Ambos",
     vinculo: "Qualquer",
@@ -668,17 +748,33 @@ function Explorar() {
     temSite: null,
   });
   const [draftOrgs, setDraftOrgs] = useState<FiltrosOrgs>({ temSite: null });
-  const [filtrosOutros, setFiltrosOutros] = useState<FiltrosOutros>({
-    tipo: "Todos",
-    cidade: "",
-    estado: "",
-  });
+  const [
+    filtrosOutros,
+    setFiltrosOutros,
+  ] =
+    useState<FiltrosOutros>({
+      tipo: [],
 
-  const [draftOutros, setDraftOutros] = useState<FiltrosOutros>({
-    tipo: "Todos",
-    cidade: "",
-    estado: "",
-  });
+      cidade:
+        "",
+
+      estado:
+        "",
+    });
+
+  const [
+    draftOutros,
+    setDraftOutros,
+  ] =
+    useState<FiltrosOutros>({
+      tipo: [],
+
+      cidade:
+        "",
+
+      estado:
+        "",
+    });
   const updateDraft = (patch: Partial<Filtros>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
   };
@@ -705,6 +801,51 @@ function Explorar() {
   const [pontosCache, setPontosCache] = useState<Record<string, number>>({});
   const [mostrarFavoritos, setMostrarFavoritos] = useState(false);
   const [favoritosPerfilIds, setFavoritosPerfilIds] = useState<string[]>([]);
+  const [
+    solicitandoResponsavelId,
+    setSolicitandoResponsavelId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    responsaveisSolicitados,
+    setResponsaveisSolicitados,
+  ] =
+    useState<
+      string[]
+    >([]);
+
+  const [
+    solicitandoAtletaId,
+    setSolicitandoAtletaId,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    atletasSolicitados,
+    setAtletasSolicitados,
+  ] =
+    useState<
+      string[]
+    >([]);
+
+  const [
+    atletasVinculados,
+    setAtletasVinculados,
+  ] =
+    useState<
+      Record<
+        string,
+        {
+          atletaId: string;
+          principal: boolean;
+        }
+      >
+    >({});
 
   function getUserIdFromAtleta(a: AtletaItem): string {
     return String(a?.usuario?.id ?? a?.usuarioId ?? a?.id ?? "").trim();
@@ -728,6 +869,439 @@ function Explorar() {
 
   function getUserIdFromOutro(o: OutroItem): string {
     return String(o?.usuario?.id ?? o?.usuarioId ?? "").trim();
+  }
+
+  async function solicitarResponsavel(
+    responsavelUsuarioId: string,
+    nomeResponsavel: string
+  ) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para solicitar um responsável.",
+      })
+    ) {
+      return;
+    }
+
+    if (!usandoPapelAtleta) {
+      window.alert(
+        "Selecione seu perfil de Atleta para solicitar um responsável."
+      );
+
+      return;
+    }
+
+    const token =
+      Storage?.token ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      return;
+    }
+
+    const confirmar =
+      window.confirm(
+        `Deseja enviar uma solicitação para ${nomeResponsavel} ser seu responsável?`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setSolicitandoResponsavelId(
+        responsavelUsuarioId
+      );
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/solicitacoes`,
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body:
+              JSON.stringify({
+                responsavelUsuarioId,
+              }),
+          }
+        );
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível enviar a solicitação."
+        );
+      }
+
+      setResponsaveisSolicitados(
+        (atual) =>
+          Array.from(
+            new Set([
+              ...atual,
+              responsavelUsuarioId,
+            ])
+          )
+      );
+
+      window.alert(
+        "Solicitação enviada ao responsável."
+      );
+    } catch (
+      error: any
+    ) {
+      window.alert(
+        error?.message ||
+        "Não foi possível enviar a solicitação."
+      );
+    } finally {
+      setSolicitandoResponsavelId(
+        null
+      );
+    }
+  }
+
+  async function solicitarVinculoAtleta(
+    atletaUsuarioId: string,
+    nomeAtleta: string
+  ) {
+    if (
+      !requireAuth({
+        message:
+          "Entre na FootEra para solicitar vínculo com um atleta.",
+      })
+    ) {
+      return;
+    }
+
+    if (!usandoPapelResponsavel) {
+      window.alert(
+        "Selecione seu perfil de Responsável para solicitar vínculo."
+      );
+
+      return;
+    }
+
+    const token =
+      Storage?.token ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      return;
+    }
+
+    const confirmar =
+      window.confirm(
+        `Deseja solicitar vínculo como responsável de ${nomeAtleta}?`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setSolicitandoAtletaId(
+        atletaUsuarioId
+      );
+
+      const resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/solicitacoes/atleta`,
+          {
+            method:
+              "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+
+            body:
+              JSON.stringify({
+                atletaUsuarioId,
+              }),
+          }
+        );
+
+      const data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível enviar a solicitação."
+        );
+      }
+
+      setAtletasSolicitados(
+        (atual) =>
+          Array.from(
+            new Set([
+              ...atual,
+              atletaUsuarioId,
+            ])
+          )
+      );
+
+      window.alert(
+        data?.message ||
+        "Solicitação enviada ao responsável principal do atleta."
+      );
+    } catch (
+      error: any
+    ) {
+      window.alert(
+        error?.message ||
+        "Não foi possível enviar a solicitação."
+      );
+    } finally {
+      setSolicitandoAtletaId(
+        null
+      );
+    }
+  }
+
+  async function desvincularAtleta(
+    atletaUsuarioId: string,
+    atletaId: string,
+    nomeAtleta: string
+  ) {
+    const token =
+      Storage?.token ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      return;
+    }
+
+    const confirmar =
+      window.confirm(
+        `Você já possui vínculo com ${nomeAtleta}.\n\nDeseja remover esse vínculo?`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setSolicitandoAtletaId(
+        atletaUsuarioId
+      );
+
+      let resposta =
+        await fetch(
+          `${API.BASE_URL}/api/responsaveis/me/atletas/${encodeURIComponent(
+            atletaId
+          )}/vinculo`,
+          {
+            method:
+              "DELETE",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+
+      let data =
+        await resposta
+          .json()
+          .catch(() => ({}));
+
+      /*
+      * Se o principal tiver mais
+      * de um possível sucessor.
+      */
+      if (
+        resposta.status ===
+          409 &&
+        data?.code ===
+          "NEW_PRIMARY_GUARDIAN_REQUIRED"
+      ) {
+        const opcoes =
+          Array.isArray(
+            data?.opcoes
+          )
+            ? data.opcoes
+            : [];
+
+        if (
+          opcoes.length ===
+          0
+        ) {
+          throw new Error(
+            data?.message ||
+            "Não foi possível definir um novo responsável principal."
+          );
+        }
+
+        const textoOpcoes =
+          opcoes
+            .map(
+              (
+                opcao: any,
+                indice: number
+              ) =>
+                `${indice + 1} - ${
+                  opcao
+                    ?.responsavel
+                    ?.nome ??
+                  opcao
+                    ?.responsavel
+                    ?.nomeDeUsuario ??
+                  "Responsável"
+                }`
+            )
+            .join("\n");
+
+        const escolha =
+          window.prompt(
+            `Antes de sair, escolha quem será o novo responsável principal:\n\n${textoOpcoes}\n\nDigite o número da opção.`
+          );
+
+        if (
+          escolha ===
+          null
+        ) {
+          return;
+        }
+
+        const indice =
+          Number(
+            escolha
+          ) - 1;
+
+        const escolhido =
+          opcoes[
+            indice
+          ];
+
+        if (!escolhido) {
+          window.alert(
+            "Opção inválida."
+          );
+
+          return;
+        }
+
+        resposta =
+          await fetch(
+            `${API.BASE_URL}/api/responsaveis/me/atletas/${encodeURIComponent(
+              atletaId
+            )}/vinculo`,
+            {
+              method:
+                "DELETE",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+
+                Authorization:
+                  `Bearer ${token}`,
+              },
+
+              body:
+                JSON.stringify({
+                  novoPrincipalVinculoId:
+                    escolhido.id,
+                }),
+            }
+          );
+
+        data =
+          await resposta
+            .json()
+            .catch(() => ({}));
+      }
+
+      if (!resposta.ok) {
+        throw new Error(
+          data?.message ||
+          "Não foi possível remover o vínculo."
+        );
+      }
+
+      setAtletasVinculados(
+        (atual) => {
+          const proximo = {
+            ...atual,
+          };
+
+          delete proximo[
+            atletaUsuarioId
+          ];
+
+          return proximo;
+        }
+      );
+
+      setAtletasSolicitados(
+        (atual) =>
+          atual.filter(
+            (id) =>
+              id !==
+              atletaUsuarioId
+          )
+      );
+
+      window.alert(
+        data?.message ||
+        "Vínculo removido com sucesso."
+      );
+    } catch (
+      error: any
+    ) {
+      window.alert(
+        error?.message ||
+        "Não foi possível remover o vínculo."
+      );
+    } finally {
+      setSolicitandoAtletaId(
+        null
+      );
+    }
   }
 
   function isPerfilFavorito(usuarioId?: string | null) {
@@ -915,6 +1489,72 @@ function Explorar() {
     };
   }
 
+  const estadosAtletas =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            (
+              dados.atletas ||
+              []
+            )
+              .map(
+                (a) =>
+                  String(
+                    (a as any)
+                      ?.estado ??
+                      a.usuario
+                        ?.estado ??
+                      ""
+                  ).trim()
+              )
+              .filter(Boolean)
+          )
+        ).sort(
+          (a, b) =>
+            a.localeCompare(
+              b,
+              "pt-BR"
+            )
+        ),
+      [
+        dados.atletas,
+      ]
+    );
+
+  const cidadesAtletas =
+    useMemo(
+      () =>
+        Array.from(
+          new Set(
+            (
+              dados.atletas ||
+              []
+            )
+              .map(
+                (a) =>
+                  String(
+                    (a as any)
+                      ?.cidade ??
+                      a.usuario
+                        ?.cidade ??
+                      ""
+                  ).trim()
+              )
+              .filter(Boolean)
+          )
+        ).sort(
+          (a, b) =>
+            a.localeCompare(
+              b,
+              "pt-BR"
+            )
+        ),
+      [
+        dados.atletas,
+      ]
+    );
+
   const atletasFiltrados = useMemo(() => {
     const f = filtros;
     const q = normText(busca);
@@ -926,8 +1566,30 @@ function Explorar() {
 
       const m = getAtletaMeta(a);
 
-      if (f.categoria) {
-        if (normKey(m.categoria) !== normKey(f.categoria)) return false;
+      if (
+        f.categoria &&
+        f.categoria.length >
+          0
+      ) {
+        const categoriaAtual =
+          normKey(
+            m.categoria
+          );
+
+        const bateCategoria =
+          f.categoria.some(
+            (categoria) =>
+              categoriaAtual ===
+              normKey(
+                categoria
+              )
+          );
+
+        if (
+          !bateCategoria
+        ) {
+          return false;
+        }
       }
 
       if (f.posicoes && f.posicoes.length > 0) {
@@ -938,8 +1600,53 @@ function Explorar() {
         if (!bate) return false;
       }
 
-      if (f.estado && !includesText(m.estado, f.estado)) return false;
-      if (f.cidade && !includesText(m.cidade, f.cidade)) return false;
+      if (
+        f.estado &&
+        f.estado.length >
+          0
+      ) {
+        const estadoAtual =
+          normKey(
+            m.estado
+          );
+
+        const bateEstado =
+          f.estado.some(
+            (estado) =>
+              estadoAtual ===
+              normKey(
+                estado
+              )
+          );
+
+        if (!bateEstado) {
+          return false;
+        }
+      }
+
+      if (
+        f.cidade &&
+        f.cidade.length >
+          0
+      ) {
+        const cidadeAtual =
+          normKey(
+            m.cidade
+          );
+
+        const bateCidade =
+          f.cidade.some(
+            (cidade) =>
+              cidadeAtual ===
+              normKey(
+                cidade
+              )
+          );
+
+        if (!bateCidade) {
+          return false;
+        }
+      }
 
       if (f.independente !== null && f.independente !== undefined) {
         if (m.independente == null || m.independente !== f.independente)
@@ -1143,6 +1850,7 @@ function Explorar() {
       ...(dados.learning || []),
       ...(dados.marcas || []),
       ...(dados.federacoes || []),
+      ...(dados.responsaveis || []),
     ];
 
     const f = filtrosOutros;
@@ -1160,7 +1868,14 @@ function Explorar() {
       const estado = item.estado ?? item.usuario?.estado ?? "";
       const tipo = item.tipoOutro;
 
-      if (f.tipo && f.tipo !== "Todos" && tipo !== f.tipo) {
+      if (
+        f.tipo &&
+        f.tipo.length >
+          0 &&
+        !f.tipo.includes(
+          tipo
+        )
+      ) {
         return false;
       }
 
@@ -1192,6 +1907,7 @@ function Explorar() {
     dados.learning,
     dados.marcas,
     dados.federacoes,
+    dados.responsaveis,
     busca,
     JSON.stringify(filtrosOutros),
     mostrarFavoritos,
@@ -1482,13 +2198,66 @@ function Explorar() {
             (data.learning || []).map((l: any) => ({
               ...l,
               tipoOutro: "Learning",
-              nome: l.usuario?.nome ?? l.usuario?.nomeDeUsuario ?? "Learning",
-              usuarioId: l.usuarioId ?? l.usuario?.id,
-              logo: l.usuario?.foto ?? null,
-              cidade: l.usuario?.cidade ?? null,
-              estado: l.usuario?.estado ?? null,
-              usuario: l.usuario ?? undefined,
+              nome:
+                l.usuario?.nome ??
+                l.usuario?.nomeDeUsuario ??
+                "Learning",
+              usuarioId:
+                l.usuarioId ??
+                l.usuario?.id,
+              logo:
+                l.usuario?.foto ??
+                null,
+              cidade:
+                l.usuario?.cidade ??
+                null,
+              estado:
+                l.usuario?.estado ??
+                null,
+              usuario:
+                l.usuario ??
+                undefined,
             })),
+          ),
+
+          responsaveis: filtrarEu<OutroItem>(
+            (data.responsaveis || []).map(
+              (r: any) => ({
+                ...r,
+
+                tipoOutro:
+                  "Responsavel",
+
+                nome:
+                  r.nome ??
+                  r.usuario?.nome ??
+                  r.usuario?.nomeDeUsuario ??
+                  "Responsável",
+
+                usuarioId:
+                  r.usuarioId ??
+                  r.usuario?.id,
+
+                foto:
+                  r.foto ??
+                  r.usuario?.foto ??
+                  null,
+
+                cidade:
+                  r.cidade ??
+                  r.usuario?.cidade ??
+                  null,
+
+                estado:
+                  r.estado ??
+                  r.usuario?.estado ??
+                  null,
+
+                usuario:
+                  r.usuario ??
+                  undefined,
+              })
+            ),
           ),
         });
       })
@@ -1503,10 +2272,151 @@ function Explorar() {
           federacoes: [],
           marcas: [],
           learning: [],
+          responsaveis: [],
         });
       })
       .finally(() => setCarregandoDados(false));
   }, [busca, loggedUserId, filtrarEu]);
+
+  useEffect(() => {
+    if (
+      !usandoPapelResponsavel
+    ) {
+      setAtletasVinculados(
+        {}
+      );
+
+      return;
+    }
+
+    const token =
+      Storage?.token ||
+      localStorage.getItem(
+        "token"
+      ) ||
+      sessionStorage.getItem(
+        "token"
+      ) ||
+      "";
+
+    if (!token) {
+      return;
+    }
+
+    let cancelado =
+      false;
+
+    void (async () => {
+      try {
+        const resposta =
+          await fetch(
+            `${API.BASE_URL}/api/responsaveis/me/atletas`,
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+              },
+            }
+          );
+
+        const data =
+          await resposta
+            .json()
+            .catch(() => ({
+              items: [],
+            }));
+
+        if (
+          cancelado ||
+          !resposta.ok
+        ) {
+          return;
+        }
+
+        const mapa:
+          Record<
+            string,
+            {
+              atletaId: string;
+              principal: boolean;
+            }
+          > =
+          {};
+
+        const pendentes:
+          string[] =
+          [];
+
+        for (
+          const item of
+            Array.isArray(
+              data?.items
+            )
+              ? data.items
+              : []
+        ) {
+          const usuarioId =
+            String(
+              item?.atleta
+                ?.usuarioId ??
+              ""
+            ).trim();
+
+          if (!usuarioId) {
+            continue;
+          }
+
+          if (
+            item.status ===
+            "ATIVO"
+          ) {
+            mapa[
+              usuarioId
+            ] = {
+              atletaId:
+                String(
+                  item.atletaId
+                ),
+
+              principal:
+                item.principal ===
+                true,
+            };
+          }
+
+          if (
+            item.status ===
+            "PENDENTE"
+          ) {
+            pendentes.push(
+              usuarioId
+            );
+          }
+        }
+
+        setAtletasVinculados(
+          mapa
+        );
+
+        setAtletasSolicitados(
+          pendentes
+        );
+      } catch (error) {
+        console.error(
+          "[Explorar] vínculos do responsável:",
+          error
+        );
+      }
+    })();
+
+    return () => {
+      cancelado =
+        true;
+    };
+  }, [
+    usandoPapelResponsavel,
+    activeContext?.key,
+  ]);
 
   const abrirFiltros = () => {
     if (aba === "atletas") setDraft(filtros);
@@ -1528,12 +2438,29 @@ function Explorar() {
 
   const limparFiltros = () => {
     if (aba === "atletas") {
-      const base: Filtros = {
-        independente: null,
-        pontuacaoMin: null,
-        pontuacaoMax: null,
-        posicoes: [],
-      };
+      const base:
+        Filtros = {
+          categoria:
+            [],
+
+          posicoes:
+            [],
+
+          estado:
+            [],
+
+          cidade:
+            [],
+
+          independente:
+            null,
+
+          pontuacaoMin:
+            null,
+
+          pontuacaoMax:
+            null,
+        };
       setDraft(base);
       setFiltros(base);
     } else if (aba === "profissionais") {
@@ -1554,11 +2481,17 @@ function Explorar() {
       setDraftOrgs(base);
       setFiltrosOrgs(base);
     } else if (aba === "outros") {
-      const base: FiltrosOutros = {
-        tipo: "Todos",
-        cidade: "",
-        estado: "",
-      };
+      const base:
+        FiltrosOutros = {
+          tipo:
+            [],
+
+          cidade:
+            "",
+
+          estado:
+            "",
+        };
       setDraftOutros(base);
       setFiltrosOutros(base);
     }
@@ -1572,10 +2505,25 @@ function Explorar() {
   const activeFiltersCount = useMemo(() => {
     if (aba === "atletas") {
       return (
-        (filtros.categoria ? 1 : 0) +
-        (filtros.posicoes && filtros.posicoes.length ? 1 : 0) +
-        (filtros.estado ? 1 : 0) +
-        (filtros.cidade ? 1 : 0) +
+        (filtros.categoria
+          ?.length
+          ? 1
+          : 0) +
+
+        (filtros.posicoes
+          ?.length
+          ? 1
+          : 0) +
+
+        (filtros.estado
+          ?.length
+          ? 1
+          : 0) +
+
+        (filtros.cidade
+          ?.length
+          ? 1
+          : 0) +
         (filtros.independente !== null && filtros.independente !== undefined
           ? 1
           : 0) +
@@ -1609,7 +2557,10 @@ function Explorar() {
 
     if (aba === "outros") {
       return (
-        (filtrosOutros.tipo && filtrosOutros.tipo !== "Todos" ? 1 : 0) +
+        (filtrosOutros.tipo
+          ?.length
+          ? 1
+          : 0) +
         (filtrosOutros.estado ? 1 : 0) +
         (filtrosOutros.cidade ? 1 : 0)
       );
@@ -1658,6 +2609,7 @@ function Explorar() {
         ...(dados.learning || []),
         ...(dados.marcas || []),
         ...(dados.federacoes || []),
+        ...(dados.responsaveis || []),
       ];
 
       return todos.filter((item) => isPerfilFavorito(getUserIdFromOutro(item)))
@@ -1673,6 +2625,7 @@ function Explorar() {
     dados.learning,
     dados.marcas,
     dados.federacoes,
+    dados.responsaveis,
     profissionais,
     favoritosPerfilIds,
   ]);
@@ -1964,20 +2917,90 @@ function Explorar() {
                     <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Categoria
                     </label>
+
                     <select
                       className="w-full border rounded-lg px-3 py-2 text-sm"
-                      value={draft.categoria ?? ""}
-                      onChange={(e) =>
-                        updateDraft({ categoria: e.target.value || undefined })
-                      }
+                      value=""
+                      onChange={(e) => {
+                        const valor =
+                          e.target.value;
+
+                        if (!valor) {
+                          return;
+                        }
+
+                        const atuais =
+                          draft.categoria ??
+                          [];
+
+                        if (
+                          !atuais.includes(
+                            valor
+                          )
+                        ) {
+                          updateDraft({
+                            categoria: [
+                              ...atuais,
+                              valor,
+                            ],
+                          });
+                        }
+
+                        e.target.value =
+                          "";
+                      }}
                     >
-                      <option value="">Todas</option>
-                      {CATEGORIAS.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
+                      <option value="">
+                        Selecione uma categoria...
+                      </option>
+
+                      {CATEGORIAS.map(
+                        (cat) => (
+                          <option
+                            key={cat}
+                            value={cat}
+                          >
+                            {CAT_LABEL[
+                              cat
+                            ] ?? cat}
+                          </option>
+                        )
+                      )}
                     </select>
+
+                    {!!draft
+                      .categoria
+                      ?.length && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {draft.categoria.map(
+                          (cat) => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() =>
+                                updateDraft({
+                                  categoria:
+                                    (
+                                      draft.categoria ??
+                                      []
+                                    ).filter(
+                                      (item) =>
+                                        item !==
+                                        cat
+                                    ),
+                                })
+                              }
+                              className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800"
+                            >
+                              {CAT_LABEL[
+                                cat
+                              ] ?? cat}{" "}
+                              ×
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -2033,29 +3056,168 @@ function Explorar() {
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Estado
                       </label>
-                      <input
-                        type="text"
+
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const valor =
+                            e.target.value;
+
+                          if (!valor) {
+                            return;
+                          }
+
+                          const atuais =
+                            draft.estado ??
+                            [];
+
+                          if (
+                            !atuais.includes(
+                              valor
+                            )
+                          ) {
+                            updateDraft({
+                              estado: [
+                                ...atuais,
+                                valor,
+                              ],
+                            });
+                          }
+
+                          e.target.value =
+                            "";
+                        }}
                         className="w-full border rounded-lg px-3 py-2 text-sm"
-                        placeholder="Ex: SP, RJ..."
-                        value={draft.estado ?? ""}
-                        onChange={(e) =>
-                          updateDraft({ estado: e.target.value || undefined })
-                        }
-                      />
+                      >
+                        <option value="">
+                          Selecione um estado...
+                        </option>
+
+                        {estadosAtletas.map(
+                          (estado) => (
+                            <option
+                              key={estado}
+                              value={estado}
+                            >
+                              {estado}
+                            </option>
+                          )
+                        )}
+                      </select>
+
+                      {!!draft.estado
+                        ?.length && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {draft.estado.map(
+                            (estado) => (
+                              <button
+                                key={estado}
+                                type="button"
+                                onClick={() =>
+                                  updateDraft({
+                                    estado:
+                                      (
+                                        draft.estado ??
+                                        []
+                                      ).filter(
+                                        (item) =>
+                                          item !==
+                                          estado
+                                      ),
+                                  })
+                                }
+                                className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800"
+                              >
+                                {estado} ×
+                              </button>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-gray-700 mb-1">
                         Cidade
                       </label>
-                      <input
-                        type="text"
+
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const valor =
+                            e.target.value;
+
+                          if (!valor) {
+                            return;
+                          }
+
+                          const atuais =
+                            draft.cidade ??
+                            [];
+
+                          if (
+                            !atuais.includes(
+                              valor
+                            )
+                          ) {
+                            updateDraft({
+                              cidade: [
+                                ...atuais,
+                                valor,
+                              ],
+                            });
+                          }
+
+                          e.target.value =
+                            "";
+                        }}
                         className="w-full border rounded-lg px-3 py-2 text-sm"
-                        placeholder="Ex: São Paulo"
-                        value={draft.cidade ?? ""}
-                        onChange={(e) =>
-                          updateDraft({ cidade: e.target.value || undefined })
-                        }
-                      />
+                      >
+                        <option value="">
+                          Selecione uma cidade...
+                        </option>
+
+                        {cidadesAtletas.map(
+                          (cidade) => (
+                            <option
+                              key={cidade}
+                              value={cidade}
+                            >
+                              {cidade}
+                            </option>
+                          )
+                        )}
+                      </select>
+
+                      {!!draft.cidade
+                        ?.length && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {draft.cidade.map(
+                            (cidade) => (
+                              <button
+                                key={cidade}
+                                type="button"
+                                onClick={() =>
+                                  updateDraft({
+                                    cidade:
+                                      (
+                                        draft.cidade ??
+                                        []
+                                      ).filter(
+                                        (item) =>
+                                          item !==
+                                          cidade
+                                      ),
+                                  })
+                                }
+                                className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800"
+                              >
+                                {cidade} ×
+                              </button>
+                            )
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2312,19 +3474,99 @@ function Explorar() {
                     </label>
 
                     <select
+                      value=""
+                      onChange={(e) => {
+                        const valor =
+                          e.target
+                            .value as
+                            TipoFiltroOutro;
+
+                        if (!valor) {
+                          return;
+                        }
+
+                        const atuais =
+                          draftOutros
+                            .tipo ??
+                          [];
+
+                        if (
+                          !atuais.includes(
+                            valor
+                          )
+                        ) {
+                          updateDraftOutros({
+                            tipo: [
+                              ...atuais,
+                              valor,
+                            ],
+                          });
+                        }
+
+                        e.target.value =
+                          "";
+                      }}
                       className="w-full border rounded-lg px-3 py-2 text-sm"
-                      value={draftOutros.tipo ?? "Todos"}
-                      onChange={(e) =>
-                        updateDraftOutros({
-                          tipo: e.target.value as FiltrosOutros["tipo"],
-                        })
-                      }
                     >
-                      <option value="Todos">Todos</option>
-                      <option value="Learning">Learning</option>
-                      <option value="Marca">Marca</option>
-                      <option value="Federacao">Federação</option>
+                      <option value="">
+                        Todos os tipos
+                      </option>
+
+                      <option value="Learning">
+                        Learning
+                      </option>
+
+                      <option value="Marca">
+                        Marca
+                      </option>
+
+                      <option value="Federacao">
+                        Federação
+                      </option>
+
+                      <option value="Responsavel">
+                        Responsáveis
+                      </option>
                     </select>
+
+                    {!!draftOutros
+                      .tipo
+                      ?.length && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {draftOutros.tipo.map(
+                          (tipo) => (
+                            <button
+                              key={tipo}
+                              type="button"
+                              onClick={() =>
+                                updateDraftOutros({
+                                  tipo:
+                                    (
+                                      draftOutros
+                                        .tipo ??
+                                      []
+                                    ).filter(
+                                      (item) =>
+                                        item !==
+                                        tipo
+                                    ),
+                                })
+                              }
+                              className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-800"
+                            >
+                              {tipo ===
+                              "Federacao"
+                                ? "Federação"
+                                : tipo ===
+                                    "Responsavel"
+                                  ? "Responsável"
+                                  : tipo}{" "}
+                              ×
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2417,19 +3659,50 @@ function Explorar() {
                     const meta = getAtletaMeta(a);
                     const categoria = meta.categoria;
                     const uid = a?.usuario?.id ?? a?.usuarioId ?? a.id;
+                    const uidString =
+                      String(uid);
+
+                    const jaSolicitouAtleta =
+                      atletasSolicitados.includes(
+                        uidString
+                      );
+
+                    const vinculoAtivo =
+                      atletasVinculados[
+                        uidString
+                      ];
+
+                    const jaPossuiVinculo =
+                      Boolean(
+                        vinculoAtivo
+                      );
+                      
+                    const solicitandoAtleta =
+                      solicitandoAtletaId ===
+                      uidString;
+
                     return (
-                      <Link
-                        href={criarHrefPerfil(uid, "Atleta")}
+                      <div
                         key={`${a.id}-${uid}`}
+                        className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center"
                       >
-                        <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
+                        <Link
+                          href={criarHrefPerfil(
+                            uid,
+                            "Atleta"
+                          )}
+                          className="flex w-full flex-col items-center"
+                        >
                           <div className="relative">
                             <Avatar
                               foto={rawFoto}
                               alt={`${nome} profile`}
                               className="w-20 h-20 sm:w-24 sm:h-24 border"
                             />
-                            {shouldShowProBadgeOnAvatar(a) && (
+
+                            {shouldShowProBadgeOnAvatar(
+                              a
+                            ) && (
                               <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                                 PRO
                               </span>
@@ -2440,37 +3713,99 @@ function Explorar() {
                             {nome}
                           </p>
 
-                          <ProfileStatusBadges item={a} />
+                          <ProfileStatusBadges
+                            item={a}
+                          />
 
                           <div className="mt-1 flex flex-wrap gap-1 justify-center">
                             {categoria && (
                               <Pill tone="emerald">
-                                <Shield className="h-3.5 w-3.5" /> {categoria}
+                                <Shield className="h-3.5 w-3.5" />
+
+                                {categoria}
                               </Pill>
                             )}
+
                             {meta.posicao && (
                               <Pill tone="sky">
-                                <Goal className="h-3.5 w-3.5" /> {meta.posicao}
+                                <Goal className="h-3.5 w-3.5" />
+
+                                {meta.posicao}
                               </Pill>
                             )}
 
-                            {(meta.cidade || meta.estado) && (
+                            {(meta.cidade ||
+                              meta.estado) && (
                               <Pill tone="gray">
-                                <MapPin className="h-3.5 w-3.5" />{" "}
-                                {meta.cidade ?? ""}{" "}
-                                {meta.estado ? `, ${meta.estado}` : ""}
+                                <MapPin className="h-3.5 w-3.5" />
+
+                                {meta.cidade ?? ""}
+
+                                {meta.estado
+                                  ? `, ${meta.estado}`
+                                  : ""}
                               </Pill>
                             )}
 
-                            {typeof meta.pontuacao === "number" && (
+                            {typeof meta.pontuacao ===
+                              "number" && (
                               <Pill tone="amber">
-                                <Heart className="h-3.5 w-3.5" />{" "}
+                                <Heart className="h-3.5 w-3.5" />
+
                                 {meta.pontuacao}
                               </Pill>
                             )}
                           </div>
-                        </div>
-                      </Link>
+                        </Link>
+
+                        {usandoPapelResponsavel && (
+                          <button
+                            type="button"
+                            disabled={
+                              solicitandoAtleta ||
+                              (
+                                !jaPossuiVinculo &&
+                                jaSolicitouAtleta
+                              )
+                            }
+                            onClick={() => {
+                              if (
+                                jaPossuiVinculo &&
+                                vinculoAtivo
+                              ) {
+                                void desvincularAtleta(
+                                  uidString,
+                                  vinculoAtivo
+                                    .atletaId,
+                                  nome
+                                );
+
+                                return;
+                              }
+
+                              void solicitarVinculoAtleta(
+                                uidString,
+                                nome
+                              );
+                            }}
+                            className={
+                              jaPossuiVinculo
+                                ? "mt-3 w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                                : "mt-3 w-full rounded-lg border border-green-700 px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
+                            }
+                          >
+                            {solicitandoAtleta
+                              ? jaPossuiVinculo
+                                ? "Removendo..."
+                                : "Enviando..."
+                              : jaPossuiVinculo
+                                ? "Já possui vínculo"
+                                : jaSolicitouAtleta
+                                  ? "Solicitação enviada"
+                                  : "Solicitar vínculo"}
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -2811,21 +4146,45 @@ function Explorar() {
                       ? "Federação"
                       : item.tipoOutro === "Marca"
                         ? "Marca"
-                        : "Learning";
+                        : item.tipoOutro === "Responsavel"
+                          ? "Responsável"
+                          : "Learning";
 
                   const pillTone =
                     item.tipoOutro === "Learning"
                       ? "sky"
                       : item.tipoOutro === "Marca"
                         ? "amber"
-                        : "emerald";
+                        : item.tipoOutro === "Responsavel"
+                          ? "gray"
+                          : "emerald";
+                  
+                  const ehResponsavel =
+                    item.tipoOutro ===
+                    "Responsavel";
+
+                  const jaSolicitado =
+                    responsaveisSolicitados
+                      .includes(
+                        String(uid)
+                      );
+
+                  const solicitando =
+                    solicitandoResponsavelId ===
+                    String(uid);
 
                   return (
-                    <Link
-                      href={criarHrefPerfil(uid, item.tipoOutro)}
+                    <div
                       key={`${item.tipoOutro}-${item.id}`}
+                      className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center"
                     >
-                      <div className="bg-white rounded-xl shadow-sm p-3 hover:shadow transition flex flex-col items-center">
+                      <Link
+                        href={criarHrefPerfil(
+                          uid,
+                          item.tipoOutro
+                        )}
+                        className="flex w-full flex-col items-center"
+                      >
                         <div className="relative">
                           <Avatar
                             foto={rawFoto}
@@ -2833,7 +4192,9 @@ function Explorar() {
                             className="w-20 h-20 sm:w-24 sm:h-24 border"
                           />
 
-                          {shouldShowProBadgeOnAvatar(item) && (
+                          {shouldShowProBadgeOnAvatar(
+                            item
+                          ) && (
                             <span className="absolute -top-1 -right-1 text-[10px] px-2 py-1 rounded-full bg-emerald-800 text-white font-extrabold shadow ring-2 ring-white">
                               PRO
                             </span>
@@ -2844,20 +4205,64 @@ function Explorar() {
                           {nome}
                         </p>
 
-                        <ProfileStatusBadges item={item} />
+                        <ProfileStatusBadges
+                          item={item}
+                        />
 
-                        {(cidade || estado) && (
-                          <p className="mt-1 text-xs text-gray-600 flex items-center gap-1 text-center">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {[cidade, estado].filter(Boolean).join(", ")}
+                        {(cidade ||
+                          estado) && (
+                          <p className="mt-1 text-sm text-gray-600 flex items-center gap-1 text-center">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" />
+
+                            <span>
+                              {cidade}
+
+                              {estado
+                                ? `, ${estado}`
+                                : ""}
+                            </span>
                           </p>
                         )}
 
-                        <Pill tone={pillTone as any} className="mt-2">
+                        <Pill
+                          tone={
+                            pillTone as
+                              | "emerald"
+                              | "amber"
+                              | "sky"
+                              | "gray"
+                              | "rose"
+                          }
+                          className="mt-2"
+                        >
                           {labelTipo}
                         </Pill>
-                      </div>
-                    </Link>
+                      </Link>
+
+                      {ehResponsavel &&
+                        usandoPapelAtleta && (
+                          <button
+                            type="button"
+                            disabled={
+                              solicitando ||
+                              jaSolicitado
+                            }
+                            onClick={() =>
+                              solicitarResponsavel(
+                                String(uid),
+                                nome
+                              )
+                            }
+                            className="mt-3 w-full rounded-lg border border-green-700 px-3 py-2 text-xs font-semibold text-green-800 transition hover:bg-green-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
+                          >
+                            {solicitando
+                              ? "Enviando..."
+                              : jaSolicitado
+                                ? "Solicitação enviada"
+                                : "Solicitar vínculo"}
+                          </button>
+                        )}
+                    </div>
                   );
                 })}
               </div>
