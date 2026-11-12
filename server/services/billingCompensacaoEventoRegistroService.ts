@@ -5,13 +5,6 @@ import { prisma } from "../prisma.js";
 const MOTIVO =
   "BILLING_EVENT_CAPACITY_EXCEEDED";
 
-/**
- * Prepara a compensação financeira no banco.
- *
- * NÃO consulta o Mercado Pago.
- * NÃO envia solicitação de reembolso.
- * NÃO muda o status do pagamento.
- */
 export async function prepararCompensacaoEvento(
   pagamentoId: string
 ) {
@@ -25,8 +18,6 @@ export async function prepararCompensacaoEvento(
 
   return prisma.$transaction(
     async (tx) => {
-      // Serializar tentativas de preparação
-      // do mesmo pagamento.
       const linhas = await tx.$queryRaw<
         Array<{ id: string }>
       >`
@@ -96,8 +87,6 @@ export async function prepararCompensacaoEvento(
         );
       }
 
-      // Não preparar compensação se o
-      // pagamento já concedeu benefício.
       const beneficios =
         await tx.pagamentoBeneficio.count({
           where: {
@@ -111,7 +100,6 @@ export async function prepararCompensacaoEvento(
         );
       }
 
-      // A inscrição também deve estar ausente.
       const inscricoes =
         await tx.inscricaoEvento.count({
           where: {
@@ -129,9 +117,6 @@ export async function prepararCompensacaoEvento(
         );
       }
 
-      // Chave determinística por pagamento.
-      // Nunca gerar um UUID novo para cada
-      // tentativa da mesma compensação.
       const chaveIdempotencia =
         `footera-evento-refund-${id}`;
 

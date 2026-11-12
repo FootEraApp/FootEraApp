@@ -1,4 +1,3 @@
-// server/controllers/feedController
 import { Response, RequestHandler, Request } from "express";
 import { getIO } from "../socket.js";
 import { getDailyUsage } from "../services/usage.js";
@@ -53,14 +52,6 @@ async function resolverAutorPostagem(
       authorContextKeyRaw ?? ""
     ).trim();
 
-  /*
-   * Compatibilidade enquanto o front
-   * ainda não envia authorContextKey.
-   *
-   * Assim a etapa 115 pode entrar antes
-   * do seletor da etapa 116 sem quebrar
-   * a criação de posts atual.
-   */
   if (!authorContextKey) {
     const contexto =
       await getActiveContext(
@@ -92,14 +83,6 @@ async function resolverAutorPostagem(
     };
   }
 
-  /*
-   * Nunca confiamos diretamente no
-   * organizationId enviado pelo cliente.
-   *
-   * O contextKey precisa existir entre
-   * os contextos que realmente pertencem
-   * ao usuário autenticado.
-   */
   const contextos =
     await listarActiveContexts(
       usuarioId
@@ -677,8 +660,6 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
     let perfilWhere: Prisma.PostagemWhereInput = {};
 
     if (filtrosDePerfilInformados) {
-      // O cliente escolhe um perfil pessoal OU uma organização.
-      // Não permitimos misturar os dois modos.
       if (
         perfilOrganizacaoId &&
         (perfilUsuarioId || perfilPapel)
@@ -975,11 +956,6 @@ export const curtirPostagem: RequestHandler = async (req, res) => {
               )}`,
           });
         } catch (error) {
-          /*
-          * A curtida já foi registrada.
-          * Uma falha de push/notificação
-          * não deve desfazer a curtida.
-          */
           console.warn(
             "[curtirPostagem] falha ao criar notificação:",
             error
@@ -1267,8 +1243,6 @@ async (req, res) => {
         });
     }
 
-    // Uma postagem pessoal pertence ao autor.
-    // Uma postagem institucional pertence à organização.
     const proprioAutor =
       !post.organizacaoId &&
       post.usuarioId === usuarioId;
@@ -1417,11 +1391,6 @@ async (req, res) => {
         },
       });
 
-    /*
-     * Registramos separadamente
-     * quando a exclusão foi feita
-     * pelo responsável.
-     */
     if (
       vinculoResponsavel
     ) {
@@ -1461,11 +1430,6 @@ async (req, res) => {
       } catch (
         auditError
       ) {
-        /*
-         * O post já foi removido.
-         * Falha na auditoria não deve
-         * transformar a exclusão em 500.
-         */
         console.warn(
           "[deletarPostagem] erro ao registrar auditoria:",
           auditError

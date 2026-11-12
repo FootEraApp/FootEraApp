@@ -1,4 +1,3 @@
-// client/src/pages/admin/login
 import { useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import { useLocation } from "wouter";
 import axios from "axios";

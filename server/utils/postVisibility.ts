@@ -1,15 +1,12 @@
-
 import {
   Prisma,
   VisibilidadePostagem,
 } from "@prisma/client";
-
 import { avaliarPrivacidadePerfil } from "./privacy.js";
 import { prisma } from "../prisma.js";
 import { getActiveContext } from "../services/activeContext.js";
 import { canPermission } from "../services/permissions.js";
 
-// Normaliza a visibilidade recebida do frontend.
 export function normalizarVisibilidadePostagem(
   value: unknown,
   fallback: VisibilidadePostagem =
@@ -37,7 +34,6 @@ export function normalizarVisibilidadePostagem(
   }
 }
 
-// Filtro inicial das publicações no banco.
 export async function getPostVisibilityWhere(
   viewerUsuarioId?: string | null
 ): Promise<Prisma.PostagemWhereInput> {
@@ -87,13 +83,11 @@ export async function getPostVisibilityWhere(
       visibilidade: VisibilidadePostagem.LOGADO,
     },
     {
-      // Posts pessoais do próprio usuário.
       usuarioId: viewerUsuarioId,
       organizacaoId: null,
     },
   ];
 
-  // Publicações pessoais dos usuários seguidos.
   if (pessoasIds.length > 0) {
     permitido.push({
       organizacaoId: null,
@@ -104,7 +98,6 @@ export async function getPostVisibilityWhere(
     });
   }
 
-  // Publicações de organizações seguidas.
   if (organizacoesIds.length > 0) {
     permitido.push({
       visibilidade: VisibilidadePostagem.SEGUIDORES,
@@ -114,8 +107,6 @@ export async function getPostVisibilityWhere(
     });
   }
 
-  // Publicações privadas da organização ativa,
-  // sujeitas a uma segunda verificação de permissão.
   if (
     contexto?.kind === "ORGANIZATION" &&
     contexto.organizationId
@@ -139,7 +130,6 @@ export async function getPostVisibilityWhere(
   };
 }
 
-// Verificação completa de acesso à publicação.
 export async function podeVisualizarPostagem(
   post: {
     usuarioId: string | null;
@@ -153,9 +143,6 @@ export async function podeVisualizarPostagem(
     return false;
   }
 
-  // ====================================
-  // PUBLICAÇÃO INSTITUCIONAL
-  // ====================================
   if (post.organizacaoId) {
     if (
       post.visibilidade ===
@@ -175,9 +162,6 @@ export async function podeVisualizarPostagem(
       return true;
     }
 
-    // O gestor da organização pode ver
-    // seus próprios conteúdos, inclusive
-    // aqueles restritos a seguidores.
     const contexto = await getActiveContext(
       viewerUsuarioId
     );
@@ -217,15 +201,10 @@ export async function podeVisualizarPostagem(
       return Boolean(segueOrganizacao);
     }
 
-    // PRIVADO: somente gestor autorizado.
     return false;
   }
 
-  // ====================================
-  // PUBLICAÇÃO PESSOAL
-  // ====================================
   if (!post.usuarioId) {
-    // Publicação pessoal sem autor válido.
     return false;
   }
 
@@ -249,7 +228,6 @@ export async function podeVisualizarPostagem(
     return false;
   }
 
-  // Autor pessoal pode ver suas publicações.
   if (post.usuarioId === viewerUsuarioId) {
     return true;
   }

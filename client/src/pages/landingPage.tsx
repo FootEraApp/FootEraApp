@@ -1,4 +1,3 @@
-// client/src/pages/landingPage.tsx
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Instagram, Facebook } from "lucide-react";

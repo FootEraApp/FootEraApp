@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/treino/treino-metodologia.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { MoreVertical, X } from "lucide-react";

@@ -113,14 +113,6 @@ export function syncSocketAuth(
 }
 
 export function syncSocketContext() {
-  /*
-   * Se estiver desconectado,
-   * não precisamos forçar conexão.
-   *
-   * Na próxima conexão o backend
-   * já resolverá o ActiveContext
-   * atual automaticamente.
-   */
   if (!socket.connected) {
     return;
   }

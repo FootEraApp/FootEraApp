@@ -1215,8 +1215,6 @@ export async function participarEvento(
       });
     }
 
-    // Serializa inscricoes do mesmo evento no PostgreSQL.
-    // A contagem e a inscricao ocorrem na mesma transacao.
     const resultado = await prisma.$transaction(
       async (tx) => {
         const linhas = await tx.$queryRaw<
@@ -1234,7 +1232,6 @@ export async function participarEvento(
           };
         }
 
-        // Reconsulta depois de obter o bloqueio.
         const eventoAtual = await tx.evento.findUnique({
           where: { id: eventoId },
         });
@@ -1265,7 +1262,6 @@ export async function participarEvento(
             },
           });
 
-        // Repetir a solicitacao nao cria outra inscricao.
         if (
           existenteAtual &&
           existenteAtual.status !== "CANCELADA"
@@ -1306,8 +1302,6 @@ export async function participarEvento(
           eventoAtual.valorInscricao ?? 0
         );
 
-        // Eventos pagos nunca geram inscricao gratuita.
-        // Validade financeira continua a cargo do billing.
         if (
           !Number.isFinite(valorAtual) ||
           valorAtual < 0

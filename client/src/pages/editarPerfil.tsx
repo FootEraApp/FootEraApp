@@ -1,4 +1,3 @@
-// client/src/pages/editarPerfil
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
@@ -729,8 +728,6 @@ const EditarPerfil = () => {
           respostaContextos.data?.activeContext?.key ?? null
         );
       } catch (error: any) {
-        // Enquanto o endpoint de papéis ainda não estiver publicado, a página
-        // continua funcionando com o tipo atual vindo do perfil.
         if (error?.response?.status !== 404) {
           console.warn(
             "[EditarPerfil] Não foi possível carregar os papéis",
@@ -960,11 +957,6 @@ const EditarPerfil = () => {
         );
       } catch {
         if (!cancelado) {
-          /*
-          * Em caso de falha não alteramos
-          * dados no frontend, mas o backend
-          * continuará sendo a autoridade.
-          */
           setContaSupervisionada(
             false
           );
@@ -1060,8 +1052,6 @@ const EditarPerfil = () => {
         return;
       }
 
-      // Não usamos o formulário pessoal para editar
-      // uma organização sem identificar a entidade.
       setDadosTipo({});
       return;
     }
@@ -1135,7 +1125,6 @@ const EditarPerfil = () => {
       return;
     }
 
-    // Organizações possuem fluxo próprio de criação.
     const papelOrganizacional = [
       "Clube",
       "Escolinha",
@@ -1144,7 +1133,6 @@ const EditarPerfil = () => {
     ].includes(perfil.papel);
 
     if (papelOrganizacional) {
-      // Abrir o formulário sem criar um UsuarioPapel incompleto.
       setTipoNovaOrganizacao(perfil.papel);
 
       setDadosNovaOrganizacao({
@@ -1160,7 +1148,6 @@ const EditarPerfil = () => {
       return;
     }
 
-    // Fluxo original dos papéis pessoais.
     const registroAnterior = papeisUsuario.find(
       (item) => item.papel === perfil.papel
     );
@@ -2927,8 +2914,6 @@ const EditarPerfil = () => {
                     const tipo: any = { ...dadosTipo };
 
                     if (tipoRender === "atleta") {
-                      // A idade do atleta é calculada pelo backend a partir da
-                      // data de nascimento; não enviamos idade digitada.
                       delete tipo.idade;
                     }
 
@@ -3011,19 +2996,12 @@ const EditarPerfil = () => {
                           : dadosUsuario.foto,
 
                       nomeDeUsuario: usernameFinal || null,
-
                       cep: cepFinal === "" ? null : cepFinal,
-
-                      // Só permite atualizar a data nos perfis
-                      // em que o campo é exibido.
-                      // Nos demais, preserva a data já cadastrada.
                       ...(exigeDataNascimento && dataNascimentoFinal
                         ? { dataNascimento: dataNascimentoFinal }
                         : {}),
                     };
 
-                    // Remove a propriedade herdada de dadosUsuario
-                    // quando o perfil não edita data de nascimento.
                     if (!exigeDataNascimento) {
                       delete usuarioPayload.dataNascimento;
                     }

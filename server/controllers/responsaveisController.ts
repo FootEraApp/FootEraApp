@@ -233,7 +233,6 @@ async function notificarDesvinculoResponsavel(
     select: { nome: true, nomeDeUsuario: true },
   }).catch(() => null);
   const nomeResponsavel = usuarioQueSaiu?.nome || usuarioQueSaiu?.nomeDeUsuario || "Um responsável";
-  // Notifica o atleta sobre o encerramento do vínculo.
   try {
     await criarNotificacaoEEnviarPush({
       usuarioId: atletaUsuarioId,
@@ -251,7 +250,6 @@ async function notificarDesvinculoResponsavel(
     );
   }
 
-  // Notifica o novo principal, se houver transferência.
   if (
     novoPrincipalUsuarioId &&
     novoPrincipalUsuarioId !== responsavelUsuarioId
@@ -499,10 +497,6 @@ export async function listarMeusAtletas(
                         OrigemSolicitacaoResponsavel.ATLETA,
                     },
 
-                    /*
-                    * Compatibilidade com solicitações
-                    * criadas antes deste campo existir.
-                    */
                     {
                     origemSolicitacao:
                         null,
@@ -1765,11 +1759,6 @@ export async function listarPostagensAtletaGerenciado(
               vinculo.atleta
                 .usuarioId,
 
-            /*
-             * Não exibimos como conteúdo
-             * da criança posts publicados
-             * em nome de organização.
-             */
             organizacaoId:
               null,
           },
@@ -1983,12 +1972,6 @@ export async function solicitarExclusaoContaAtleta(
         });
     }
 
-    /*
-     * Exclusão da conta é uma ação
-     * muito sensível.
-     *
-     * Apenas o responsável principal.
-     */
     if (
       vinculo.principal !==
       true
@@ -2042,12 +2025,6 @@ export async function solicitarExclusaoContaAtleta(
         });
     }
 
-    /*
-     * Para evitar exclusão acidental,
-     * o responsável precisa digitar
-     * exatamente o nome de usuário
-     * da criança.
-     */
     const username =
       String(
         vinculo.atleta
@@ -2225,10 +2202,6 @@ export async function solicitarVinculoResponsavel(
         });
     }
 
-    /*
-     * Confirma que o destino realmente
-     * possui papel Responsavel ativo.
-     */
     const responsavel =
       await prisma.usuario.findFirst({
         where: {
@@ -2315,10 +2288,6 @@ export async function solicitarVinculoResponsavel(
       atleta.idade ??
       null;
 
-    /*
-     * Este fluxo foi criado para
-     * supervisão de menor de 12.
-     */
     if (
       idade === null
     ) {
@@ -2349,9 +2318,6 @@ export async function solicitarVinculoResponsavel(
           },
         });
 
-    /*
-     * Já existe vínculo ativo.
-     */
     if (
       existente?.status ===
       StatusResponsavelAtleta.ATIVO
@@ -2367,9 +2333,6 @@ export async function solicitarVinculoResponsavel(
         });
     }
 
-    /*
-     * Já existe solicitação aguardando.
-     */
     if (
       existente?.status ===
       StatusResponsavelAtleta.PENDENTE
@@ -2385,10 +2348,6 @@ export async function solicitarVinculoResponsavel(
         });
     }
 
-    /*
-     * Um vínculo REVOGADO pode receber
-     * uma nova solicitação.
-     */
     const vinculo =
       await prisma
         .responsavelAtleta
@@ -2471,11 +2430,6 @@ export async function solicitarVinculoResponsavel(
         .nomeDeUsuario ||
       "Um atleta";
 
-    /*
-     * A solicitação já foi criada.
-     * Falha de notificação não deve
-     * desfazer o vínculo pendente.
-     */
     try {
       await criarNotificacaoEEnviarPush({
         usuarioId:
@@ -2886,11 +2840,6 @@ export async function solicitarVinculoAtletaComoResponsavel(
         });
     }
 
-    /*
-     * Só permitimos que um adulto solicite
-     * vínculo quando a criança já possui
-     * responsável principal ativo.
-     */
     const responsavelPrincipal =
       await prisma
         .responsavelAtleta
@@ -2914,8 +2863,6 @@ export async function solicitarVinculoAtletaComoResponsavel(
           },
         });
 
-    // Para menores de 12 anos, uma solicitação iniciada por adulto
-    // só pode ser encaminhada se existir principal ativo.
     if (!responsavelPrincipal && idade < 12) {
       return res.status(409).json({
         code: "PRIMARY_GUARDIAN_REQUIRED",
@@ -3074,7 +3021,6 @@ export async function solicitarVinculoAtletaComoResponsavel(
       );
     }
 
-    // O atleta é sempre informado. Se tiver >=12 anos, também pode decidir.
     try {
       await criarNotificacaoEEnviarPush({
         usuarioId: atletaUsuarioId,
@@ -3292,9 +3238,6 @@ export async function listarSolicitacoesNovosResponsaveis(
   }
 }
 
-/** Decide pedidos iniciados por responsável.
- * Atleta com >=12 ou principal ativo pode responder. Somente a primeira decisão vale.
- */
 async function decidirNovoResponsavel(
   req: AuthRequest,
   res: Response,
@@ -3310,8 +3253,6 @@ async function decidirNovoResponsavel(
     const vinculoId = String(req.params.vinculoId ?? "").trim();
     if (!vinculoId) return res.status(400).json({ message: "Solicitação inválida." });
 
-    // A transação serializa as decisões por atleta e evita que duas
-    // solicitações diferentes se tornem principais simultaneamente.
     const resultado = await prisma.$transaction(async (tx) => {
       const original = await tx.responsavelAtleta.findUnique({
         where: { id: vinculoId },
@@ -3325,7 +3266,6 @@ async function decidirNovoResponsavel(
         },
       });
       if (!original) return { erro: 404, message: "Solicitação não encontrada." } as const;
-      // Mantém decisões de um mesmo atleta em ordem no PostgreSQL.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${original.atletaId}))::text`;
       const solicitacao = await tx.responsavelAtleta.findUnique({ where: { id: vinculoId } });
       if (solicitacao?.status !== StatusResponsavelAtleta.PENDENTE ||
@@ -3363,8 +3303,6 @@ async function decidirNovoResponsavel(
           principal: aceitar && !principal,
           confirmadoEm: aceitar ? new Date() : null,
           revogadoEm: aceitar ? null : new Date(),
-          // Primeiro vínculo de atleta >=12 não concede controle
-          // irrestrito de perfil ou conteúdo automaticamente.
         },
       });
       if (updated.count !== 1)
@@ -3409,7 +3347,6 @@ async function decidirNovoResponsavel(
         mensagem: `${decisor} ${acao} o pedido de ${resultado.nomeSolicitante} para ser responsável por ${resultado.nomeAtleta}.`,
       }] : []),
     ];
-    // Não criar notificação para o ator sobre sua própria decisão.
     await Promise.allSettled(destinatarios.filter(d => d.id !== usuarioId).map(d =>
       criarNotificacaoEEnviarPush({
         usuarioId: d.id,
@@ -3840,10 +3777,6 @@ export async function desvincularGoogleAtleta(
         });
     }
 
-    /*
-     * Não deixa o responsável remover
-     * o único método de autenticação.
-     */
     if (
       !usuario.localLoginEnabled
     ) {
@@ -4414,12 +4347,6 @@ export async function desvincularResponsavelComoAtleta(
         });
     }
 
-    /*
-     * Aos 12 anos ou mais,
-     * o atleta passa a ter autonomia
-     * e pode remover qualquer vínculo,
-     * inclusive o principal.
-     */
     const agora =
       new Date();
 
@@ -4691,10 +4618,6 @@ export async function desvincularMeuAtletaComoResponsavel(
         },
       });
 
-    /*
-     * Secundário:
-     * pode sair diretamente.
-     */
     if (
       vinculoAtual.principal !==
       true
@@ -4759,10 +4682,6 @@ export async function desvincularMeuAtletaComoResponsavel(
       });
     }
 
-    /*
-     * Principal sem outros responsáveis:
-     * pode sair e o atleta fica sem principal.
-     */
     if (
       outrosResponsaveis.length ===
       0
@@ -4827,10 +4746,6 @@ export async function desvincularMeuAtletaComoResponsavel(
       });
     }
 
-    /*
-     * Principal com apenas um sucessor:
-     * promoção automática.
-     */
     if (
       outrosResponsaveis.length ===
       1
@@ -4922,10 +4837,6 @@ export async function desvincularMeuAtletaComoResponsavel(
       });
     }
 
-    /*
-     * Principal com vários possíveis sucessores:
-     * precisa escolher.
-     */
     if (
       !novoPrincipalVinculoId
     ) {
@@ -5059,7 +4970,6 @@ export async function desvincularMeuAtletaComoResponsavel(
   }
 }
 
-// Validação de ID para a prévia do formulário "Solicitar responsável".
 export async function consultarResponsavelPorId(req: AuthRequest, res: Response) {
   try {
     const usuarioId = getUsuarioId(req, res);
@@ -5108,7 +5018,6 @@ export async function atualizarParentescoComoAtleta(req: AuthRequest, res: Respo
   }
 }
 
-/** Responsável principal encerra vínculo de um responsável secundário. */
 export async function desvincularResponsavelSecundarioComoPrincipal(
   req: AuthRequest,
   res: Response

@@ -264,10 +264,6 @@ export default function ProfilePostsSection({
         ""
       ).trim();
 
-    /*
-    * No próprio perfil não precisamos
-    * verificar vínculo de responsável.
-    */
     if (
       !token ||
       !alvoUsuarioId ||
@@ -698,8 +694,6 @@ export default function ProfilePostsSection({
         );
 
         dados = (dados || []).filter((post) => {
-          // Publicações institucionais pertencem à organização,
-          // independentemente de qual membro as publicou.
           if (organizacaoId) {
             return (
               String(post.organizacaoId ?? "") ===
@@ -707,7 +701,6 @@ export default function ProfilePostsSection({
             );
           }
 
-          // Publicações pessoais pertencem ao papel utilizado.
           if (papel) {
             return (
               String(post.usuarioId ?? post.usuario?.id ?? "") ===

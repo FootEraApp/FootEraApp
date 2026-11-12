@@ -1,4 +1,3 @@
-// client/src/pages/learning/evento/sala-copa.tsx
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState } from "react";
 import {

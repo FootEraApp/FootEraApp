@@ -1,4 +1,3 @@
-// server/controlllers/gerenciarController
 import { StatusUsuarioPapel, TipoUsuario, Prisma, Categoria, AvaliacaoAutorTipo } from "@prisma/client";
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";

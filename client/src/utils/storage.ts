@@ -1,4 +1,3 @@
-// client/src/utils/storage
 const getFromStorage = (key: string): string | null => {
   return localStorage.getItem(key) || sessionStorage.getItem(key);
 };

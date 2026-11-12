@@ -20,8 +20,6 @@ setup("login admin (salva sessão)", async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-
-    // O login.tsx usa window.Cypress para pular alguns efeitos no E2E.
     // @ts-ignore
     window.Cypress = true;
 

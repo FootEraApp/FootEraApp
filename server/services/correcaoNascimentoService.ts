@@ -88,8 +88,6 @@ export async function solicitarCorrecaoNascimento(args: {
     );
   }
 
-  // Bloqueia o registro do usuário dentro da transação.
-  // Isso serializa solicitações simultâneas da mesma conta.
   return prisma.$transaction(
     async (tx) => {
       const linhas = await tx.$queryRaw<
@@ -343,9 +341,6 @@ export async function decidirCorrecaoNascimento(args: {
 
   return prisma.$transaction(
     async (tx) => {
-      // Garante que o operador ainda possui privilégio
-      // administrativo, mesmo se o serviço for chamado
-      // fora de uma rota HTTP protegida.
       const administrador = await tx.administrador.findUnique({
         where: { usuarioId: administradorId },
         select: { id: true },
@@ -359,9 +354,6 @@ export async function decidirCorrecaoNascimento(args: {
         );
       }
 
-      // Localiza o dono para bloquear primeiro Usuario,
-      // mantendo a mesma ordem de bloqueio da criação
-      // de solicitações.
       const referencia =
         await tx.solicitacaoCorrecaoNascimento.findUnique({
           where: { id: solicitacaoId },
@@ -438,7 +430,6 @@ export async function decidirCorrecaoNascimento(args: {
         solicitacao.dataSolicitada.toISOString().slice(0, 10);
 
       if (args.decisao === "APROVAR") {
-        // Revalida a data no momento da decisão.
         const nascimento = analisarDataCivil(
           nascimentoSolicitado
         );
@@ -502,8 +493,6 @@ export async function decidirCorrecaoNascimento(args: {
                 gte: documento.criadoEm,
               },
 
-              // O acesso precisa pertencer ao
-              // documento exato da solicitação.
               meta: {
                 path: ["documentoId"],
                 equals: documento.id,
@@ -526,8 +515,6 @@ export async function decidirCorrecaoNascimento(args: {
         const idade = calcularIdadePorNascimento(nascimento);
         const categoria = categoriaAtletaPorIdade(idade);
 
-        // Proteção para correções de nascimento de atletas
-        // que passam a ter menos de 12 anos.
         if (idade < 12) {
           const atleta = await tx.atleta.findUnique({
             where: {
@@ -586,7 +573,6 @@ export async function decidirCorrecaoNascimento(args: {
           }
         }
 
-        // Não diminuir uma carência já existente.
         const novaCarencia = new Date(
           agora.getTime() + 30 * 24 * 60 * 60 * 1000
         );
@@ -605,10 +591,6 @@ export async function decidirCorrecaoNascimento(args: {
           data: {
             dataNascimento: nascimento,
             aniversarioElegivelApartirDe: elegivelApartirDe,
-
-            // Se a correção indicar um atleta com menos
-            // de 12 anos, invalida as sessões existentes.
-            // O usuário precisará autenticar-se novamente.
             ...(idade < 12
               ? {
                   tokenVersion: {
@@ -659,8 +641,6 @@ export async function decidirCorrecaoNascimento(args: {
         },
       });
 
-      // Auditoria obrigatória na mesma transação.
-      // Se falhar, toda a decisão é revertida.
       await tx.logAuditoria.create({
         data: {
           usuarioId: administradorId,

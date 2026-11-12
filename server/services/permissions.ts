@@ -175,11 +175,6 @@ async function permissoesAtivas(
     return [];
   }
 
-  /*
-   * Admin global FootEra continua sendo
-   * admin global independentemente do
-   * contexto selecionado.
-   */
   if (
     usuario.administrador
   ) {
@@ -225,16 +220,12 @@ async function permissoesAtivas(
     return [];
   }
 
-  // O papel Admin, isoladamente, não concede
-  // permissões administrativas.
-  // É obrigatório existir um registro Administrador.
   if (papel === TipoUsuario.Admin) {
     return [];
   }
 
   return permissoesDoPapel(papel);
 }
-
 
 export async function canPermission(
   usuarioId: string,

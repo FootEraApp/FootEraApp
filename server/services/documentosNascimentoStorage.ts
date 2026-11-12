@@ -1,10 +1,7 @@
-// server/services/documentosNascimentoStorage.ts
-
 import {
   randomUUID,
   createHash,
 } from "node:crypto";
-
 import {
   S3Client,
   PutObjectCommand,
@@ -65,7 +62,6 @@ function obterBucketPrivado(): string {
   return privado;
 }
 
-/** Adaptador usado somente por testes QA locais. Nunca habilitar em produção. */
 export type ArmazenamentoNascimentoQA = {
   gravar: (key: string, bytes: Buffer, mimeType: TipoDocumentoNascimento) => Promise<void>;
   ler: (key: string) => Promise<Buffer>;
@@ -87,7 +83,6 @@ function ambienteQaLocal(): boolean {
   } catch { return false; }
 }
 
-/** Injetado por um teste, em processo isolado. null remove o adaptador. */
 export function configurarArmazenamentoNascimentoQa(
   implementacao: ArmazenamentoNascimentoQA | null
 ): void {
@@ -98,8 +93,6 @@ export function configurarArmazenamentoNascimentoQa(
 }
 
 export function documentosNascimentoDisponiveis(): boolean {
-  // Preserva os testes isolados com armazenamento
-  // em memória, sem acessar a AWS.
   if (armazenamentoQa && ambienteQaLocal()) {
     return true;
   }
@@ -110,8 +103,6 @@ export function documentosNascimentoDisponiveis(): boolean {
     return false;
   }
 
-  // Em produção, não aceitar novos documentos
-  // sem o processo responsável pela análise.
   if (process.env.NODE_ENV === "production") {
     if (
       process.env.ENABLE_BIRTH_DOCUMENT_WORKER !== "true" ||
@@ -279,7 +270,6 @@ export async function listarObjetosNascimentoS3(
   }>;
   nextToken?: string;
 }> {
-  // Esta operação é exclusiva do armazenamento real.
   if (process.env.NODE_ENV !== "production") {
     throw new Error(
       "BIRTH_DOCUMENT_S3_LIST_PRODUCTION_ONLY"

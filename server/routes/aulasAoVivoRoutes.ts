@@ -1,4 +1,3 @@
-// server/routes/aulasAoVivoRoutes
 import { Router } from "express";
 import {
   getAulaAoVivo,

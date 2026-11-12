@@ -1,4 +1,3 @@
-// server/controllers/explorarController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { calcularPerfilVerificado } from "../utils/perfilVerificado.js";
@@ -332,8 +331,6 @@ async function filtrarPorPapelAtivo<T>(
           usuarioId
         ) ?? [];
 
-      // Usuário já migrado:
-      // UsuarioPapel é fonte de verdade.
       if (registros.length > 0) {
         return registros.some(
           (registro) =>
@@ -345,7 +342,6 @@ async function filtrarPorPapelAtivo<T>(
         );
       }
 
-      // Usuário legado ainda sem UsuarioPapel.
       return (
         tipoLegado.get(
           usuarioId

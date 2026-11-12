@@ -47,11 +47,6 @@ async function esperarServiceWorkerReady(
     );
   }
 
-  // Em produção usamos o SW gerado pelo vite-plugin-pwa.
-  // Ele já importa /push-handler.js pelo vite.config.ts.
-  //
-  // Em desenvolvimento o generateSW está desativado,
-  // então podemos usar diretamente o push-handler.js.
   const workerPath =
     import.meta.env.PROD
       ? "/sw.js"

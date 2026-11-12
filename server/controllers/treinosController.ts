@@ -434,8 +434,6 @@ export async function iniciarTreinoPublico(
       });
     }
 
-    // Não permitir burlar conteúdo de Learning/metodologia
-    // usando diretamente o link público do treino.
     if (treinoProgramado.metodologia) {
       return res.status(403).json({
         code: "LEARNING_REQUIRED",
@@ -1533,13 +1531,6 @@ async function resolverEscopoTreino(
     return null;
   }
 
-  /*
-   * Contexto de organização.
-   *
-   * Clube FootEra — Proprietário
-   * Clube FootEra — Professor
-   * Escolinha X — Professor
-   */
   if (
     contexto.kind ===
       "ORGANIZATION" &&
@@ -1617,9 +1608,6 @@ async function resolverEscopoTreino(
     }
   }
 
-  /*
-   * Contexto pessoal.
-   */
   if (
     contexto.kind ===
     "PERSONAL"
@@ -2084,11 +2072,6 @@ async function buildTreinosWhereByLogin(
     return {};
   }
 
-  /*
-   * Professor pessoal:
-   * somente treinos próprios ou
-   * onde é colaborador.
-   */
   if (
     escopo.tipo ===
       "professor" &&
@@ -2113,13 +2096,6 @@ async function buildTreinosWhereByLogin(
     };
   }
 
-  /*
-   * Clube ativo.
-   *
-   * Não mistura automaticamente
-   * outros Clubes em que o Professor
-   * dessa conta trabalha.
-   */
   if (
     escopo.tipo ===
       "clube" &&
@@ -2142,12 +2118,6 @@ async function buildTreinosWhereByLogin(
     };
   }
 
-  /*
-   * Atleta:
-   * continua podendo visualizar
-   * treinos disponíveis por seus
-   * vínculos atuais.
-   */
   if (
     escopo.tipo ===
       "atleta"
@@ -2187,10 +2157,6 @@ async function buildTreinosWhereByLogin(
     if (
       ctx.professores.length
     ) {
-      /*
-      * Professor principal/legado
-      * associado ao treino.
-      */
       or.push({
         professorId: {
           in:
@@ -2198,10 +2164,6 @@ async function buildTreinosWhereByLogin(
         },
       });
 
-      /*
-      * Professor que efetivamente
-      * criou o treino.
-      */
       or.push({
         criadorProfessorId: {
           in:
@@ -2209,10 +2171,6 @@ async function buildTreinosWhereByLogin(
         },
       });
 
-      /*
-      * Professores colaboradores
-      * associados ao treino.
-      */
       or.push({
         professores: {
           some: {
@@ -2740,14 +2698,6 @@ export async function salvarTreinoNaBiblioteca(
         });
     }
 
-    /*
-     * O limite pertence à criança,
-     * não ao responsável.
-     *
-     * Por enquanto usamos FREE como
-     * fallback. Depois podemos resolver
-     * o plano real do contexto Atleta.
-     */
     const planoAtleta =
       "FREE";
 
@@ -3700,9 +3650,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
       let temVinc =
         false;
 
-      /*
-      * Professor pessoal.
-      */
       if (
         escopo.tipo ===
           "professor" &&
@@ -3733,9 +3680,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           );
       }
 
-      /*
-      * Clube ativo.
-      */
       if (
         escopo.tipo ===
           "clube" &&
@@ -3778,9 +3722,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           );
       }
 
-      /*
-      * Escolinha ativa.
-      */
       if (
         escopo.tipo ===
           "escolinha" &&
@@ -3823,10 +3764,6 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
           );
       }
 
-      /*
-      * Observação também precisa
-      * pertencer ao contexto atual.
-      */
       let ehObservado =
         false;
 
@@ -3929,12 +3866,7 @@ export async function agendarTreino(req: AuthenticatedRequest, res: Response) {
         !ehObservado &&
         !vinculoDireto
       ) {
-        /*
-        * Se veio uma turma específica,
-        * atleta precisa ser membro dela
-        * E a turma precisa pertencer
-        * ao contexto ativo.
-        */
+
         if (turmaId) {
           const membro =
             await prisma
@@ -5178,8 +5110,6 @@ export async function concluirTreino(
     const jaAprovadaAntes =
       existenteSub?.aprovado === true;
 
-    // As estatísticas só são processadas após
-    // a confirmação bem-sucedida da transação.
     if (aprovadoAgora && !jaAprovadaAntes) {
       if (agendado.treinoProgramadoId) {
         try {

@@ -1,4 +1,3 @@
-// server/routes/metodologiasRoutes.ts
 import { Router } from "express";
 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";
 import {

@@ -76,11 +76,6 @@ async function resolverAtletaAtivo(
 }
 
 export const treinosLivresController = {
-  /**
-   * GET /api/treinos-livres
-   *
-   * Lista o histórico do atleta selecionado.
-   */
   async index(req: Request, res: Response) {
     try {
       const atletaIdSolicitado =
@@ -151,11 +146,6 @@ export const treinosLivresController = {
     }
   },
 
-  /**
-   * GET /api/treinos-livres/:id
-   *
-   * Consulta um treino livre específico.
-   */
   async show(req: Request, res: Response) {
     try {
       const atletaIdSolicitado =
@@ -216,14 +206,6 @@ export const treinosLivresController = {
     }
   },
 
-  /**
-   * POST /api/treinos-livres
-   *
-   * Registra um treino livre com limite diário.
-   *
-   * O limite pertence ao atleta, nunca
-   * ao responsável que registra o treino.
-   */
   async create(req: Request, res: Response) {
     try {
       const atletaAtivo = await resolverAtletaAtivo(
@@ -249,10 +231,6 @@ export const treinosLivresController = {
         categoria,
       } = req.body as any;
 
-      /**
-       * O atletaId sempre vem do
-       * contexto validado pelo backend.
-       */
       const atletaId = atletaAtivo.atletaId;
 
       const atletaExiste = await prisma.atleta.findUnique({
@@ -311,10 +289,6 @@ export const treinosLivresController = {
         });
       }
 
-      /**
-       * Um treino livre precisa ter sido
-       * realizado na data informada.
-       */
       if (dataTreino.getTime() > Date.now()) {
         return res.status(400).json({
           code: "FUTURE_TRAINING_DATE",
@@ -344,15 +318,6 @@ export const treinosLivresController = {
         ? `/uploads/treinos-livres/${file.filename}`
         : null;
 
-      /**
-       * NOVA REGRA:
-       *
-       * Confere a cota diária e grava o
-       * treino livre na mesma transação.
-       *
-       * O serviço identifica se o atleta
-       * possui PRO ou Learning.
-       */
       const novo = await executarComLimiteDiarioTreinos({
         atletaId,
         data: dataTreino,
@@ -385,13 +350,6 @@ export const treinosLivresController = {
         },
       });
 
-      /**
-       * Mantém o recálculo existente
-       * da pontuação do atleta.
-       *
-       * Executado somente depois de
-       * salvar o treino com sucesso.
-       */
       try {
         await recomputePontuacaoAtleta(atletaId);
       } catch (error) {
@@ -403,10 +361,6 @@ export const treinosLivresController = {
 
       return res.status(201).json(novo);
     } catch (error) {
-      /**
-       * Resposta específica quando o
-       * atleta ultrapassar a cota.
-       */
       const limite = respostaErroLimiteDiario(error);
 
       if (limite) {
@@ -434,12 +388,6 @@ export const treinosLivresController = {
     }
   },
 
-  /**
-   * DELETE /api/treinos-livres/:id
-   *
-   * Mantém a autorização e exclusão
-   * utilizadas no controller original.
-   */
   async delete(req: Request, res: Response) {
     try {
       const atletaIdSolicitado =
@@ -470,10 +418,6 @@ export const treinosLivresController = {
         });
       }
 
-      /**
-       * Primeiro confere se o treino
-       * pertence ao atleta autorizado.
-       */
       const treino = await prisma.treinoLivre.findFirst({
         where: {
           id,

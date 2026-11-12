@@ -1,24 +1,8 @@
-// server/services/billingEstornoMercadoPagoGateway.ts
 import { prisma } from "../prisma.js";
 import { Prisma } from "@prisma/client";
-
 import {
   consultarEstornosPagamentoMercadoPago,
 } from "./billingConciliacaoMercadoPagoService.js";
-
-/**
- * Gateway de consulta dos estornos de eventos.
- *
- * SEGURANÇA:
- * - Consulta somente estornos existentes.
- * - Não cria novas solicitações de estorno.
- * - Não altera o banco de dados.
- * - Não confirma compensações.
- * - Não concede nem revoga benefícios.
- *
- * O envio real permanece desabilitado até
- * a homologação da operação externa.
- */
 
 export type EvidenciaEstornoMercadoPago = {
   pagamentoProviderRef: string;
@@ -219,7 +203,6 @@ export async function testarTransporteEstornoMercadoPagoQa(
           Accept: "application/json",
         },
 
-        // Reembolso TOTAL: não informar amount.
         body: "{}",
         signal:
           AbortSignal.timeout(10000),
@@ -236,8 +219,6 @@ export async function testarTransporteEstornoMercadoPagoQa(
   }
 
   if (!response.ok) {
-    // HTTP com erro não comprova que o estorno
-    // deixou de ser executado pelo provedor.
     return {
         ...resultadoBase,
         resultado: "DESCONHECIDO",
@@ -375,8 +356,6 @@ export async function executarPostEstornoAutorizadoMercadoPago(
     );
   }
 
-  // A autorização será consumida antes do POST.
-  // A transação NÃO inclui nenhuma chamada HTTP.
   const autorizada = await prisma.$transaction(
     async (tx) => {
       const compensacao =
@@ -496,8 +475,6 @@ export async function executarPostEstornoAutorizadoMercadoPago(
       ) {
         return false;
       }
-      // Apenas uma chamada concorrente pode
-      // transformar NULL em data.
       const consumida =
         await tx.billingCompensacaoTentativa.updateMany({
           where: {
@@ -545,8 +522,6 @@ export async function executarPostEstornoAutorizadoMercadoPago(
     );
   }
 
-  // A autorização já foi persistida.
-  // Daqui em diante, uma falha não libera novo POST.
   const base = {
     pagamentoProviderRef: args.pagamentoProviderRef,
   };

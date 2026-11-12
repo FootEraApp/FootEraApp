@@ -1,4 +1,3 @@
-// server/index
 import express from "express";
 import cors from "cors";
 import path, { dirname } from "path";
@@ -603,7 +602,6 @@ async function revisarPagamentosMercadoPago() {
       const referencia =
         pagamento.providerRef ?? "";
 
-      // Preferencias nao sao IDs de pagamento.
       if (!/^\d+$/.test(referencia)) {
         continue;
       }
@@ -635,9 +633,7 @@ async function revisarPagamentosMercadoPago() {
             motivo: resultado.motivo,
           }
         );
-
-        // SOMENTE DIAGNOSTICO.
-        // Nao aprova nem cancela neste scheduler.
+        
       } catch (error) {
         console.error(
           "[mp-conciliacao] Falha na consulta:",

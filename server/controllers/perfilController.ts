@@ -1,4 +1,3 @@
-// server/controllers/perfilController
 import { Request, Response } from "express";
 import {
   Categoria,
@@ -7,7 +6,6 @@ import {
   StatusUsuarioPapel,
   TipoUsuario,
   TipoOrganizacao,
-  StatusResponsavelAtleta,
 } from "@prisma/client";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireUsage } from "server/lib/usage.js";
@@ -813,11 +811,6 @@ export const getPerfilUsuarioMe =
           });
       }
 
-      /*
-       * Quando o contexto ativo é
-       * organizacional, /perfil/me
-       * representa a organização.
-       */
       if (
         activeContext.kind ===
         "ORGANIZATION"
@@ -873,11 +866,6 @@ export const getPerfilUsuarioMe =
         }
       }
 
-      /*
-       * Só sincroniza categoria quando
-       * o perfil ativo é realmente
-       * Atleta.
-       */
       if (
         activeContext
           .tipoUsuario ===
@@ -2214,8 +2202,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         (papel) => papel === String(usuario.tipo),
       );
 
-      // Compatibilidade temporária com usuários antigos que ainda não tenham
-      // recebido a linha correspondente na tabela UsuarioPapel.
       if (!papelDoUsuario && !papelPrincipalEquivalente) {
         return res.status(404).json({
           code: "PROFILE_ROLE_NOT_FOUND",
@@ -2617,8 +2603,6 @@ export const getPerfilUsuario = async (req: Request, res: Response) => {
         "Responsavel";
     }
 
-    // Um papel PENDENTE ainda não possui sua tabela específica. Retornamos o
-    // papel solicitado com formulário vazio para que o proprietário o configure.
     if (tipoSolicitado && !tipoPerfil) {
       tipoPerfil = tipoSolicitado;
       dadosEspecificos = {};
@@ -3058,11 +3042,6 @@ export const atualizarPerfil = async (
       usuario = {
         ...usuario,
 
-        /*
-        * Menor de 12 não pode alterar
-        * sozinho dados de identidade,
-        * contato ou endereço.
-        */
         email:
           usuarioAtual.email,
 
@@ -3109,12 +3088,6 @@ export const atualizarPerfil = async (
       usuario = {
         ...usuario,
 
-        /*
-        * O responsável pode editar
-        * o perfil do atleta, mas não
-        * as credenciais/identidade
-        * sensíveis da conta.
-        */
         email:
           usuarioAtual.email,
 
@@ -3294,12 +3267,6 @@ export const atualizarPerfil = async (
       }
     }
 
-    // Primeira definição do nascimento:
-    // permitida apenas se o cadastro ainda não possui data.
-    //
-    // O updateMany condicional evita sobrescrever uma data
-    // que tenha sido definida por outra requisição concorrente.
-
     if (
       usuarioAtual.dataNascimento === null &&
       dataNascimentoFinal !== null
@@ -3312,9 +3279,6 @@ export const atualizarPerfil = async (
           },
           data: {
             dataNascimento: dataNascimentoFinal,
-
-            // A primeira definição não libera o cupom
-            // imediatamente. Aplica 30 dias de carência.
             aniversarioElegivelApartirDe: new Date(
               Date.now() + 30 * 24 * 60 * 60 * 1000
             ),
@@ -5540,11 +5504,6 @@ export const upgradeLearningProfile = async (
       const agora =
         new Date();
 
-
-      // PERFIS PESSOAIS:
-      // não permitir que um novo papel utilize uma
-      // data de nascimento diferente da conta principal.
-
       if (
         tipoValidado === "ATLETA" ||
         tipoValidado === "PROFESSOR" ||
@@ -5555,8 +5514,6 @@ export const upgradeLearningProfile = async (
             req.body?.dataNascimento
           );
 
-        // Bloqueia a linha da conta para serializar
-        // duas operações de cadastro simultâneas.
         await tx.$queryRaw`
           SELECT "id"
           FROM "Usuario"

@@ -1,4 +1,3 @@
-// client/src/pages/perfilUnico
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import axios from "axios";
@@ -95,9 +94,6 @@ export default function PerfilUnico() {
   const [location, navigate] = useLocation();
   const { requireAuth } = useAuthGate();
 
-  // O papel presente no link define qual perfil do usuário será exibido.
-  // Ex.: /perfil/:id?papel=Professor ou /perfil/:id?papel=Atleta.
-  // O backend normaliza e valida o valor recebido.
   const papelDaUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
 
@@ -287,8 +283,6 @@ export default function PerfilUnico() {
     ).trim();
 
     if (ehOrganizacao && !organizacaoId) {
-      // Não usar o ID do usuário como substituto
-      // para o ID da organização.
       return;
     }
 
@@ -497,8 +491,6 @@ export default function PerfilUnico() {
       ? PUBLIC_PATHS.organizacao(slugPerfil)
       : PUBLIC_PATHS.profile(slugPerfil);
 
-    // O compartilhamento precisa preservar o papel que está sendo visto.
-    // Sem isso, o destinatário cairia novamente no papel ativo de Usuario.tipo.
     const papelCompartilhado = String(tipo || papelDaUrl || "").trim();
 
     const sharePath = papelCompartilhado

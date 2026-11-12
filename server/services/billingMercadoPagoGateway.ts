@@ -42,9 +42,6 @@ function ambienteQaSeguro(): boolean {
   }
 }
 
-// Só pode ser usado pelo processo de testes QA.
-// A proteção é verificada tanto na instalação
-// quanto na execução do mock.
 export function configurarConsultorMercadoPagoQa(
   consultor: ConsultorPagamento | null
 ): void {
@@ -74,8 +71,6 @@ export async function obterPagamentoMercadoPago(
 
     return consultorQa(paymentId);
   }
-  // Ambiente QA: nunca fazer fallback para
-  // uma consulta externa quando o mock faltar.
   if (
     process.env.BILLING_CUPOM_RESERVA_QA === "true"
   ) {
@@ -105,10 +100,6 @@ type ConsultorEstornoQa = (
 
 let consultorEstornoQa: ConsultorEstornoQa | null = null;
 
-/**
- * Instala um simulador de consulta de estorno.
- * Não habilita nenhum endpoint real.
- */
 export function configurarConsultorEstornoQa(
   consultor: ConsultorEstornoQa | null
 ): void {
@@ -121,10 +112,6 @@ export function configurarConsultorEstornoQa(
   consultorEstornoQa = consultor;
 }
 
-/**
- * Consulta exclusivamente o simulador QA.
- * Nunca executa reembolso.
- */
 export async function obterEvidenciaEstornoQa(
   paymentId: string
 ): Promise<EvidenciaEstornoQa> {

@@ -261,10 +261,6 @@ export async function solicitarExclusaoConta(
         });
     }
 
-    /*
-     * Verifica se esta conta é de
-     * atleta menor supervisionado.
-     */
     const usuario =
       await prisma.usuario.findUnique({
         where: {
@@ -378,11 +374,6 @@ export async function solicitarExclusaoConta(
           .length >
         0;
 
-      /*
-       * Menor de 12 com responsável:
-       * a própria criança não pode
-       * excluir a conta.
-       */
       if (
         idade !== null &&
         idade < 12 &&
@@ -507,9 +498,6 @@ export async function consultarDiagnosticoExclusaoConta(
       });
     }
 
-    // Mesmo sem pendências de propriedade/Admin,
-    // o endpoint DELETE ainda executa suas demais
-    // verificações, incluindo menores supervisionados.
     return res.status(200).json({
       ok: true,
       diagnostico,

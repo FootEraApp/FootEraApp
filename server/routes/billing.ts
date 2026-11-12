@@ -56,10 +56,6 @@ router.get(
   getAulasAoVivoPagas
 );
 
-/*
- * DAQUI PARA BAIXO:
- * tudo exige autenticação.
- */
 router.use(authenticateToken);
 
 router.get(
@@ -133,10 +129,6 @@ router.post(
   switchPlan
 );
 
-/*
- * Continua privado.
- * Não faz sentido visitante poder resetar.
- */
 router.post(
   "/metodologias-avulsas/reset-dev",
   requireAdmin,

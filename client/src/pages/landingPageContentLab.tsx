@@ -1,4 +1,3 @@
-// client/src/pages/landingPageContentLab
 import React from "react";
 
 const servicos = [

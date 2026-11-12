@@ -27,13 +27,6 @@ function validarPagamentoId(
   }
 }
 
-/**
- * Identidade retirada da requisicao autenticada.
- * Nunca aceitar executorId enviado pelo cliente.
- *
- * A rota precisa usar:
- * authenticateToken + requireAdmin.
- */
 async function exigirOperadorHttpAutenticado(
   req: Request
 ): Promise<string> {
@@ -83,13 +76,6 @@ async function exigirOperadorHttpAutenticado(
   return executorId;
 }
 
-/**
- * Previa somente leitura.
- *
- * Nao cria tentativa.
- * Nao altera pagamento.
- * Nao executa estorno.
- */
 export async function consultarPreviaEstornoOperacional(
   pagamentoId: string,
   executorId: string
@@ -233,11 +219,7 @@ export async function consultarPreviaEstornoOperacional(
 
     preflightAprovado,
     motivoBloqueio,
-
-    // Preflight aprovado nao autoriza sozinho
-    // uma movimentacao financeira.
     execucaoRealHabilitada,
-
     estornoExecutado: false,
   };
 }
@@ -290,7 +272,6 @@ export async function executarEstornoOperacionalHttp(
 ) {
   validarPagamentoId(pagamentoId);
 
-  // Bloqueio independente do gateway.
   if (
     process.env.NODE_ENV !== "production" ||
     process.env.BILLING_CUPOM_RESERVA_QA === "true" ||
@@ -306,8 +287,6 @@ export async function executarEstornoOperacionalHttp(
     );
   }
 
-  // Confirmacao vinculada ao pagamento,
-  // ao valor e a referencia do provedor.
   const pagamentoConfirmacao =
     await prisma.pagamento.findUnique({
       where: {
@@ -354,16 +333,11 @@ export async function executarEstornoOperacionalHttp(
   const executorId =
     await exigirOperadorHttpAutenticado(req);
 
-  // Preflight evita um preparo desnecessario.
-  // A validacao definitiva acontece na
-  // transacao de aquisicao financeira.
   await validarAutorizacaoEstornoAntesDoPreparo(
     pagamentoId,
     executorId
   );
 
-  // Auditoria obrigatoria antes do orquestrador.
-  // Se falhar, a operacao nao prossegue.
   await prisma.logAuditoria.create({
     data: {
       usuarioId: executorId,
@@ -384,8 +358,6 @@ export async function executarEstornoOperacionalHttp(
     },
   });
 
-  // Este e o unico orquestrador que pode
-  // iniciar o POST de estorno real.
   try {
     const resultado =
       await executarEstornoRealControlado(
@@ -418,17 +390,10 @@ export async function executarEstornoOperacionalHttp(
       erro
     );
 
-    // Nao executar novamente a partir deste erro.
     throw erro;
   }
 }
 
-/**
- * Conciliacao de um estorno existente.
- *
- * Nao inicia um segundo POST.
- * Exige identidade financeira autorizada.
- */
 export async function conciliarEstornoOperacionalHttp(
   req: Request,
   pagamentoId: string
@@ -448,8 +413,6 @@ export async function conciliarEstornoOperacionalHttp(
   const executorId =
     await exigirOperadorHttpAutenticado(req);
 
-  // Auditoria obrigatoria antes de consultar
-  // o provedor.
   await prisma.logAuditoria.create({
     data: {
       usuarioId: executorId,
@@ -499,7 +462,6 @@ export async function conciliarEstornoOperacionalHttp(
       erro
     );
 
-    // A conciliacao nao autoriza novo POST.
     throw erro;
   }
 }

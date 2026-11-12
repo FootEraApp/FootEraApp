@@ -790,8 +790,6 @@ export async function deletarGrupo(
         (desafio) => desafio.id
       );
 
-      // Identifica os áudios vinculados ao grupo
-      // antes de apagar suas mensagens.
       const mensagensComAudio =
         await tx.mensagemGrupo.findMany({
           where: {
@@ -817,8 +815,6 @@ export async function deletarGrupo(
         ),
       ];
 
-      // Registra as pendências DURANTE a mesma transação.
-      // Se a transação falhar, nada é confirmado.
       for (const audioKey of chavesAudio) {
         await tx.exclusaoAudioMensagemPendente.upsert({
           where: {
@@ -831,7 +827,6 @@ export async function deletarGrupo(
         });
       }
 
-      // Agora pode apagar as mensagens do grupo.
       await tx.mensagemGrupo.deleteMany({
         where: {
           grupoId,

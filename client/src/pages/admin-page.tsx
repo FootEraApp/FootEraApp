@@ -1036,8 +1036,6 @@ async function carregarAutorizacaoEstornoAdmin(
       [pagamentoId]: dados.autorizacao,
     }));
   } catch (erro) {
-    // Uma autorizacao ainda nao solicitada
-    // retorna 404, sem representar falha financeira.
     const mensagem =
       erro instanceof Error ? erro.message : "";
 
@@ -1233,23 +1231,18 @@ async function executarAcaoAutorizacaoEstornoAdmin(
             : "Autorização revogada. Nenhum estorno foi executado.",
     }));
 
-    // A consulta posterior usa a rota ja existente.
-    // Atualiza a listagem sem realizar outro POST.
     await carregarPendenciasFinanceiras(
       pendenciasPagina,
       pendenciasStatus,
       pendenciasPagamentoId
     );
 
-    // Invalida a previa antiga apos qualquer alteracao.
     setPreviasEstornoAdmin((anterior) => {
       const novo = { ...anterior };
       delete novo[pagamentoId];
       return novo;
     });
 
-    // Consulta novamente o estado persistido.
-    // Nao repete o POST administrativo.
     try {
       const atualizada = await requisicaoEstornoAdmin(
         pagamentoId,

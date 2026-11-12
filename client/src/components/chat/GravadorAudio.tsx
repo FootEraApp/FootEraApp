@@ -1,4 +1,3 @@
-// client/src/components/chat/GravadorAudio.tsx
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Trash2 } from "lucide-react";
 

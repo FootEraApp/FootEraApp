@@ -236,7 +236,6 @@ export async function responderTransferenciaPropriedade(params: {
         );
       }
 
-      // Campo usuarioId dos modelos legados é UNIQUE.
       const jaPossuiMesmoTipo =
         organizacao.tipo === "CLUBE"
           ? await tx.clube.findFirst({
@@ -289,8 +288,6 @@ export async function responderTransferenciaPropriedade(params: {
           select: { id: true, ativo: true },
         });
 
-      // Reativação de vínculo existente acontece
-      // aqui por aceite expresso do destinatário.
       if (membroDestino) {
         await tx.membroOrganizacao.update({
           where: { id: membroDestino.id },
@@ -333,8 +330,6 @@ export async function responderTransferenciaPropriedade(params: {
         );
       }
 
-      // Atualiza o proprietário nos registros legados,
-      // impedindo que a sincronização restaure o antigo.
       const dadosTitular = {
         usuarioId: destinatario.id,
       };
@@ -380,7 +375,6 @@ export async function responderTransferenciaPropriedade(params: {
         );
       }
 
-      // Regularizar o Creator institucional da organização transferida.
       const creatorInstitucional = await tx.creator.findUnique({
         where: {
           organizacaoId: organizacao.id,
@@ -435,7 +429,6 @@ export async function responderTransferenciaPropriedade(params: {
         }
       }
 
-      // Identificar o papel institucional transferido.
       const papelOrganizacao =
         organizacao.tipo === "CLUBE"
           ? TipoUsuario.Clube
@@ -445,8 +438,6 @@ export async function responderTransferenciaPropriedade(params: {
               ? TipoUsuario.Marca
               : TipoUsuario.Federacao;
 
-      // Verificar se o antigo proprietário mantém acesso
-      // a outra organização ativa do mesmo tipo.
       const outrosVinculos = await tx.membroOrganizacao.count({
         where: {
           usuarioId: anterior.id,
@@ -461,8 +452,6 @@ export async function responderTransferenciaPropriedade(params: {
         },
       });
 
-      // Desativar o papel apenas quando não existir
-      // outra organização válida do mesmo tipo.
       if (outrosVinculos === 0) {
         await tx.usuarioPapel.updateMany({
           where: {
@@ -477,8 +466,6 @@ export async function responderTransferenciaPropriedade(params: {
         });
       }
 
-      // Desativar apenas o papel Creator ligado ao
-      // Creator institucional que estava sendo transferido.
       if (
         creatorInstitucional?.usuarioId === anterior.id
       ) {

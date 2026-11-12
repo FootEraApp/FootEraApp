@@ -1,7 +1,5 @@
 import dotenv from "dotenv";
 
-// Execute a partir da raiz do projeto: npx tsx server/scripts/testBilling.ts
-// Variaveis do ambiente do terminal possuem prioridade sobre server/.env.
 dotenv.config({ path: "server/.env" });
 
 const BANCO_QA_SCHEDULER = "footera_billing_scheduler_qa_20261103";
@@ -78,7 +76,6 @@ async function main() {
     throw new Error("Defina BILLING_TEST_ASSINATURA_ID.");
   }
 
-  // Importacao tardia: impede carregar servicos antes das validacoes de seguranca.
   const { prisma } = await import("../prisma.js");
 
   try {

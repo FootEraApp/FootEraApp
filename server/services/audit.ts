@@ -53,14 +53,11 @@ export async function auditFinanceiroObrigatorio(
     throw new Error("BILLING_AUDITORIA_OPERADOR_AUSENTE");
   }
 
-  const ip =
-    req.ip ?? "";
+  const ip = req.ip ?? "";
 
   const userAgent =
     String(req.headers["user-agent"] ?? "");
 
-  // Não capturar erros: a operação chamadora deve
-  // falhar se a auditoria não puder ser persistida.
   await prisma.logAuditoria.create({
     data: {
       usuarioId,

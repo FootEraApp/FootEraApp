@@ -79,9 +79,7 @@ export async function verificarPermissaoResponsavelAtleta({
   ) {
     return false;
   }
-
-  // O principal possui as quatro permissões de gestão.
-  // Os secundários dependem das permissões concedidas.
+  
   if (vinculo.principal) {
     return true;
   }

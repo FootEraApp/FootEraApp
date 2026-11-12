@@ -1,4 +1,3 @@
-// server/services/conquistasMetodologia.ts
 import { prisma } from "../prisma.js";
 import {
   Conquista,

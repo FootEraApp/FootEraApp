@@ -1,4 +1,3 @@
-// client/src/components/Atualizacoes.tsx
 import React, { useState } from "react";
 
 type UpdateType = "atualizacao" | "correcoes";

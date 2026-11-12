@@ -42,10 +42,6 @@ export async function requireAdminOrTreinoOwner(
       });
     }
 
-    /*
-     * Admin global continua podendo
-     * administrar qualquer treino.
-     */
     const isAdmin =
       await canPermission(
         usuarioId,
@@ -134,11 +130,6 @@ export async function requireAdminOrTreinoOwner(
     let permitido =
       false;
 
-    /*
-     * Professor pessoal:
-     *
-     * Pedro — Professor
-     */
     if (
       contexto.kind ===
         "PERSONAL" &&
@@ -167,13 +158,6 @@ export async function requireAdminOrTreinoOwner(
         );
     }
 
-    /*
-     * Contexto da organização:
-     *
-     * Clube FootEra — Proprietário
-     * Clube FootEra — Professor
-     * Escolinha X — Administrador
-     */
     if (
       contexto.kind ===
       "ORGANIZATION"

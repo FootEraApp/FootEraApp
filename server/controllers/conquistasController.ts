@@ -1,4 +1,3 @@
-// server/controller/conquistascontroller.tsx
 import { Request, Response } from "express";
 import {  
   TipoUsuario,
@@ -221,9 +220,6 @@ async function getConquistaOwnerPorTipo(
       ).toLowerCase(),
     ];
 
-    /*
-     * Compatibilidade Escola <-> Escolinha
-     */
     if (
       tipo === "escola" &&
       owner.ownerTipo ===

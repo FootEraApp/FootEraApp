@@ -1,4 +1,3 @@
-// client/src/pages/post/create
 import {
   useContext,
   useEffect,
@@ -265,10 +264,6 @@ export default function PaginaPostagem() {
       return;
     }
 
-    /*
-    * Se a opção atualmente selecionada
-    * ainda existe, não mexemos nela.
-    */
     if (
       authorContextKey &&
       authorOptions.some(

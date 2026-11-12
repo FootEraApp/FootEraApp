@@ -1,4 +1,3 @@
-// client/src/components/learning/LearningCard.tsx
 import React from "react";
 import { Link } from "wouter";
 import CoverImage from "../shared/CoverImage.js";

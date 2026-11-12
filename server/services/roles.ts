@@ -103,9 +103,6 @@ export async function getRoles(
       },
     });
 
-  // A partir do momento em que o usuário já possui
-  // registros em UsuarioPapel, essa tabela vira
-  // a fonte de verdade.
   if (registros.length > 0) {
     return Array.from(
       new Set(
@@ -124,8 +121,6 @@ export async function getRoles(
     );
   }
 
-  // Compatibilidade SOMENTE para usuário antigo
-  // que ainda não possui nenhuma linha em UsuarioPapel.
   if (
     !statuses.includes(
       StatusUsuarioPapel.ATIVO

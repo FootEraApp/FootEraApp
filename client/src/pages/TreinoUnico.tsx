@@ -1,4 +1,3 @@
-// client/src/pages/TreinoUnico
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import {

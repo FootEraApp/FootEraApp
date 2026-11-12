@@ -110,9 +110,6 @@ export async function verificarDuracaoRealChatAudio(
     !Number.isFinite(duracaoSegundos) ||
     duracaoSegundos <= 0
     ) {
-    // Alguns arquivos WebM do MediaRecorder não possuem
-    // duration no cabeçalho do contêiner.
-    // Calcula a duração a partir dos pacotes de áudio.
     let pacotes: string;
 
     try {

@@ -311,8 +311,6 @@ export async function sincronizarProfessorProprio(
       },
     });
 
-  // Usuário migrado:
-  // só cria vínculo se Professor estiver ATIVO.
   if (!papelProfessor) {
     return;
   }

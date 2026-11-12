@@ -415,8 +415,6 @@ export default function PaginaEventoDetalhe({
       true
     );
 
-    // participarEvento é intencionalmente
-    // executada somente quando token/evento mudam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     token,

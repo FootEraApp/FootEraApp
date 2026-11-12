@@ -1,4 +1,3 @@
-// server/controllers/turmasController
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
@@ -107,14 +106,6 @@ async function buscarContextoUsuarioLogado(
         legacyId;
     }
 
-    /*
-     * Exemplo:
-     * Clube FootEra FC — Professor
-     *
-     * A turma pertence ao Clube,
-     * mas a pessoa também atua
-     * nela como aquele Professor.
-     */
     if (
       activeContext.tipoUsuario ===
       TipoUsuario.Professor

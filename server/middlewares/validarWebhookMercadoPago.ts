@@ -85,9 +85,6 @@ for (const parte of assinatura.split(",")) {
     });
   }
 
-  // Aceitar timestamp Unix em segundos ou milissegundos.
-    // A tolerância de 5 minutos limita a reutilização
-    // de assinaturas antigas.
     const tsNumero = Number(ts);
 
     const tsMillis =

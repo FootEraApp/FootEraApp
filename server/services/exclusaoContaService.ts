@@ -63,7 +63,6 @@ async function validarVinculosExclusaoPapel(
     }
   }
 
-  // Verifica se o atleta possui responsáveis ativos.
   if (papeis.includes(TipoUsuario.Atleta)) {
     const atleta = await tx.atleta.findUnique({
       where: { usuarioId },
@@ -450,9 +449,6 @@ export async function desativarPapelPessoal(
         );
     }
 
-    // Essas relações legadas permanecem no banco
-    // para preservar o histórico institucional.
-    // Elas não serão excluídas fisicamente.
     console.info(
         "[exclusaoPapel] Desativando Professor:",
         {
@@ -473,8 +469,6 @@ export async function desativarPapelPessoal(
     ) ??
     outrosContextos[0];
 
-  // A mudança do papel e a seleção do próximo
-  // contexto devem ocorrer na mesma transação.
   await prisma.$transaction(
     async (tx) => {
       if (proximoContexto.kind === "ORGANIZATION") {
@@ -576,7 +570,6 @@ export async function desativarPapelPessoal(
     },
   );
 
-  // Recupera o contexto já atualizado no banco.
   const activeContext =
     await getActiveContext(usuarioId);
 
@@ -645,8 +638,6 @@ export async function desativarPapeisPeloAdmin(
     }
   }
 
-  // Os contextos servem como candidatos.
-  // A validade dos papéis será conferida na transação.
   const contextos = await listarActiveContexts(usuarioId);
   const contextoAnterior = await getActiveContext(usuarioId);
 
@@ -713,8 +704,6 @@ export async function desativarPapeisPeloAdmin(
         );
       }
 
-      // Verifica todos os papéis ativos diretamente
-      // no banco, dentro da transação.
       const registros = await tx.usuarioPapel.findMany({
         where: {
           usuarioId,

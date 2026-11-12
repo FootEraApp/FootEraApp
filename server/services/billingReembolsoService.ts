@@ -1,9 +1,3 @@
-
-// server/services/billingReembolsoService.ts
-// Reembolso TOTAL SIMULADO: metodologia avulsa individual
-// ou BUNDLE somente de metodologias avulsas.
-// NÃO usar para Mercado Pago real, reembolso parcial ou produção.
-
 import {
   CreatorVendaStatus,
   PagamentoStatus,
@@ -238,7 +232,6 @@ export async function reembolsarMetodologiaAvulsaQa(
         }
       }
 
-      // Locks em ordem determinística para reduzir deadlocks.
       const acessos =
         await tx.metodologiaAssinante.findMany({
           where: {
@@ -262,7 +255,6 @@ export async function reembolsarMetodologiaAvulsaQa(
         `;
       }
 
-      // Releitura do estado atual após os locks.
       const acessosAtuais =
         await tx.metodologiaAssinante.findMany({
           where: {
@@ -389,7 +381,6 @@ export async function reembolsarMetodologiaAvulsaQa(
         );
       }
 
-      // Não devolve usos de cupons automaticamente.
       return {
         pagamentoId,
         idempotent: false,

@@ -1,4 +1,3 @@
-// server/controllers/cadastroController
 import { Request, Response } from "express";
 import { z } from "zod";
 import {

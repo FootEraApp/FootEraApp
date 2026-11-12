@@ -202,7 +202,6 @@ export function iniciarWorkerDocumentosNascimento(): void {
     void executarWorkerNascimentoUmaVez();
   }, INTERVALO_MS);
 
-  // Primeiro ciclo após a inicialização.
   void executarWorkerNascimentoUmaVez();
 }
 

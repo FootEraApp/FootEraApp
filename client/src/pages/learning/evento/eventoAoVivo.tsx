@@ -1,4 +1,3 @@
-// client/src/pages/learning/evento/evento-ao-vivo.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,

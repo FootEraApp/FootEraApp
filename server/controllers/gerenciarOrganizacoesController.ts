@@ -1,4 +1,3 @@
-// server/controllers/gerenciarOrganizacoesController.ts
 import type { Response } from "express";
 import { Prisma, TipoUsuario, FuncaoMembroOrganizacao } from "@prisma/client";
 import { prisma } from "../prisma.js";
@@ -563,7 +562,6 @@ async function canManageOwnerOrAdmin(
     return false;
   }
 
-  // Admin global do FootEra.
   if (
     await canPermission(
       userId,
@@ -573,7 +571,6 @@ async function canManageOwnerOrAdmin(
     return true;
   }
 
-  // Permissão do contexto atualmente selecionado.
   const podeGerenciar =
     await canPermission(
       userId,
@@ -594,7 +591,6 @@ async function canManageOwnerOrAdmin(
     return false;
   }
 
-  // Resolver a organização associada ao ID legado.
   const entidade =
     tipo === "CLUBE"
       ? await prisma.clube.findUnique({
@@ -614,7 +610,6 @@ async function canManageOwnerOrAdmin(
     return false;
   }
 
-  // A autorização vale somente para a organização ativa.
   return (
     contexto.organizationId ===
     entidade.organizacaoId

@@ -1,4 +1,3 @@
-// server/controllers/documentosNascimentoController.ts
 import { createHash } from "node:crypto";
 import type {
   Request,
@@ -315,8 +314,6 @@ export async function enviarDocumentoNascimento(
     });
   } catch (erro) {
     if (arquivoSalvo) {
-        // Registra primeiro a pendência para recuperar
-        // a exclusão caso a tentativa imediata falhe.
         let pendenciaRegistrada = false;
 
         try {
@@ -479,7 +476,6 @@ export async function baixarDocumentoNascimentoAdmin(
           ? "jpg"
           : "png";
 
-    // Auditoria obrigatória antes da entrega.
     await prisma.logAuditoria.create({
       data: {
         usuarioId: administradorId,

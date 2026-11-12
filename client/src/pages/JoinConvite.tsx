@@ -1,4 +1,3 @@
-// client/src/pages/JoinConvite.tsx
 import {
   useCallback,
   useEffect,

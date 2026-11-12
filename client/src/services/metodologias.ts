@@ -1,4 +1,3 @@
-// client/src/services/metodologias.ts
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 

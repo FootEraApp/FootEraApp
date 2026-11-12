@@ -35,9 +35,6 @@ export function avaliarListaEstornosCompensacaoEvento(
     quantidadeEstornos: entrada.estornos.length,
     totalAprovado: totalAprovado.toFixed(2),
     totalPendente: totalPendente.toFixed(2),
-
-    // Nenhuma classificação autoriza estorno
-    // ou atualização financeira automática.
     executarNovoEstorno: false,
     atualizarPagamento: false,
     confirmarCompensacao: false,
@@ -106,9 +103,6 @@ export function avaliarListaEstornosCompensacaoEvento(
         ? ""
         : String(estorno.payment_id).trim();
 
-    // Exigir vínculo explícito ao pagamento.
-    // Não aceitar o pagamento apenas porque
-    // ele foi usado no caminho da URL.
     if (
       !/^\d+$/.test(id) ||
       ids.has(id) ||

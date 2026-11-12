@@ -1,4 +1,3 @@
-// client/src/pages/tutorial
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";

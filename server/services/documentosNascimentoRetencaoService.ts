@@ -67,7 +67,6 @@ export async function prepararRetencaoDocumentoNascimento(
         return "NAO_ELEGIVEL";
       }
 
-      // Preserva a ordem de locks do fluxo administrativo.
       await tx.$queryRaw`
         SELECT "id"
         FROM "Usuario"
@@ -110,8 +109,6 @@ export async function prepararRetencaoDocumentoNascimento(
         return "NAO_ELEGIVEL";
       }
 
-      // Pendência e auditoria são gravadas
-      // antes de excluir o metadado, na mesma transação.
       await tx.exclusaoDocumentoNascimentoPendente.upsert({
         where: {
           s3Key: atual.s3Key,
@@ -156,8 +153,6 @@ export async function prepararRetencaoDocumentoNascimento(
   );
 }
 
-// Auditoria de objetos possivelmente órfãos.
-// Não exclui nem agenda arquivos automaticamente.
 export async function auditarObjetosOrfaosNascimento(
   continuationToken?: string
 ): Promise<{
@@ -179,7 +174,6 @@ export async function auditarObjetosOrfaosNascimento(
       continuationToken
     );
 
-  // Ignorar uploads recentes ou ainda em andamento.
   const limiteAntiguidade =
     Date.now() - 48 * 60 * 60 * 1000;
 

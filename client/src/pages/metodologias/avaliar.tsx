@@ -1,5 +1,4 @@
 import { toast } from "@/lib/toast";
-// client/src/pages/metodologias/avaliar.tsx
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Star as StarIcon, ArrowLeft, Volleyball } from "lucide-react";

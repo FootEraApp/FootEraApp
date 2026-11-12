@@ -1,4 +1,3 @@
-// server/controllers/usuarioController
 import {
   Request,
   Response,
@@ -235,10 +234,6 @@ export const getUsuarioAssinatura =
       let consultaComoResponsavel =
         false;
 
-      /*
-       * RESPONSÁVEL CONSULTANDO
-       * A ASSINATURA DO ATLETA.
-       */
       if (atletaIdQuery) {
         const contextoResponsavel =
           await getActiveContext(
@@ -320,14 +315,6 @@ export const getUsuarioAssinatura =
           vinculo.atleta
             .usuarioId;
 
-        /*
-         * Não usamos o contexto
-         * atualmente selecionado pela
-         * criança.
-         *
-         * Queremos especificamente a
-         * assinatura do papel Atleta.
-         */
         const contextosAtleta =
           await listarActiveContexts(
             usuarioAlvoId
@@ -346,11 +333,6 @@ export const getUsuarioAssinatura =
         consultaComoResponsavel =
           true;
       } else {
-        /*
-         * FLUXO NORMAL:
-         * usuário consulta a própria
-         * assinatura ou Admin consulta.
-         */
         if (
           authUserId !== id &&
           !isAdmin
@@ -564,15 +546,6 @@ export const getUsuarioAssinatura =
             ? "OK"
             : "EXPIRED_OR_NOT_ACTIVE",
 
-        /*
-         * Evitamos devolver dados
-         * financeiros completos da
-         * criança quando a consulta
-         * é feita pelo responsável.
-         *
-         * Para esta tela precisamos
-         * apenas de isPro.
-         */
         assinatura:
           consultaComoResponsavel
             ? null

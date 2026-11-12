@@ -1,4 +1,3 @@
-// client/src/components/perfil/perfilFederacao
 import PerfilMarca from "./PerfilMarca.js";
 
 export default function PerfilFederacao(props: any) {

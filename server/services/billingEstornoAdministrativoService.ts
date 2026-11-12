@@ -1,5 +1,3 @@
-// server/services/billingEstornoAdministrativoService.ts
-// Autorizações administrativas. NÃO executa HTTP nem estorno.
 import { Prisma, BillingAutorizacaoEstornoStatus as Status } from "@prisma/client";
 import { prisma } from "../prisma.js";
 
@@ -121,7 +119,6 @@ async function registrarAuditoria(
   tx: Prisma.TransactionClient, usuarioId: string, pagamentoId: string,
   acao: string, autorizacaoId: string
 ) {
-  // Obrigatório: falha de gravação desfaz a transação.
   await tx.logAuditoria.create({ data: {
     usuarioId, acao, entidade: "BillingAutorizacaoEstorno", entidadeId: autorizacaoId,
     descricao: `Pagamento ${pagamentoId}`,
@@ -237,15 +234,6 @@ export async function consumirAutorizacaoEstornoNaAquisicao(
   await registrarAuditoria(tx, executorId, pagamentoId, "BILLING_ESTORNO_AUTORIZACAO_CONSUMIDA", a.id);
 }
 
-/**
- * ETAPA 4 — Verificação prévia, somente leitura.
- *
- * Evita preparar uma tentativa quando não existe
- * autorização administrativa válida.
- *
- * A validação definitiva continua obrigatória
- * dentro da transação de aquisição financeira.
- */
 export async function validarAutorizacaoEstornoAntesDoPreparo(
   pagamentoId: string,
   executorId: string
@@ -322,8 +310,6 @@ export async function validarAutorizacaoEstornoAntesDoPreparo(
     );
   }
 
-  // Confere se os dois administradores ainda possuem
-  // autorização financeira específica.
   await exigirOperador(
     autorizacao.solicitanteId,
     "SOLICITAR"

@@ -1,4 +1,3 @@
-// server/controllers/usuarioPapelController.ts
 import { Response } from "express";
 import {
   Prisma,
@@ -542,7 +541,6 @@ export async function adicionarPapel(
       ).somenteGestaoConta === true;
 
     if (modoRecuperacao) {
-      // Apenas papéis pessoais previamente autorizados.
       if (!PAPEIS_RECUPERACAO.has(papel)) {
         return res.status(403).json({
           code: "RECOVERY_ROLE_NOT_ALLOWED",
@@ -552,8 +550,6 @@ export async function adicionarPapel(
         });
       }
 
-      // Não aceitar reativação de papel antigo
-      // no fluxo inicial de recuperação.
       if (req.body?.reativar === true) {
         return res.status(409).json({
           code: "RECOVERY_REACTIVATION_NOT_ALLOWED",
@@ -563,8 +559,6 @@ export async function adicionarPapel(
         });
       }
 
-      // Revalidar no servidor, pois não podemos
-      // confiar somente na marcação do middleware.
       const contextosValidos =
         await listarActiveContexts(usuarioId);
 
@@ -597,8 +591,6 @@ export async function adicionarPapel(
             },
           });
 
-          // Um Creator antigo incompatível não pode
-          // ser reutilizado na recuperação.
           if (
             creator &&
             (
@@ -649,8 +641,6 @@ export async function adicionarPapel(
             });
           }
 
-          // Comprovar que a conta realmente transferiu
-          // uma organização com Creator institucional.
           const transferencias =
             await prisma.transferenciaPropriedade.findMany({
               where: {
@@ -745,8 +735,6 @@ export async function adicionarPapel(
         });
       }
 
-      // Não criar um UsuarioPapel novo se já existe
-      // um perfil físico antigo com o mesmo papel.
       const perfilExiste =
         await perfilEspecificoExiste(usuarioId, papel);
 
@@ -807,10 +795,6 @@ export async function adicionarPapel(
             "para ativação de perfis.",
         });
       }
-
-      // Criar somente o pedido de novo papel.
-      // Nenhum contexto operacional será ativado
-      // antes do preenchimento e validação do perfil.
       const agora = new Date();
 
       const novoPapel = await prisma.usuarioPapel.create({
@@ -908,10 +892,6 @@ export async function adicionarPapel(
     const agora =
       new Date();
 
-    /*
-     * Um papel só pode ficar ATIVO
-     * quando o perfil físico existe.
-     */
     const statusDesejado =
       perfilExiste
         ? StatusUsuarioPapel.ATIVO
@@ -1642,10 +1622,7 @@ export async function salvarPerfilRecuperacao(
       : [];
 
   try {
-    // Não aceitar acesso operacional ou alteração
-    // de organizações durante a recuperação.
-    const contextos =
-      await listarActiveContexts(usuarioId);
+    const contextos = await listarActiveContexts(usuarioId);
 
     if (contextos.length > 0) {
       return res.status(409).json({
@@ -1695,8 +1672,6 @@ export async function salvarPerfilRecuperacao(
       }
     }
 
-    // Professor e Olheiro exigem mais de 16 anos,
-    // segundo a regra atual de atualizarPerfil().
     if (
       papel === TipoUsuario.Professor ||
       papel === TipoUsuario.Olheiro
@@ -1736,7 +1711,6 @@ export async function salvarPerfilRecuperacao(
 
     const resultado = await prisma.$transaction(
       async (tx) => {
-        // Revalidar o estado dentro da transação.
         const registro = await tx.usuarioPapel.findUnique({
           where: {
             usuarioId_papel: {
@@ -1792,7 +1766,6 @@ export async function salvarPerfilRecuperacao(
         }
 
         if (papel === TipoUsuario.Atleta) {
-          // Revalidar os dados dentro da transação.
           const usuarioAtual = await tx.usuario.findUnique({
             where: { id: usuarioId },
             select: {
@@ -2620,8 +2593,6 @@ async function processarCriacaoOrganizacao(
           );
         }
 
-        // Bloqueia a recuperação se já existir
-        // outro papel operacional ativo.
         const papelAtivo =
           await tx.usuarioPapel.findFirst({
             where: {
@@ -2698,9 +2669,6 @@ async function processarCriacaoOrganizacao(
               "Regularize a solicitação antes de criar outra."
           );
         }
-        // Não reutilizar papel histórico indiscriminadamente.
-        // Se houver um papel inativo, exigir comprovação
-        // de uma transferência anterior do mesmo tipo.
         if (
           papelAnterior?.status ===
           StatusUsuarioPapel.INATIVO
@@ -2750,7 +2718,6 @@ async function processarCriacaoOrganizacao(
           }
         }
 
-        // Evitar reutilizar um perfil físico antigo.
         const legadoExistente =
           tipo === "Clube"
             ? await tx.clube.findUnique({
@@ -2820,7 +2787,6 @@ async function processarCriacaoOrganizacao(
             tx,
           });
 
-        // Marca e Federação possuem Creator institucional.
         if (
           tipo === "Marca" ||
           tipo === "Federacao"

@@ -35,8 +35,6 @@ export async function aplicarEstatisticasPosSubmissao(
       return { processado: false };
     }
 
-    // Apenas uma transação consegue alterar
-    // NULL para a data de processamento.
     const reserva = await tx.submissaoTreino.updateMany({
       where: {
         id: submissaoId,
@@ -60,8 +58,6 @@ export async function aplicarEstatisticasPosSubmissao(
       0
     );
 
-    // Preserva a pontuação já calculada
-    // no controller, inclusive penalidades.
     const pontos = Number(
       sub.pontosCreditados ??
       sub.pontuacaoSnapshot ??
@@ -92,8 +88,6 @@ export async function aplicarEstatisticasPosSubmissao(
     });
 
     if (tp?.id) {
-      // Recalcula em vez de acrescentar +1
-      // indiscriminadamente.
       const realizacoes =
         await tx.submissaoTreino.count({
           where: {
@@ -139,9 +133,7 @@ export async function aplicarEstatisticasPosSubmissao(
         totalPontos: { increment: pontos },
       },
     });
-
-    // PontuacaoAtleta é calculada pelo serviço
-    // recomputePontuacaoAtleta, não incrementada aqui.
+    
     return { processado: true };
   });
 }

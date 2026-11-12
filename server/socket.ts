@@ -374,13 +374,6 @@ export function setupSocket(server: http.Server) {
             });
           }
 
-          /*
-          * Sempre resolve o contexto
-          * atual novamente no servidor.
-          *
-          * Não confiamos em contexto
-          * enviado pelo cliente.
-          */
           const nextContext =
             await getActiveContext(
               uid
@@ -394,15 +387,6 @@ export function setupSocket(server: http.Server) {
             });
           }
 
-          /*
-          * Busca TODOS os sockets
-          * conectados dessa conta.
-          *
-          * Isso cobre:
-          * - outra aba
-          * - outra janela
-          * - outro dispositivo
-          */
           const socketsDoUsuario =
             await io
               .in(
@@ -414,15 +398,6 @@ export function setupSocket(server: http.Server) {
             const targetSocket of
               socketsDoUsuario
           ) {
-            /*
-            * Remove somente as salas
-            * de contexto antigas.
-            *
-            * NÃO remove:
-            * - u:<usuarioId>
-            * - g:<grupoId>
-            * - sala própria do socket
-            */
             for (
               const room of
                 Array.from(
@@ -447,10 +422,6 @@ export function setupSocket(server: http.Server) {
               }
             }
 
-            /*
-            * Atualiza o snapshot
-            * operacional do socket.
-            */
             targetSocket.data
               .activeContext =
               nextContext;
@@ -502,10 +473,6 @@ export function setupSocket(server: http.Server) {
                 .legacyOrganizationId ??
               null;
 
-            /*
-            * Entra na nova sala
-            * contextual.
-            */
             await targetSocket.join(
               `ctx:${nextContext.key}`
             );
@@ -520,11 +487,6 @@ export function setupSocket(server: http.Server) {
               );
             }
 
-            /*
-            * Opcional, mas útil:
-            * avisa cada aba/socket que
-            * o contexto foi atualizado.
-            */
             targetSocket.emit(
               "context:synced",
               {

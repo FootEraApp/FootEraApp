@@ -1,5 +1,3 @@
-// client/src/components/admin/CorrecoesNascimentoAdmin.tsx
-
 import {
   useCallback,
   useEffect,

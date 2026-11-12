@@ -1,4 +1,3 @@
-// client/src/components/profile/TrainingProgress
 import { useContext, useMemo, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format as formatDateFns, startOfDay } from "date-fns";
@@ -435,9 +434,6 @@ export default function TrainingProgress({ userId, tipoUsuarioId }: TrainingProg
         return;
       }
 
-      // Um responsável poderá consultar o histórico
-      // pelo fluxo privado de gerenciamento de atletas.
-      // Visualizar um perfil público não concede essa permissão.
       return;
     }
 

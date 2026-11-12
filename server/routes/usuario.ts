@@ -1,4 +1,3 @@
-// server/routes/usuario
 import { Router } from "express";
 import { 
   getUsuarioPorId, 

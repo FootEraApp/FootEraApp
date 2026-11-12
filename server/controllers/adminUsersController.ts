@@ -248,20 +248,10 @@ export async function listAdminUsers(
       ];
     }
 
-    /*
-     * Filtro por papel.
-     *
-     * Não usamos mais
-     * where.tipo = tipo.
-     */
     if (tipo) {
       let idsPermitidos:
         string[] = [];
 
-      /*
-       * Admin global é definido
-       * pela relação Administrador.
-       */
       if (
         tipo ===
         TipoUsuario.Admin
@@ -290,14 +280,6 @@ export async function listAdminUsers(
               ]
             : [tipo];
 
-        /*
-         * Usuários que já possuem
-         * qualquer UsuarioPapel.
-         *
-         * Para eles, Usuario.tipo
-         * não pode ser usado como
-         * fallback.
-         */
         const usuariosComPapel =
           await prisma.usuarioPapel.findMany({
             select: {
@@ -316,9 +298,6 @@ export async function listAdminUsers(
               registro.usuarioId
           );
 
-        /*
-         * Papel explícito ativo.
-         */
         const papeisAtivos =
           await prisma.usuarioPapel.findMany({
             where: {
@@ -337,12 +316,6 @@ export async function listAdminUsers(
             },
           });
 
-        /*
-         * Compatibilidade com contas
-         * antigas que ainda não têm
-         * nenhuma linha em
-         * UsuarioPapel.
-         */
         const legados =
           await prisma.usuario.findMany({
             where: {
@@ -384,10 +357,6 @@ export async function listAdminUsers(
           );
       }
 
-      /*
-       * Sem correspondências:
-       * força resultado vazio.
-       */
       where.id = {
         in:
           idsPermitidos,
@@ -529,12 +498,6 @@ export async function listAdminUsers(
           usuario.id
       );
 
-    /*
-     * Buscamos UsuarioPapel
-     * separadamente para não
-     * depender do nome da relação
-     * inversa no model Usuario.
-     */
     const registrosPapel =
       usuarioIds.length > 0
         ? await prisma.usuarioPapel.findMany({
@@ -665,64 +628,41 @@ export async function listAdminUsers(
 
           nomeDeUsuario:
             u.nomeDeUsuario,
-
           email:
             u.email ??
             null,
-
-          /*
-           * Mantido temporariamente
-           * para compatibilidade com
-           * o frontend antigo.
-           */
-          tipo:
-            u.tipo,
-
-          /*
-           * Nova fonte para o admin.
-           */
+          tipo: u.tipo,
           papeis,
-
-          foto:
-            resolveFoto(u),
-
+          foto: resolveFoto(u),
           criadoEm,
-
           verificado:
             (u as any)
               .verified ??
             false,
-
           destaque:
             (u as any)
               .destaque ??
             false,
-
           status:
             (u as any)
               .status ??
             "ATIVO",
-
           blockedAt:
             (u as any)
               .blockedAt ??
             null,
-
           blockedReason:
             (u as any)
               .blockedReason ??
             null,
-
           deletedAt:
             (u as any)
               .deletedAt ??
             null,
-
           ultimaAtividade:
             null as
               | string
               | null,
-
           ultimaAtividadeNome:
             null as
               | string

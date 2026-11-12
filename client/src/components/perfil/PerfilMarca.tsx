@@ -1,4 +1,3 @@
-// client/src/components/perfil/perfilMarca
 import { useEffect, useState } from "react";
 import axios from "axios";
 import ProfileHeader from "../profile/ProfileHeader.js";

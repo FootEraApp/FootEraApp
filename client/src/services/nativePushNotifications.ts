@@ -53,8 +53,6 @@ function abrirDestinoPush(
 ) {
   const destino = normalizarDestinoPush(raw);
 
-  // Mantém o caminho e os parâmetros da notificação.
-  // O perfil será responsável por validar o papel solicitado.
   const atual =
     window.location.pathname +
     window.location.search +

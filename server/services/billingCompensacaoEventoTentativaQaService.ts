@@ -58,12 +58,6 @@ async function conferirBancoQa() {
   }
 }
 
-/**
- * Adquire exclusivamente uma tentativa QA
- * e registra seu histórico na mesma transação.
- *
- * NÃO efetua estorno no Mercado Pago.
- */
 export async function iniciarTentativaCompensacaoQa(
   pagamentoId: string
 ) {
@@ -117,8 +111,6 @@ export async function iniciarTentativaCompensacaoQa(
     throw new Error("QA_COMPENSACAO_ACESSO_EXISTENTE");
   }
 
-  // A mudança de estado e a inserção do histórico
-  // formam uma única transação.
   return prisma.$transaction(async (tx) => {
     const adquirido =
       await tx.billingCompensacaoEvento.updateMany({
@@ -166,10 +158,6 @@ export async function iniciarTentativaCompensacaoQa(
   });
 }
 
-/**
- * Finaliza a simulação QA.
- * Não altera o pagamento nem registra estorno.
- */
 export async function finalizarTentativaCompensacaoQa(
   pagamentoId: string
 ) {
@@ -234,17 +222,6 @@ export async function finalizarTentativaCompensacaoQa(
   });
 }
 
-
-/**
- * Simula a situação em que o resultado de uma
- * operação financeira não pôde ser confirmado.
- *
- * QA EXCLUSIVO:
- * - Não chama o Mercado Pago.
- * - Não executa reembolso.
- * - Não altera o Pagamento.
- * - Bloqueia novas tentativas automáticas.
- */
 export async function simularResultadoDesconhecidoCompensacaoQa(
   pagamentoId: string
 ) {
@@ -262,8 +239,6 @@ export async function simularResultadoDesconhecidoCompensacaoQa(
       );
     }
 
-    // Só é permitido sair de uma tentativa
-    // adquirida e ainda em processamento.
     const atualizado =
       await tx.billingCompensacaoEvento.updateMany({
         where: {
@@ -328,16 +303,6 @@ export async function simularResultadoDesconhecidoCompensacaoQa(
   });
 }
 
-/**
- * Reserva a chave de idempotencia da tentativa QA.
- *
- * Esta funcao NAO envia requisicao ao Mercado Pago.
- * NAO marca uma operacao externa como executada.
- * NAO cria ou confirma estorno.
- *
- * Concorrencia: somente uma chamada pode
- * preencher a chave antes vazia.
- */
 export async function reservarChaveOperacaoCompensacaoQa(
   pagamentoId: string
 ) {
@@ -393,9 +358,6 @@ export async function reservarChaveOperacaoCompensacaoQa(
       );
     }
 
-    // Compare-and-set:
-    // apenas a primeira chamada que encontrar
-    // chaveIdempotenciaOperacao = null vence.
     const atualizada =
       await tx.billingCompensacaoTentativa.updateMany({
         where: {
@@ -442,16 +404,6 @@ export async function reservarChaveOperacaoCompensacaoQa(
   });
 }
 
-
-/**
- * QA: registra a possibilidade de envio de uma
- * operacao financeira antes de qualquer HTTP.
- *
- * Nao envia estorno.
- * Nao marca operacao externa como executada.
- * Nao atualiza o pagamento.
- * Bloqueia uma segunda reserva da mesma chave.
- */
 export async function registrarIntencaoEnvioEstornoQa(
   pagamentoId: string
 ) {
@@ -646,8 +598,6 @@ export async function avaliarRetomadaCompensacaoQa(
     motivo,
     chaveIdempotencia:
       tentativa?.chaveIdempotenciaOperacao ?? null,
-
-    // Recuperação é exclusivamente observacional.
     podeEnviarEstorno: false,
     podeRepetirEstorno: false,
     podeConfirmarCompensacao: false,

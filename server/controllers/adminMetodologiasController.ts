@@ -841,7 +841,6 @@ export async function deleteMinhaMetodologiaAdmin(
       });
     }
 
-    // EXCLUSÃO DE METODOLOGIA AVULSA
     if (origemTipo === "AVULSA") {
       const metodologia =
         await prisma.metodologiaAvulsa.findUnique({
@@ -862,8 +861,6 @@ export async function deleteMinhaMetodologiaAdmin(
         });
       }
 
-      // Não permitir exclusão institucional
-      // pela rota pessoal do administrador.
       const institucional = Boolean(
         metodologia.clubeId ||
         metodologia.escolinhaId ||
@@ -896,7 +893,6 @@ export async function deleteMinhaMetodologiaAdmin(
       return res.json({ ok: true });
     }
 
-    // EXCLUSÃO DE METODOLOGIA LEARNING
     const metodologia =
       await prisma.metodologia.findUnique({
         where: { id },

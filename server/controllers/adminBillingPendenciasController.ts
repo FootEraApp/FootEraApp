@@ -192,8 +192,6 @@ export async function verificarPendenciaEventoNoMpAdmin(
       });
     }
 
-    // Somente consulta o provedor.
-    // Nenhum pagamento ou pendencia sera atualizado.
     const mp = await obterPagamentoMercadoPago(
       pendencia.providerRef,
       consultarPagamentoMercadoPago
@@ -212,9 +210,6 @@ export async function verificarPendenciaEventoNoMpAdmin(
         mp
       );
 
-    // A classificação APROVAR serve à conciliação
-    // normal. Para eventos sem vaga, ela NUNCA
-    // autoriza conceder a inscrição.
     const identidadeFinanceiraConfirmada =
       ![
         "PROVEDOR_OU_ID_INVALIDO",

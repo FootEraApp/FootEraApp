@@ -1,4 +1,3 @@
-// server/routes/usuarioPapel.ts
 import { Router } from "express";
 import {
   adicionarPapel,

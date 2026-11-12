@@ -34,7 +34,6 @@ router.post(
   }
 );
 
-// Somente consulta. Não executa estorno.
 router.get(
   "/billing/estornos/:pagamentoId/status",
   authenticateToken,
@@ -55,8 +54,6 @@ router.get(
     }
 
     try {
-      // Exige permissao financeira especifica,
-      // alem de authenticateToken e requireAdmin.
       await validarExecutorEstorno(
         operadorFinanceiroId(req)
       );
@@ -160,15 +157,6 @@ router.get(
   }
 );
 
-/*
- * ETAPA 4 — Autorizações administrativas de estorno
- *
- * Todas as operações exigem sessão autenticada.
- * Os serviços verificam as listas financeiras específicas.
- *
- * NÃO realiza HTTP com o Mercado Pago.
- */
-
 function operadorFinanceiroId(req: Request): string {
   return String(
     (req as Request & {
@@ -231,13 +219,10 @@ function statusErroOperacional(
       return 503;
 
     default:
-      // Erros nao classificados nunca autorizam
-      // repeticao automatica do estorno.
       return 503;
   }
 }
 
-// Solicitar autorização — não executa estorno.
 router.post(
   "/billing/estornos/:pagamentoId/solicitar",
   authenticateToken,
@@ -302,7 +287,6 @@ router.post(
   }
 );
 
-// Aprovar — exige outro administrador autorizado.
 router.post(
   "/billing/estornos/:pagamentoId/aprovar",
   authenticateToken,
@@ -346,7 +330,6 @@ router.post(
   }
 );
 
-// Revogar — somente antes do consumo.
 router.post(
   "/billing/estornos/:pagamentoId/revogar",
   authenticateToken,
@@ -389,7 +372,6 @@ router.post(
   }
 );
 
-// Consulta da autorização, sem efeitos financeiros.
 router.get(
   "/billing/estornos/:pagamentoId/autorizacao",
   authenticateToken,
@@ -452,8 +434,6 @@ router.get(
     }
   }
 );
-// ETAPA 4 — Prévia operacional do estorno.
-// Somente consulta, sem POST ao Mercado Pago.
 router.get(
   "/billing/estornos/:pagamentoId/previa",
   authenticateToken,
@@ -499,14 +479,6 @@ router.get(
   }
 );
 
-
-/**
- * ETAPA 4 — Execucao administrativa excepcional.
- *
- * O endpoint nao acessa diretamente o gateway.
- * Exige JWT, Admin e autorizacao financeira.
- * O servico operacional aplica as flags de bloqueio.
- */
 router.post(
   "/billing/estornos/:pagamentoId/executar",
   authenticateToken,
@@ -581,13 +553,6 @@ router.post(
   }
 );
 
-/**
- * ETAPA 4 — Conciliacao administrativa.
- *
- * Nao executa um segundo POST de estorno.
- * Pode consultar evidencias e finalizar uma
- * compensacao ja confirmada externamente.
- */
 router.post(
   "/billing/estornos/:pagamentoId/conciliar",
   authenticateToken,

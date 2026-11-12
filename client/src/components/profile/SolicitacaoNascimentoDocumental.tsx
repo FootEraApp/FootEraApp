@@ -1,5 +1,3 @@
-// client/src/components/profile/SolicitacaoNascimentoDocumental.tsx
-
 import { useEffect, useState } from "react";
 import { API } from "../../config.js";
 

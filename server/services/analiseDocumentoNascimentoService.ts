@@ -181,7 +181,6 @@ export function verificarComClamAV(
     });
 
     socket.on("connect", () => {
-      // Protocolo ClamAV INSTREAM.
       socket.write(
         Buffer.from(
           "zINSTREAM\0",
@@ -230,10 +229,6 @@ export async function analisarDocumentoNascimentoPendente(
 
   const identificador = randomUUID();
   const inicio = new Date();
-
-  // Reserva atômica:
-  // aceita documento PENDENTE ou
-  // análise cuja reserva já expirou.
   const aquisicao =
     await prisma.documentoCorrecaoNascimento.updateMany({
       where: {

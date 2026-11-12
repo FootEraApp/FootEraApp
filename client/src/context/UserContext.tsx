@@ -1,4 +1,3 @@
-// client/src/context/UserContext
 import React, {
   createContext,
   useCallback,
@@ -523,14 +522,6 @@ export function UserProvider({
           return;
         }
 
-        /*
-        * O servidor já alterou o
-        * ActiveContext da conta.
-        *
-        * Esta aba apenas atualiza
-        * seu estado React/storage
-        * a partir do backend.
-        */
         syncSession();
 
         void Promise.all([

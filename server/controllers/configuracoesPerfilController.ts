@@ -162,11 +162,6 @@ async function obterSupervisaoUsuario(
       usuario.dataNascimento
     );
 
-  /*
-   * Nesta etapa a regra
-   * continua sendo apenas
-   * para menores de 12.
-   */
   if (
     idade === null ||
     idade >= 12
@@ -192,10 +187,6 @@ async function obterSupervisaoUsuario(
     };
   }
 
-  /*
-   * Se existir mais de um responsável,
-   * damos preferência ao principal.
-   */
   const responsavel =
     usuario.atleta
       .responsaveis[0] ??
@@ -213,10 +204,6 @@ async function obterSupervisaoUsuario(
         ?.responsavelUsuarioId ??
       null,
 
-    /*
-     * Menor sem responsável ativo
-     * continua com regras seguras.
-     */
     permitirPerfilPublico:
       responsavel
         ?.permitirPerfilPublico ??
@@ -749,11 +736,6 @@ export async function patchPrivacidadeAtletaGerenciado(
           },
         });
 
-    /*
-     * Ao retirar uma permissão,
-     * também corrigimos imediatamente
-     * a configuração da criança.
-     */
     const atual =
       readPrivacyConfig(
         vinculo.atleta
@@ -1180,11 +1162,6 @@ export async function unlinkGoogle(req: Request, res: Response) {
         authProvider:
           novoProvider,
 
-        /*
-        * Alteração de método de
-        * autenticação é ação sensível:
-        * encerra todas as sessões.
-        */
         tokenVersion: {
           increment:
             1,

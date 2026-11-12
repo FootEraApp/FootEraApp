@@ -1,4 +1,3 @@
-// server/controllers/metodologiasController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { sendError } from "../utils/httpError.js";
@@ -770,12 +769,6 @@ async function upsertAulaAoVivoParaItem(params: {
         aula.contextoLegacyOrganizationId
       );
 
-    /*
-    * Compatibilidade com aulas antigas
-    * que ainda não possuem snapshot.
-    *
-    * Não mudamos o contexto delas aqui.
-    */
     if (!aulaTemContextoSalvo) {
       return;
     }
@@ -1084,8 +1077,6 @@ async function validarMetodologiaDoCriador(
         ativo: true,
         geraBadge: true,
         geraCertificado: true,
-
-        // Identificação da organização proprietária.
         clubeId: true,
         escolinhaId: true,
         federacaoId: true,
@@ -1102,7 +1093,6 @@ async function validarMetodologiaDoCriador(
     };
   }
 
-  // Administrador global da FootEra.
   const isAdmin = await isAdminUser(userId);
 
   if (isAdmin) {
@@ -1134,7 +1124,6 @@ async function validarMetodologiaDoCriador(
     };
   }
 
-  // Verifica a organização ativa do usuário.
   const contexto =
     await getActiveContext(userId);
 
@@ -1151,8 +1140,6 @@ async function validarMetodologiaDoCriador(
     };
   }
 
-  // A permissão deve estar ativa no contexto
-  // organizacional selecionado.
   const podeGerenciar =
     await canPermission(
       userId,
@@ -1168,11 +1155,8 @@ async function validarMetodologiaDoCriador(
     };
   }
 
-  const legacyId =
-    contexto.legacyOrganizationId;
+  const legacyId = contexto.legacyOrganizationId;
 
-  // Compara a organização ativa com a
-  // organização proprietária da metodologia.
   const pertenceOrganizacao =
     (
       contexto.organizationType === "CLUBE" &&
@@ -1232,7 +1216,6 @@ async function validarMetodologiaAvulsaDoCriador(
     };
   }
 
-  // Administrador global da FootEra.
   const isAdmin = await isAdminUser(userId);
 
   if (isAdmin) {
@@ -1240,7 +1223,6 @@ async function validarMetodologiaAvulsaDoCriador(
   }
 
   const contexto = await getActiveContext(userId);
-
   const pertenceAOrganizacao =
     Boolean(
       metodologia.clubeId ||
@@ -1249,8 +1231,6 @@ async function validarMetodologiaAvulsaDoCriador(
       metodologia.marcaId
     );
 
-  // Metodologia pessoal:
-  // somente o criador original pode gerenciar.
   if (!pertenceAOrganizacao) {
     if (
       metodologia.criadorUsuarioId === userId &&
@@ -1267,8 +1247,6 @@ async function validarMetodologiaAvulsaDoCriador(
     };
   }
 
-  // Metodologia institucional:
-  // exige o contexto da organização proprietária.
   if (
     contexto?.kind !== "ORGANIZATION" ||
     !contexto.organizationId ||
@@ -7208,12 +7186,6 @@ export async function deleteMetodologiaAvulsa(
       });
     }
 
-    // Exclui o registro e suas relações conforme
-    // as regras de integridade do banco.
-    //
-    // Não excluímos arquivos S3 neste endpoint:
-    // eles podem estar referenciados por outros
-    // conteúdos da plataforma.
     await prisma.metodologiaAvulsa.delete({
       where: { id },
     });

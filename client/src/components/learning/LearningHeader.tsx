@@ -1,4 +1,3 @@
-// client/src/components/learning/LearningHeader.tsx
 import React from "react";
 import { Link } from "wouter";
 import { ArrowLeft, Plus } from "lucide-react";

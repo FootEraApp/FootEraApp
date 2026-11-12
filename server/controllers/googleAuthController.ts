@@ -913,10 +913,6 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
           });
       }
 
-      /*
-      * Criança e responsável não podem
-      * compartilhar a mesma conta/e-mail.
-      */
       if (
         responsavelEmailFinal ===
         emailNorm

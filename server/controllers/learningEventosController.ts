@@ -1,4 +1,3 @@
-// server/controllers/learningEventosController.ts
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -684,14 +683,10 @@ async function podeGerenciarEventoLearning(
     aula.contextoLegacyOrganizationId
   );
 
-  // Eventos antigos sem contexto precisam de
-  // revisão de propriedade antes de concedermos
-  // acesso administrativo automaticamente.
   if (!contextoSalvo) {
     return false;
   }
 
-  // Evento criado em contexto pessoal.
   if (aula.contextoKind === "PERSONAL") {
     if (contexto.kind !== "PERSONAL") {
       return false;
@@ -718,8 +713,6 @@ async function podeGerenciarEventoLearning(
     );
   }
 
-  // Evento institucional:
-  // não depende da conta que criou a aula.
   if (
     aula.contextoKind !== "ORGANIZATION" ||
     contexto.kind !== "ORGANIZATION"

@@ -1,4 +1,3 @@
-// server/routes/treinosSalvos
 import express from 'express';
 import {
   criarTreinoSalvo,

@@ -1,8 +1,4 @@
-
 import { Prisma } from "@prisma/client";
-
-// Consulta e classificação financeira.
-// Este serviço NÃO altera o banco e NÃO concede benefícios.
 
 export type PagamentoLocalConciliacao = {
   id: string;
@@ -107,9 +103,6 @@ export function classificarConciliacaoMercadoPago(
     );
   }
 
-  // A referência inicial pode ser o ID de
-  // uma preferência, antes de chegar o
-  // ID numérico do pagamento efetivo.
   if (
     local.providerRef &&
     /^\d+$/.test(local.providerRef) &&
@@ -399,7 +392,6 @@ export async function diagnosticarBuscaCheckoutSemReferencia(
   ) => Promise<PagamentoMercadoPago | null> =
     buscarPagamentoPorReferenciaExternaMercadoPago
 ): Promise<DiagnosticoBuscaCheckout> {
-  // Nenhuma busca externa para pagamentos incompatíveis.
   if (
     local.provider !== "MERCADOPAGO" ||
     local.status !== "PENDENTE" ||
@@ -458,17 +450,6 @@ export type EstornoMercadoPago = {
   date_created?: string;
 };
 
-/**
- * Consulta a lista de reembolsos de um pagamento.
- *
- * SOMENTE LEITURA:
- * - Não envia POST.
- * - Não solicita estorno.
- * - Não altera o banco.
- * - Não aprova pagamentos.
- *
- * O fetchImpl permite testar sem acesso externo.
- */
 export async function consultarEstornosPagamentoMercadoPago(
   paymentId: string,
   options: {
@@ -633,8 +614,6 @@ export function validarPixRecuperavelMercadoPago(args: {
     return false;
   }
 
-  // Não devolve QR diferente daquele
-  // confirmado pelo provedor.
   const qrExterno =
     mp.point_of_interaction
       ?.transaction_data?.qr_code;

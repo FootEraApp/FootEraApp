@@ -1,4 +1,3 @@
-// server/controllers/chatAudioHttp.ts
 import type { Request, Response } from "express";
 import multer from "multer";
 import { prisma } from "../prisma.js";
@@ -28,7 +27,7 @@ export function receberChatAudio(req: Request, res: Response, next: (err?: unkno
 }
 
 export function prepararAudioPrivado(req: Request, _res: Response, next: () => void): void {
-  req.body.tipo = "AUDIO"; // Tipo definido pelo servidor, não pelo cliente.
+  req.body.tipo = "AUDIO";
   next();
 }
 

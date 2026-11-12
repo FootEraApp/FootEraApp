@@ -350,11 +350,9 @@ export default function RecuperarPerfil() {
         );
         }
 
-        // Atualiza tipoUsuario, tipoUsuarioId e activeContext.
         applyActiveContextSession(conclusao.activeContext);
         operacaoConfirmada = true;
 
-      // Confirmar que o servidor já reconhece o contexto.
       const sessao = await requisitar("/auth/me", "GET");
 
       if (
@@ -370,7 +368,6 @@ export default function RecuperarPerfil() {
       localStorage.setItem("somenteGestaoConta", "false");
       sessionStorage.setItem("somenteGestaoConta", "false");
 
-      // Recarrega o contexto global da aplicação.
       window.location.assign("/perfil");
     } catch (error: any) {
         if (operacaoConfirmada) {
@@ -390,7 +387,6 @@ export default function RecuperarPerfil() {
                 return;
             }
             } catch {
-            // Preserva a mensagem original.
             }
         }
 

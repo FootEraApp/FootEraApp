@@ -85,10 +85,6 @@ async function resolverUsuarioBiblioteca(
     return null;
   }
 
-  /*
-   * Atleta:
-   * biblioteca pertence ao próprio usuário.
-   */
   if (
     contexto.tipoUsuario ===
     TipoUsuario.Atleta
@@ -122,10 +118,6 @@ async function resolverUsuarioBiblioteca(
     };
   }
 
-  /*
-   * Responsável:
-   * precisa informar a criança.
-   */
   if (
     contexto.tipoUsuario ===
     TipoUsuario.Responsavel
@@ -170,7 +162,6 @@ async function resolverUsuarioBiblioteca(
   return null;
 }
 
-// GET /api/treinos/biblioteca
 export async function listarMinhaBiblioteca(
   req: AuthenticatedRequest,
   res: Response,
@@ -373,7 +364,6 @@ export async function listarMinhaBiblioteca(
   }
 }
 
-// DELETE /api/treinos/biblioteca/:treinoProgramadoId
 export async function removerDaMinhaBiblioteca(
   req: AuthenticatedRequest,
   res: Response,
@@ -415,10 +405,6 @@ export async function removerDaMinhaBiblioteca(
         });
     }
 
-    /*
-     * Procuramos especificamente
-     * na biblioteca pessoal do atleta.
-     */
     const salvo =
       await prisma
         .treinoSalvo

@@ -92,7 +92,6 @@ export async function requireMetodologiaOwnership(
     metodologia.federacaoId
   );
 
-  // Metodologia pessoal: respeitar autoria e contexto.
   if (!ehInstitucional) {
     const autorizado =
       contexto?.kind === "PERSONAL" &&
@@ -109,8 +108,6 @@ export async function requireMetodologiaOwnership(
     return next();
   }
 
-  // Metodologia institucional: a autoria antiga não
-  // concede acesso após transferência da organização.
   if (
     contexto?.kind !== "ORGANIZATION" ||
     !contexto.organizationId ||
@@ -143,8 +140,6 @@ export async function requireMetodologiaOwnership(
     });
   }
 
-  // Validar a identidade da organização e a função
-  // no banco, sem confiar apenas no contexto salvo.
   const membro = await prisma.membroOrganizacao.findUnique({
     where: {
       organizacaoId_usuarioId: {

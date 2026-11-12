@@ -276,9 +276,6 @@ export async function listarSolicitacoesMinhas(req: Request, res: Response) {
             remetentePapel:
               papelAtivo,
           },
-
-          // Compatibilidade com registros antigos
-          // criados antes de existir remetentePapel.
           {
             remetentePapel:
               null,
@@ -1104,10 +1101,6 @@ async function cancelarPorSolicitacaoId(
     return false;
   }
 
-  /*
-   * Cancelamento pertence
-   * ao remetente.
-   */
   if (
     s.remetenteId !==
     userId
@@ -1125,13 +1118,6 @@ async function cancelarPorSolicitacaoId(
       s.remetentePapel
     );
 
-  /*
-   * Registro novo:
-   * exige o mesmo papel.
-   *
-   * Registro antigo:
-   * mantém compatibilidade.
-   */
   if (
     papelSolicitacao &&
     (
@@ -1698,10 +1684,6 @@ export async function recusarSolicitacao(
           .destinatarioPapel
       );
 
-    /*
-     * Compatibilidade com
-     * solicitações antigas.
-     */
     if (!papelSolicitacao) {
       const usuario =
         await prisma.usuario

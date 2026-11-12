@@ -47,7 +47,6 @@ export function janelaDiaTreino(data: Date) {
     parte("day"),
   ].join("-");
 
-  // Horário atual de Brasília: UTC-03:00.
   const inicio = new Date(`${dia}T00:00:00-03:00`);
   const fim = new Date(inicio.getTime() + 86400000);
 
@@ -95,8 +94,6 @@ async function atletaPossuiPlanoPago(
   });
 
   return assinaturas.some((assinatura) => {
-    // Uma assinatura já cancelada não concede benefício
-    // depois da data de cancelamento.
     if (
       assinatura.canceledAt &&
       assinatura.canceledAt <= agora
@@ -126,7 +123,6 @@ async function contarTreinosDoDia(
 ): Promise<number> {
   const { dia } = janelaDiaTreino(inicio);
 
-  // Histórico permanente do dia consultado.
   const historicoDia =
     await tx.treinoRealizacaoDiaria.findMany({
       where: {
@@ -139,8 +135,6 @@ async function contarTreinosDoDia(
       },
     });
 
-  // Registros legados que ainda existem nas
-  // tabelas originais.
   const [livres, agendados] = await Promise.all([
     tx.treinoLivre.findMany({
       where: {
@@ -181,11 +175,6 @@ async function contarTreinosDoDia(
     }),
   ]);
 
-  // Consulta o histórico das realizações legadas
-  // em QUALQUER data, não apenas na data atual.
-  //
-  // Isso impede que o mesmo treino seja contado
-  // novamente se sua data original for alterada.
   const historicoDosLegados =
     livres.length > 0 || agendados.length > 0
       ? await tx.treinoRealizacaoDiaria.findMany({
@@ -322,12 +311,6 @@ export async function verificarLimiteDiarioNaTransacao(
   };
 }
 
-/**
- * Executa a validação e a gravação atomicamente.
- *
- * Utilizado inicialmente pelos treinos livres
- * e, depois, pelas conclusões agendadas.
- */
 export async function executarComLimiteDiarioTreinos<T>(
   params: {
     atletaId: string;
@@ -418,16 +401,6 @@ export function respostaErroLimiteDiario(
   };
 }
 
-
-/**
- * Serializa uma operação por atleta sem consumir
- * ou exigir disponibilidade na cota diária.
- *
- * Uso: início/reabertura controlada de um treino.
- *
- * A conclusão continua obrigatoriamente utilizando
- * executarComLimiteDiarioTreinos().
- */
 export async function executarComBloqueioAtleta<T>(
   params: {
     atletaId: string;

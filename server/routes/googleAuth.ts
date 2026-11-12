@@ -1,4 +1,3 @@
-// server/routes/googleAuth.ts
 import { Router } from "express";
 import {
   googleLogin,

@@ -33,19 +33,8 @@ type OwnerTreinoSalvo = {
 type ContextoTreinoSalvo = {
   usuarioId: string;
   isAdmin: boolean;
-
   owner:
     OwnerTreinoSalvo;
-
-  /*
-   * Professor que está efetivamente
-   * usando o contexto.
-   *
-   * Pode existir inclusive dentro
-   * de uma organização:
-   *
-   * Clube X — Professor
-   */
   professorAtivoId:
     string | null;
 };
@@ -65,12 +54,6 @@ function addDays(
   return x;
 }
 
-/*
- * Compatibilidade EXCLUSIVA para Admin.
- *
- * Usuário normal nunca terá o dono
- * escolhido pelo body/query.
- */
 function ownerFromExplicit(
   tipoUsuario?: unknown,
   tipoUsuarioId?: unknown
@@ -214,10 +197,6 @@ async function resolverContextoTreinoSalvo(
       "VER_ADMIN"
     );
 
-  /*
-   * Admin pode continuar escolhendo
-   * explicitamente um owner.
-   */
   if (isAdmin) {
     return {
       usuarioId,
@@ -255,9 +234,6 @@ async function resolverContextoTreinoSalvo(
     return null;
   }
 
-  /*
-   * Professor pessoal.
-   */
   if (
     contexto.kind ===
       "PERSONAL" &&
@@ -285,12 +261,6 @@ async function resolverContextoTreinoSalvo(
     };
   }
 
-  /*
-   * Contexto de organização.
-   *
-   * O treino salvo pertence
-   * à organização ativa.
-   */
   if (
     contexto.kind ===
       "ORGANIZATION" &&
@@ -373,15 +343,8 @@ export const criarTreinoSalvo =
         publico,
         parceiro,
         naoExpira,
-
-        /*
-         * Mantidos temporariamente
-         * para Admin e compatibilidade
-         * do front legado.
-         */
         tipoUsuario,
         tipoUsuarioId,
-
         treinoProgramadoId,
         apagarTreinoSalvoId,
       } =
@@ -410,11 +373,6 @@ export const criarTreinoSalvo =
       let owner =
         contexto.owner;
 
-      /*
-       * Admin precisa indicar
-       * explicitamente para quem
-       * está salvando.
-       */
       if (
         contexto.isAdmin &&
         !ownerValido(owner)
@@ -425,11 +383,6 @@ export const criarTreinoSalvo =
         });
       }
 
-      /*
-       * Para usuário comum,
-       * owner veio exclusivamente
-       * do activeContext.
-       */
       if (
         !contexto.isAdmin &&
         !ownerValido(owner)
@@ -476,12 +429,6 @@ export const criarTreinoSalvo =
       const created =
         await prisma.$transaction(
           async (tx) => {
-            /*
-             * Quando o usuário escolhe
-             * substituir um dos 5 slots,
-             * só pode apagar do contexto
-             * ativo.
-             */
             if (
               apagarTreinoSalvoId
             ) {
@@ -739,17 +686,9 @@ export const criarTreinoSalvo =
                     Boolean(
                       naoExpira
                     ),
-
                   expiraEm,
-
-                  /*
-                   * Nunca confiamos mais
-                   * em criadoPorUsuarioId
-                   * vindo do cliente.
-                   */
                   criadoPorUsuarioId:
                     contexto.usuarioId,
-
                   ...owner,
                 },
               });
@@ -1119,20 +1058,6 @@ export const reutilizarTreinoSalvo =
         });
       }
 
-      /*
-       * TreinoSalvoReuso registra
-       * especificamente um Professor.
-       *
-       * Por isso:
-       *
-       * Pedro — Professor
-       * Clube X — Professor
-       *
-       * funcionam.
-       *
-       * Clube X — Proprietário
-       * não inventa um professorId.
-       */
       const professorId =
         contexto
           .professorAtivoId;
@@ -1209,13 +1134,6 @@ export const reutilizarTreinoSalvo =
             },
           });
       } catch {
-        /*
-         * Já reutilizado pelo mesmo
-         * Professor.
-         *
-         * O @@unique do Prisma impede
-         * duplicar a contagem.
-         */
       }
 
       const totalProfessores =
@@ -1416,13 +1334,6 @@ export const limparTreinosSalvosExpirados =
         });
       }
 
-      /*
-       * Esse endpoint apaga registros
-       * globalmente.
-       *
-       * Antes qualquer usuário
-       * autenticado podia chamá-lo.
-       */
       const isAdmin =
         await canPermission(
           usuarioId,

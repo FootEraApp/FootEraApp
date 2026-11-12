@@ -1,4 +1,3 @@
-// client/src/pages/explorar
 import { useEffect, useMemo, useRef, useState, useContext } from "react";
 import axios from "axios";
 import { Link } from "wouter";
@@ -1160,10 +1159,6 @@ function Explorar() {
           .json()
           .catch(() => ({}));
 
-      /*
-      * Se o principal tiver mais
-      * de um possível sucessor.
-      */
       if (
         resposta.status ===
           409 &&

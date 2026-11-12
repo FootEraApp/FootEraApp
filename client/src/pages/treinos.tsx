@@ -1,4 +1,3 @@
-// client/src/pages/treinos
 import {
   useContext,
   useMemo,
@@ -42,10 +41,6 @@ export default function Treinos() {
           return null;
         }
 
-        /*
-        * Em organização,
-        * a tela é de instrutor/gestão.
-        */
         if (
           activeContext.kind ===
           "ORGANIZATION"

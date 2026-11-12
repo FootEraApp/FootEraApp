@@ -317,7 +317,6 @@ export async function criarNotificacaoEEnviarPush(params: {
   let not;
 
   if (!params.agrupamentoKey) {
-    // Notificações normais continuam independentes.
     not = await prisma.notificacao.create({
       data: {
         ...dados,
@@ -328,8 +327,6 @@ export async function criarNotificacaoEEnviarPush(params: {
     const agrupamentoKey = params.agrupamentoKey;
 
     try {
-      // Primeira mensagem da conversa:
-      // cria um único aviso.
       not = await prisma.notificacao.create({
         data: {
           ...dados,
@@ -346,8 +343,6 @@ export async function criarNotificacaoEEnviarPush(params: {
         throw erro;
       }
 
-      // Se o aviso anterior já foi lido,
-      // reativa esse mesmo registro.
       const reativacao =
         await prisma.notificacao.updateMany({
           where: {
@@ -364,14 +359,9 @@ export async function criarNotificacaoEEnviarPush(params: {
           },
         });
 
-      // Só envia outro push quando começa
-      // um novo ciclo de notificação.
       enviarPush = reativacao.count > 0;
 
       if (!enviarPush) {
-        // Já existe um aviso não lido:
-        // atualiza o texto, sem criar outro
-        // e sem enviar outro push.
         await prisma.notificacao.updateMany({
           where: {
             agrupamentoKey,
@@ -404,8 +394,6 @@ export async function criarNotificacaoEEnviarPush(params: {
     );
   }
 
-  // Não repete push enquanto o mesmo
-  // aviso permanecer não lido.
   if (enviarPush) {
     const resultados = await Promise.allSettled([
       enviarPushParaUsuario({

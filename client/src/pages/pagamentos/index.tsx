@@ -1,4 +1,3 @@
-// client/src/pages/pagamentos/index.tsx
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState, useRef, useContext} from "react";
 import {
@@ -1252,7 +1251,6 @@ export default function PagamentosPage() {
       return;
     }
 
-    // Bloqueia antes de qualquer consulta assíncrona.
     setCheckoutBloqueado(true);
 
     let chaveCliente: string;
@@ -1377,8 +1375,6 @@ export default function PagamentosPage() {
 
             setCheckoutBloqueado(true);
 
-            // Redirecionamento para a preferência
-            // existente; não cria outra cobrança.
             window.location.assign(url.href);
             return;
           }
@@ -1435,8 +1431,6 @@ export default function PagamentosPage() {
           );
         }
 
-        // Não libera uma nova cobrança automaticamente.
-        // A confirmação da criação não equivale ao pagamento.
         setCheckoutBloqueado(true);
       } catch (erro) {
         console.error(
@@ -2208,8 +2202,6 @@ export default function PagamentosPage() {
           );
         }
 
-        // este catálogo é igual para
-        // visitante e usuário logado
         const rAulas =
           await fetch(
             `${API.BASE_URL}/api/billing/aulas-ao-vivo`,

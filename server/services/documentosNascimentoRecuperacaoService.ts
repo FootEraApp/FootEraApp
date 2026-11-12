@@ -1,6 +1,3 @@
-
-// server/services/documentosNascimentoRecuperacaoService.ts
-
 import { randomUUID } from "node:crypto";
 import { prisma } from "../prisma.js";
 import {
@@ -84,8 +81,6 @@ export async function processarExclusoesDocumentosPendentes(
     ],
   };
 
-  // Primeira leitura: encontra candidatos.
-  // Esta consulta ainda NÃO reserva registros.
   const candidatos =
     await prisma.exclusaoDocumentoNascimentoPendente.findMany({
       where: {
@@ -113,9 +108,6 @@ export async function processarExclusoesDocumentosPendentes(
     const reservadoPor = randomUUID();
     const inicio = new Date();
 
-    // Reserva atômica no PostgreSQL.
-    // Se outro worker reservou primeiro,
-    // este updateMany retorna count = 0.
     const aquisicao =
       await prisma.exclusaoDocumentoNascimentoPendente.updateMany({
         where: {
@@ -149,9 +141,6 @@ export async function processarExclusoesDocumentosPendentes(
     processadas++;
 
     try {
-      // Antes de remover, verifica se
-      // o objeto pertence a um documento
-      // ainda registrado no banco.
       const vinculado =
         await prisma.documentoCorrecaoNascimento.findUnique({
           where: {
@@ -163,8 +152,6 @@ export async function processarExclusoesDocumentosPendentes(
         });
 
       if (vinculado) {
-        // Pendência inconsistente:
-        // preservar arquivo e descartar pendência.
         await prisma.exclusaoDocumentoNascimentoPendente.deleteMany({
           where: {
             id: candidato.id,
@@ -176,13 +163,10 @@ export async function processarExclusoesDocumentosPendentes(
         continue;
       }
 
-      // Exclui o arquivo do armazenamento.
       await removerDocumentoNascimento(
         candidato.s3Key
       );
 
-      // A pendência só pode ser removida
-      // pelo worker que a reservou.
       await prisma.exclusaoDocumentoNascimentoPendente.deleteMany({
         where: {
           id: candidato.id,
@@ -194,8 +178,6 @@ export async function processarExclusoesDocumentosPendentes(
     } catch (erro) {
       falhas++;
 
-      // Confirma que a reserva ainda pertence
-      // ao mesmo worker antes de atualizar.
       const atual =
         await prisma.exclusaoDocumentoNascimentoPendente.findUnique({
           where: {
@@ -219,8 +201,6 @@ export async function processarExclusoesDocumentosPendentes(
         2 ** Math.min(proximaTentativa, 6)
       );
 
-      // Registra falha e libera a reserva
-      // para uma próxima tentativa.
       await prisma.exclusaoDocumentoNascimentoPendente.updateMany({
         where: {
           id: candidato.id,

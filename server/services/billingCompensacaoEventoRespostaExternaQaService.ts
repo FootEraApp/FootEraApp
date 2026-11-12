@@ -35,9 +35,6 @@ export function avaliarRespostaExternaEstornoQa(
     motivo,
     evidenciaCompativel,
     exigeRevisao: true,
-
-    // Nenhuma resposta simulada tem permissao
-    // para alterar o financeiro.
     executarNovoEstorno: false,
     repetirRequisicao: false,
     atualizarPagamento: false,
@@ -164,9 +161,6 @@ export function avaliarRespostaExternaEstornoQa(
     );
   }
 
-  // Apenas classificacao de uma resposta QA.
-  // Ainda nao demonstra a autoria da operacao
-  // ou a efetiva liquidacao financeira.
   return responder(
     "RESPOSTA_COMPATIVEL_EXIGE_REVISAO",
     true

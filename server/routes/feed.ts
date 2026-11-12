@@ -1,4 +1,3 @@
-// server/routes/feed.ts 
 import { Router } from "express";
 import {
   authenticateToken,

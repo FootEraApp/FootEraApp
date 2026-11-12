@@ -133,11 +133,6 @@ export async function criarComentario(req: AuthenticatedRequest, res: Response) 
             )}`,
         });
       } catch (error) {
-        /*
-        * O comentário já existe.
-        * Não transformamos falha de push
-        * em falha de comentário.
-        */
         console.warn(
           "[criarComentario] falha ao criar notificação:",
           error

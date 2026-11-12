@@ -790,7 +790,6 @@ function PostUnico(): JSX.Element {
           shadow-sm
         "
       >
-        {/* CABEÇALHO */}
         <div className="flex items-center gap-3 px-5 pt-5">
           {linkAutor ? (
             <Link
@@ -883,7 +882,6 @@ function PostUnico(): JSX.Element {
           )}
         </div>
 
-        {/* REPOST */}
         {post.repostOf && (
           <p className="px-5 pt-3 text-xs text-gray-500">
             Repostou de{" "}
@@ -897,7 +895,6 @@ function PostUnico(): JSX.Element {
           </p>
         )}
 
-        {/* CONTEÚDO */}
         <div className="px-5 pb-5 pt-4">
           {post.repostOf ? (
             <>
@@ -1090,7 +1087,6 @@ function PostUnico(): JSX.Element {
               </video>
             )}
 
-          {/* AÇÕES */}
           <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
             <button
               type="button"
@@ -1223,7 +1219,6 @@ function PostUnico(): JSX.Element {
         </div>
       </article>
 
-      {/* COMENTÁRIOS */}
       <section
         id="comentarios-post"
         className="

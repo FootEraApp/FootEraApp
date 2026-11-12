@@ -23,7 +23,6 @@ router.get(
   getTurmaPublica
 );
 
-// Tudo abaixo continua privado.
 router.use(
   authenticateToken
 );

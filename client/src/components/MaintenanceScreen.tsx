@@ -1,4 +1,3 @@
-// client/src/components/MaintenanceScreen
 import { Dumbbell, Flame, Timer, ChevronRight, Home, Sparkles } from "lucide-react";
 import { useLocation } from "wouter";
 

@@ -84,16 +84,6 @@ function validarPagamentoId(pagamentoId: string): void {
   }
 }
 
-/**
- * Prepara, adquire, reserva e registra intenção.
- *
- * Não executar duas vezes para tentar novamente
- * um envio externo.
- *
- * As funções internas fazem aquisição condicional.
- * Se qualquer etapa falhar, nenhuma chamada externa
- * será feita e a situação deverá ser conciliada.
- */
 export async function prepararIntencaoEnvioEstornoQa(
   pagamentoId: string
 ) {
@@ -201,12 +191,6 @@ export async function prepararIntencaoEnvioEstornoQa(
   };
 }
 
-/**
- * Consulta o estado da compensação em QA.
- *
- * Apenas observação.
- * Nunca reenvia um estorno.
- */
 export async function consultarRetomadaEnvioEstornoQa(
   pagamentoId: string
 ) {
@@ -260,9 +244,6 @@ export async function prepararEnvioEstornoReal(
   validarAmbienteEstornoReal();
   validarPagamentoId(pagamentoId);
 
-  // Comprova previamente que o pagamento externo
-  // está elegível à compensação.
-  // Não envia estorno ao Mercado Pago.
   const preparada =
     await prepararCompensacaoEventoVerificada(
       pagamentoId
@@ -501,11 +482,8 @@ export async function consultarRetomadaEstornoReal(
       tentativa?.requisicaoEnviadaEm ?? null,
     operacaoExternaExecutada:
       tentativa?.operacaoExternaExecutada ?? false,
-
-    // Reentrada é sempre somente leitura.
     podeEnviarNovoEstorno: false,
     podeRepetirEstorno: false,
-
     requerConciliacao:
       c.status !== "CONFIRMADA",
   };
@@ -789,8 +767,6 @@ async function persistirResultadoEstornoConfirmado(
     );
   }
 
-  // A verificação acontece ANTES da transação.
-  // Nenhum HTTP é executado dentro do FOR UPDATE.
   const evidencia = await verificarEvidencia({
     pagamentoProviderRef: compensacao.providerRef,
     estornoProviderRef,
@@ -798,8 +774,6 @@ async function persistirResultadoEstornoConfirmado(
     moeda: compensacao.moeda,
   });
 
-  // A resposta do verificador também é validada
-  // por este núcleo, independentemente do modo.
   if (
     evidencia.pagamentoProviderRef !==
       compensacao.providerRef ||
@@ -850,8 +824,6 @@ async function persistirResultadoEstornoConfirmado(
       const chaveEsperada =
         `footera-evento-refund-${pagamentoId}`;
 
-      // A evidência obtida anteriormente não pode
-      // ser aplicada a uma compensação que mudou.
       if (
         atual.providerRef !==
           compensacao.providerRef ||
@@ -886,8 +858,6 @@ async function persistirResultadoEstornoConfirmado(
         );
       }
 
-      // Permite consultar novamente a mesma evidência
-      // antes da finalização.
       if (
         atual.status === "AGUARDANDO_CONFIRMACAO" &&
         atual.tentativas === 1 &&
@@ -981,13 +951,6 @@ async function persistirResultadoEstornoConfirmado(
   );
 }
 
-/**
- * Produção: somente evidência consultada
- * diretamente no Mercado Pago.
- *
- * Nunca confia em dados de evidência recebidos
- * de um cliente HTTP ou de uma rota pública.
- */
 export async function registrarResultadoEnvioEstornoReal(
   pagamentoId: string,
   estornoProviderRef: string
@@ -1004,16 +967,6 @@ export async function registrarResultadoEnvioEstornoReal(
   );
 }
 
-/**
- * QA: permite testar o mesmo núcleo transacional
- * com uma evidência inteiramente simulada.
- *
- * Não consulta o Mercado Pago.
- * Não envia POST.
- * Não finaliza compensação.
- *
- * Só funciona no banco footera_billing_qa.
- */
 export async function registrarResultadoEnvioEstornoQa(
   pagamentoId: string,
   estornoProviderRef: string,
@@ -1250,18 +1203,6 @@ export async function investigarEstornoSemReferenciaReal(
     };
 }
 
-/**
- * Fluxo integrado QA:
- * aquisição exclusiva -> POST interceptado ->
- * validação -> persistência da evidência simulada.
- *
- * Nunca usa o token real.
- * Nunca finaliza pagamentos.
- * Nunca executa uma segunda requisição após
- * uma tentativa adquirida.
- *
- * Não registrar em controllers, rotas ou schedulers.
- */
 export async function executarFluxoEstornoIntegradoQa(
   pagamentoId: string,
   fetchSimulado: typeof fetch,
@@ -1291,8 +1232,6 @@ export async function executarFluxoEstornoIntegradoQa(
     };
   }
 
-  // Somente a aquisição vencedora chega aqui.
-  // Token fictício e fetch injetado.
   const resultado =
     await testarTransporteEstornoMercadoPagoQa({
       pagamentoProviderRef:
@@ -1321,8 +1260,6 @@ export async function executarFluxoEstornoIntegradoQa(
     };
   }
 
-  // O retorno do transporte e a evidência simulada
-  // precisam identificar exatamente o mesmo estorno.
   if (
     evidenciaSimulada.estornoProviderRef !==
       resultado.estornoProviderRef ||
@@ -1374,8 +1311,6 @@ export async function executarEstornoRealControlado(
   validarPagamentoId(pagamentoId);
   await validarExecutorEstorno(executorId);
 
-  // Impede repetir o preparo de uma compensação
-  // que já possui tentativa.
   const existente =
     await prisma.billingCompensacaoEvento.findUnique({
       where: { pagamentoId },
@@ -1399,8 +1334,6 @@ export async function executarEstornoRealControlado(
     };
   }
 
-  // Bloqueia o preparo antes de criar uma tentativa
-  // quando não existe aprovação administrativa válida.
   await validarAutorizacaoEstornoAntesDoPreparo(
     pagamentoId,
     executorId
@@ -1423,9 +1356,6 @@ export async function executarEstornoRealControlado(
     };
   }
   
-  // A aquisição já foi persistida.
-  // Qualquer falha posterior exige conciliação.
-  // Nunca executar novamente o POST.
   let resposta: Awaited<
     ReturnType<
       typeof executarPostEstornoAutorizadoMercadoPago

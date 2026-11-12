@@ -1771,8 +1771,6 @@ export default function LearningCreatePage() {
         })),
       };
 
-      // Em uma edição, nunca enviar o campo "ativo".
-      // A publicação é controlada pelo backend e pelo administrador.
       const { ativo: _ativoCriacao, ...payloadEdicao } = payloadBase;
 
       if (!editMetodologiaId) {

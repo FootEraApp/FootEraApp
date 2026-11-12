@@ -45,13 +45,6 @@ async function resolverAutorPostagem(
       authorContextKeyRaw ?? ""
     ).trim();
 
-  /*
-   * Compatibilidade com telas antigas,
-   * como pontuacoesPerfil.tsx.
-   *
-   * Se não vier authorContextKey,
-   * usamos o contexto global ativo.
-   */
   if (!authorContextKey) {
     const contexto =
       await getActiveContext(
@@ -423,8 +416,6 @@ async function podeEditarPostagem(
     organizacaoId: string | null;
   }
 ): Promise<boolean> {
-  // Publicação institucional:
-  // exige autorização na organização proprietária.
   if (postagem.organizacaoId) {
     const contexto = await getActiveContext(usuarioId);
 
@@ -441,8 +432,6 @@ async function podeEditarPostagem(
     );
   }
 
-  // Publicação pessoal:
-  // somente o autor pode editar.
   return (
     postagem.usuarioId !== null &&
     postagem.usuarioId === usuarioId
@@ -754,10 +743,6 @@ export const deletarPost =
             }),
         ]);
 
-      /*
-       * Auditoria extra quando o post
-       * foi removido pelo responsável.
-       */
       if (
         vinculoResponsavel
       ) {

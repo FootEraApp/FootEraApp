@@ -170,8 +170,6 @@ type GrupoDetalhe = {
   membros: GrupoMembro[];
 };
 
-// Datas das conversas: agrupamento por dia no fuso horário do dispositivo.
-// Evita UTC/toISOString(), que poderia deslocar mensagens perto da meia-noite.
 type MensagemComData = { id: string; criadaEm: string };
 
 type GrupoDeDia<T extends MensagemComData> = {
@@ -195,7 +193,6 @@ function chaveDoDia(data: Date): string {
 function tituloDoDia(data: Date, agora: Date): string {
   const inicioDia = new Date(data.getFullYear(), data.getMonth(), data.getDate());
   const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  // Diferença entre dias de calendário, sem depender das horas ou do horário de verão.
   const diaUTC = Date.UTC(inicioDia.getFullYear(), inicioDia.getMonth(), inicioDia.getDate());
   const hojeUTC = Date.UTC(inicioHoje.getFullYear(), inicioHoje.getMonth(), inicioHoje.getDate());
   const diasAtras = Math.round((hojeUTC - diaUTC) / 86_400_000);
@@ -648,7 +645,6 @@ export default function PaginaMensagens() {
   const [carregandoMaisPriv, setCarregandoMaisPriv] = useState(false);
   const [mensagensGrupo, setMensagensGrupo] = useState<MensagemGrupo[]>([]);
   const [temMaisGrupo, setTemMaisGrupo] = useState(true);
-  // Os grupos são recalculados apenas quando a lista muda.
   const diasPrivados = useMemo(() => agruparMensagensPorDia(mensagensPrivadas), [mensagensPrivadas]);
   const diasGrupo = useMemo(() => agruparMensagensPorDia(mensagensGrupo), [mensagensGrupo]);
   const [temMaisNovasPriv, setTemMaisNovasPriv] = useState(false);
@@ -1942,11 +1938,6 @@ export default function PaginaMensagens() {
             })
           );
 
-        /*
-        * Conversas pertencem à conta inteira.
-        * Contatos sem conversa dependem
-        * do contexto ativo.
-        */
         let base =
           mergeUnique(
             fromConversas,
@@ -2128,8 +2119,6 @@ export default function PaginaMensagens() {
         );
 
       if (!grupo) {
-        // Os grupos ainda podem
-        // estar carregando.
         return;
       }
 
@@ -2848,8 +2837,6 @@ export default function PaginaMensagens() {
 
     setPrivadaProntaId(otherId);
 
-    // Sem mensagens pendentes, atualiza possíveis
-    // avisos antigos dessa conversa.
     if (mapa && quantidade === 0) {
       void markReadFromUser(otherId);
     }
@@ -2956,7 +2943,6 @@ export default function PaginaMensagens() {
   async function abrirGrupoComNaoLidas(
     grupoId: string
   ) {
-    // Obtém a situação ANTES de marcar como lida.
     const mapa = await fetchUnreadByGroup();
 
     if (
@@ -3199,7 +3185,6 @@ export default function PaginaMensagens() {
       ) as HTMLElement | null;
 
       if (!divisor) {
-        // Ainda pode faltar carregar mensagens antigas.
         return;
       }
 
@@ -3318,8 +3303,6 @@ export default function PaginaMensagens() {
     const ultimaMensagem =
       mensagensGrupo[mensagensGrupo.length - 1];
 
-    // Não é necessário marcar como lida uma
-    // mensagem enviada pelo próprio usuário.
     if (ultimaMensagem.usuarioId === usuarioId) {
       return;
     }

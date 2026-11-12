@@ -379,8 +379,6 @@ export async function criarSubmissaoTreinoUpload(
           },
         });
 
-        // Não modifica a data de conclusão caso
-        // o agendamento já tenha sido concluído.
         if (atual.status !== "CONCLUIDO") {
           await tx.treinoAgendado.update({
             where: { id: treinoAgendadoId },
@@ -893,8 +891,6 @@ export async function criarSubmissaoTreinoSessaoUpload(
         }
       : undefined;
 
-    // Ordena os atletas para adquirir os locks sempre
-    // na mesma ordem e reduzir risco de deadlock.
     const atletasOrdenados = [
       ...new Set(presentesIds),
     ].sort();

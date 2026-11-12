@@ -1,6 +1,3 @@
-// server/services/billingCheckoutOperacaoService.ts
-// Camada de persistencia de tentativas de checkout.
-// NAO chama o Mercado Pago. NAO faz reenvio automatico de operacoes inconclusivas.
 import { createHash, randomUUID } from "node:crypto";
 import {
   BillingCheckoutOperacaoStatus,
@@ -30,9 +27,6 @@ function jsonCanonico(valor: unknown): string {
     .join(",")}}`;
 }
 
-/** Calcule a partir de usuario, contexto, itens, metodo, cupom e valor FINAL em centavos.
- * Nao inclua dados sensiveis (CPF, token, cartao) no objeto de entrada.
- */
 export function fingerprintCheckout(dados: Record<string, unknown>): string {
   return createHash("sha256").update(jsonCanonico(dados)).digest("hex");
 }
@@ -65,11 +59,6 @@ function conferirReuso(
   }
 }
 
-/**
- * Criacao do Pagamento e da operacao na MESMA transacao.
- * A restricao unique(usuarioId, chaveCliente) protege processos simultaneos.
- * O callback deve SOMENTE gravar no PostgreSQL; nunca chamar API externa.
- */
 export async function prepararCheckoutAtomico(args: PrepararCheckoutArgs): Promise<{
   pagamento: Pagamento;
   operacao: BillingCheckoutOperacao;
@@ -139,7 +128,6 @@ export async function prepararCheckoutAtomico(args: PrepararCheckoutArgs): Promi
   }
 }
 
-/** Somente uma requisicao PREPARADA pode passar para ENVIO_POSSIVEL. */
 export async function adquirirEnvioCheckout(operacaoId: string): Promise<boolean> {
   const resultado = await prisma.billingCheckoutOperacao.updateMany({
     where: { id: operacaoId, status: STATUS.PREPARADA },
@@ -185,8 +173,6 @@ export async function confirmarCheckoutExterno(args: {
         );
       }
 
-      // Aquisição condicional: outra confirmação não pode
-      // finalizar esta mesma operação simultaneamente.
       const adquirido =
         await tx.billingCheckoutOperacao.updateMany({
           where: {
@@ -325,7 +311,6 @@ export async function confirmarPreferenciaCheckout(
   });
 }
 
-/** Resultado desconhecido: NAO reenvia e NAO cancela automaticamente. */
 export async function marcarCheckoutInconclusivo(
   operacaoId: string,
   erro: unknown
@@ -338,7 +323,6 @@ export async function marcarCheckoutInconclusivo(
   return atualizado.count === 1;
 }
 
-/** Somente consultas autenticadas; o controller tambem deve validar contexto. */
 export async function consultarCheckoutDoUsuario(usuarioId: string, chaveCliente: string) {
   if (!usuarioId || !chaveCliente) {
     throw new ErroCheckoutOperacao("BILLING_CHECKOUT_OPERATION_INPUT_INVALID");

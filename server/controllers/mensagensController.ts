@@ -403,8 +403,6 @@ export async function markReadFromUser(req: any, res: Response) {
             agrupamentoKey: `dm:${userId}:${otherId}`,
           },
           {
-            // Compatibilidade com avisos privados
-            // criados antes da migration 120.
             agrupamentoKey: null,
             tipo: NotificacaoTipo.MENSAGEM,
             actorId: otherId,
@@ -658,14 +656,12 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
     let duracaoRealAudio: number | null = null;
 
     if (tipo === "AUDIO" && arquivoAudio) {
-      // Confere a duração usando o arquivo real.
       duracaoRealAudio =
         await verificarDuracaoRealChatAudio(
           arquivoAudio.buffer,
           arquivoAudio.mimetype
         );
 
-      // Só grava depois da validação.
       audioSalvo = await gravarChatAudio(
         "privadas",
         arquivoAudio.buffer,
@@ -1112,9 +1108,6 @@ export async function listarContatosRelacionados(
         return;
       }
 
-      /*
-       * Não adiciona a própria conta.
-       */
       if (
         u.id === userId
       ) {
@@ -1344,16 +1337,6 @@ export async function listarContatosRelacionados(
       }
     }
 
-    /*
-     * ===============================
-     * ORGANIZAÇÃO — CLUBE
-     * ===============================
-     *
-     * Inclusive:
-     * Clube X — Proprietário
-     * Clube X — Administrador
-     * Clube X — Professor
-     */
     if (
       contexto.kind ===
         "ORGANIZATION" &&
@@ -1471,11 +1454,6 @@ export async function listarContatosRelacionados(
       }
     }
 
-    /*
-     * ===============================
-     * ORGANIZAÇÃO — ESCOLA
-     * ===============================
-     */
     if (
       contexto.kind ===
         "ORGANIZATION" &&
@@ -1913,9 +1891,6 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
         contextoRemetenteSnapshot,
     };
 
-
-
-    // Notifica os outros integrantes sobre uma nova mensagem.
     try {
       const destinatarios = await prisma.membroGrupo.findMany({
         where: {

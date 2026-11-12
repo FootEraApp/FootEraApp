@@ -54,8 +54,6 @@ export async function resolverCreatorAdministravel(
       );
     }
 
-    // Não confiar apenas no contexto apresentado pelo cliente.
-    // Verificar o vínculo ativo diretamente no banco.
     const membro = await prisma.membroOrganizacao.findUnique({
       where: {
         organizacaoId_usuarioId: {
@@ -157,9 +155,6 @@ export async function resolverCreatorAdministravel(
     );
   }
 
-  // Um Creator institucional nunca pode ser administrado
-  // por meio de uma sessão pessoal, mesmo que usuarioId
-  // continue apontando para o proprietário anterior.
   if (
     creator.organizacaoId !== null ||
     creator.tipo !== CreatorTipo.PESSOA_FISICA

@@ -1,4 +1,3 @@
-// client/src/components/billing/AniversarioBanner.tsx
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Gift, Copy, Check, ArrowRight } from "lucide-react";
@@ -9,7 +8,6 @@ type BeneficioAniversario = {
   codigo: string | null;
   percentual: number | null;
   expiraEm: string | null;
-  // Opcional para quando o backend passar a informar consumo/reserva.
   disponivel?: boolean;
 };
 
@@ -85,7 +83,6 @@ export default function AniversarioBanner({ token }: Props) {
       await navigator.clipboard.writeText(beneficio.codigo);
       setCopiado(true);
     } catch {
-      // Ainda permite copiar manualmente o código exibido.
       setCopiado(false);
     }
   }

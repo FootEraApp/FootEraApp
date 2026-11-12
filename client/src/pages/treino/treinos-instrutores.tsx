@@ -433,7 +433,6 @@ function prepararUrlVideo(raw: string): string {
       }
     }
   } catch {
-    // Mantém o endereço original se não for URL absoluta.
   }
 
   return raw;
@@ -1888,13 +1887,6 @@ export default function TreinosInstrutores({
         activeOwnerId,
     });
 
-    /*
-    * /perfil/me continua sendo usado
-    * somente para obter o nome.
-    *
-    * NÃO usamos mais a resposta para
-    * descobrir o contexto/ID ativo.
-    */
     (async () => {
       const token =
         getToken();

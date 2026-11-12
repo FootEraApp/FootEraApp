@@ -47,9 +47,6 @@ export function avaliarCompensacaoEvento(
     statusMp: String(mp.status ?? ""),
     acaoConciliacao: classificacao.acao,
     motivoConciliacao: classificacao.motivo,
-
-    // Este serviço nunca autoriza nem executa
-    // um estorno de verdade.
     estornoAutorizado: false,
     estornoExecutado: false,
   });

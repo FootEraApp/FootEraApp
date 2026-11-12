@@ -1,4 +1,3 @@
-// client/src/components/learning/LearningTypeChooser.tsx
 import { BookOpen, GraduationCap } from "lucide-react";
 import type {
   LearningEstruturaTipo,

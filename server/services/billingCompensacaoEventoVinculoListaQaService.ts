@@ -36,15 +36,6 @@ function validarAmbienteQa() {
   }
 }
 
-/**
- * Vincula a análise da lista de estornos ao
- * pagamento e à compensação reais no banco QA.
- *
- * SOMENTE LEITURA.
- * Não cria estorno.
- * Não atualiza pagamento ou compensação.
- * Não desbloqueia novas tentativas.
- */
 export async function consultarListaEstornosCompensacaoQa(
   entrada: Entrada
 ) {
@@ -162,13 +153,7 @@ export async function consultarListaEstornosCompensacaoQa(
     chaveIdempotencia:
       compensacao.chaveIdempotencia,
     consulta,
-
-    // O vínculo da lista ao PAGAMENTO foi
-    // verificado, mas não há evidência de que
-    // um estorno específico foi iniciado por
-    // esta compensação.
     operacaoEstornoDaCompensacaoComprovada: false,
-
     exigeAnaliseManual: true,
     executarNovoEstorno: false,
     atualizarPagamento: false,

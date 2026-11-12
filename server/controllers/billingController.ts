@@ -379,8 +379,6 @@ export async function getCheckoutOperacao(
       });
     }
 
-    // Confere a propriedade e o contexto diretamente
-    // no banco antes de fornecer qualquer informação.
     const pagamento =
       await prisma.pagamento.findFirst({
         where: {
@@ -409,9 +407,6 @@ export async function getCheckoutOperacao(
       });
     }
 
-
-    // Conciliação somente leitura de checkout inconclusivo.
-    // Nunca cria cobrança, confirma checkout ou concede acesso.
     let conciliacaoExterna: {
       consultada: boolean;
       acao: string | null;
@@ -1105,8 +1100,6 @@ export async function revisarReservasCupomVencidasQa() {
   let marcadas = 0;
 
   for (const reserva of reservas) {
-    // Pagamentos já alterados de status devem ser
-    // examinados separadamente, nunca liberados aqui.
     if (
       reserva.pagamento.status !==
       PagamentoStatus.PENDENTE
@@ -1144,7 +1137,6 @@ export async function criarPagamentoComReservaQa(
   const executar = async (
     tx: Prisma.TransactionClient
   ) => {
-      // Serializa as reservas do mesmo cupom no PostgreSQL.
       await tx.$queryRaw`
         SELECT id
         FROM "Cupom"
@@ -1585,9 +1577,6 @@ async function processarComunicacaoBilling(
     canal: args.canal,
   };
 
-  // Garante a existência da comunicação.
-  // Se outra instância criar o mesmo registro,
-  // o PostgreSQL ignora a inserção duplicada.
   await prisma.billingComunicacao.createMany({
     data: [
       {
@@ -1598,8 +1587,6 @@ async function processarComunicacaoBilling(
     skipDuplicates: true,
   });
 
-  // Recupera o registro único, independentemente
-  // de qual instância tenha realizado a inserção.
   const registro =
     await prisma.billingComunicacao.findUnique({
       where: {
@@ -1656,9 +1643,6 @@ async function processarComunicacaoBilling(
     return false;
   }
 
-  // Número da tentativa que esta execução adquiriu.
-  // Impede que uma tentativa anterior finalize
-  // uma tentativa mais recente.
   const tentativaAtual = registro.tentativas + 1;
 
   try {
@@ -1972,8 +1956,6 @@ export async function processExpiringSubscriptions(
         { status: "TRIAL", ativo: true },
         { status: "ATIVA", ativo: true },
         { status: "CANCELADA", ativo: true },
-
-        // Recupera comunicações de bloqueios anteriores.
         {
           status: "BLOQUEADA",
           bloqueadoEm: { not: null },
@@ -2026,8 +2008,6 @@ export async function processExpiringSubscriptions(
         continue;
       }
 
-      // A chave do ciclo não depende do momento
-      // em que o job é executado.
       const cicloKey =
         dataLimite.toISOString();
 
@@ -2045,7 +2025,6 @@ export async function processExpiringSubscriptions(
 
       const dias = diffDays(dataLimite, now);
 
-      // 1. Aviso de vencimento
       if (
         a.ativo &&
         (
@@ -2062,8 +2041,6 @@ export async function processExpiringSubscriptions(
           diasRestantes: dias,
         });
 
-        // Campo legado mantido para compatibilidade.
-        // A entrega real é controlada por canal.
         const avisoApp =
           await prisma.billingComunicacao.findUnique({
             where: {
@@ -2104,7 +2081,6 @@ export async function processExpiringSubscriptions(
         }
       }
 
-      // 2. Trial encerrado ou assinatura vencida
       if (
         dataLimite <= now &&
         (
@@ -2182,8 +2158,6 @@ export async function processExpiringSubscriptions(
       continue;
       }
 
-      // 3. Recuperar comunicações pendentes de bloqueios
-      // já registrados pelo sistema novo.
       if (
         a.status === "BLOQUEADA" &&
         a.bloqueadoEm
@@ -2193,9 +2167,6 @@ export async function processExpiringSubscriptions(
             ? "TRIAL_ENCERRADO"
             : "BLOQUEIO";
 
-        // Só recuperamos comunicações que já
-        // começaram a ser processadas.
-        // Bloqueios antigos sem registro são ignorados.
         const comunicacaoExistente =
           await prisma.billingComunicacao.findFirst({
             where: {
@@ -2212,9 +2183,6 @@ export async function processExpiringSubscriptions(
           continue;
         }
 
-        // Verifica novamente o estado atual,
-        // pois um webhook pode ter renovado a
-        // assinatura após a consulta inicial.
         const assinaturaAtual =
           await prisma.assinatura.findUnique({
             where: {
@@ -2250,8 +2218,6 @@ export async function processExpiringSubscriptions(
         continue;
       }
 
-      // 4. Cancelamento com benefícios válidos
-      // até a data de vencimento.
       if (
         a.status === "CANCELADA" &&
         a.ativo &&
@@ -2887,10 +2853,7 @@ async function registrarCreatorVendaTx(args: {
       },
     },
 
-    // Nunca recalcular uma venda já existente
-    // apenas porque o webhook foi recebido novamente.
     update: {},
-
     create: {
       creatorId: creator.id,
       compradorId,
@@ -2924,8 +2887,6 @@ async function registrarCreatorVendaTx(args: {
     );
   }
 
-  // A repetição não deve transformar uma venda
-  // pendente ou cancelada em confirmada silenciosamente.
   if (venda.status !== CreatorVendaStatus.CONFIRMADA) {
     throw new Error(
       "BILLING_SALE_REQUIRES_RECONCILIATION"
@@ -3453,9 +3414,6 @@ async function resgatarCupom(
         throw new Error("BILLING_COUPON_NOT_FOUND");
       }
 
-      // O cupom de aniversário exige uma reserva
-      // e deve ser consumido exclusivamente no
-      // fluxo transacional de confirmação do pagamento.
       if (cupom.codigo.startsWith("ANIVERSARIO_")) {
         throw new Error(
           "BIRTHDAY_COUPON_REQUIRES_RESERVED_PAYMENT"
@@ -4290,8 +4248,6 @@ export async function applyCoupon(req: Request, res: Response) {
       baseTotal += await priceFor(it.planoId, it.periodicidade);
     }
 
-    // Prévia de cupom para pacotes.
-    // Usa as mesmas regras do checkout-bundle.
     if (items.length > 1) {
       if (items.some((item) => isEvento(item.planoId))) {
         return res.status(400).json({
@@ -5180,8 +5136,6 @@ async function registrarPagamentoBeneficioTx(
     },
   });
 
-  // Evita reutilizar uma chave de item para
-  // conceder um benefício diferente.
   if (
     beneficio.usuarioId !== args.usuarioId ||
     beneficio.tipo !== args.tipo ||
@@ -5267,8 +5221,6 @@ async function approvePaymentAndProvision(
 
   return prisma.$transaction(
     async (tx) => {
-      // Serializa aprovação e finalização financeira
-      // do mesmo pagamento entre processos.
       const pagamentoBloqueado = await tx.$queryRaw<
         Array<{ id: string }>
       >`
@@ -5616,10 +5568,7 @@ async function approvePaymentAndProvision(
             "BILLING_EVENT_FINANCIAL_RECONCILIATION_REQUIRED"
           );
         }
-        // IMPORTANTE:
-        // Bloquear o evento antes de contar as vagas.
-        // Dois pagamentos concorrentes para o mesmo
-        // evento serão processados em sequência.
+
         const eventosBloqueados = await tx.$queryRaw<
           Array<{
             id: string;
@@ -5640,7 +5589,6 @@ async function approvePaymentAndProvision(
           );
         }
 
-        // Consultar a inscrição do comprador.
         const inscricaoExistente =
           await tx.inscricaoEvento.findUnique({
             where: {
@@ -5662,8 +5610,6 @@ async function approvePaymentAndProvision(
             "PRESENCA_OK",
           ].includes(String(inscricaoExistente.status));
 
-        // Quem já está confirmado não precisa
-        // consumir uma vaga adicional.
         if (!possuiVagaConfirmada && evento.vagas !== null) {
           const vagasOcupadas =
             await tx.inscricaoEvento.count({
@@ -5726,8 +5672,6 @@ async function approvePaymentAndProvision(
           monthsForPeriodicidade(it.periodicidade)
         );
 
-        // UPSERT atômico: impede que aprovações
-        // simultâneas reduzam a validade do acesso.
         const acessosAtualizados =
           await tx.$queryRaw<Array<{ id: string }>>`
             INSERT INTO "MetodologiaAssinante" (
@@ -5796,9 +5740,6 @@ async function approvePaymentAndProvision(
             "BILLING_ACCESS_ORIGIN_REQUIRES_RECONCILIATION"
           );
         }
-
-        // Mantenha abaixo o código já existente:
-        // const valorBruto = financeiroItem ...
 
         const valorBruto = financeiroItem
           ? financeiroItem.valorFinalCentavos / 100
@@ -5915,13 +5856,6 @@ async function approvePaymentAndProvision(
   });
 }
 
-/**
- * Entrada exclusivamente para teste de concorrencia
- * com a compensacao financeira.
- *
- * Nao adicionar em routes/billing.ts.
- * Nao chamar em producao.
- */
 export async function aprovarPagamentoEventoConcorrenciaQa(
   pagamentoId: string,
   eventoId: string
@@ -6022,8 +5956,6 @@ export async function aprovarPagamentoEventoConcorrenciaQa(
     );
   }
 
-  // Executa a mesma funcao interna usada pela
-  // aprovacao real, sem simular sua logica.
   return approvePaymentAndProvision(pagamentoId, [
     {
       planoId: `EVENTO:${eventoId}`,
@@ -6980,8 +6912,6 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         });
       }
 
-      // Nesta primeira etapa, somente cupons
-      // válidos para o pacote inteiro.
       if (
         cupomRow.plano ||
         cupomRow.periodicidade ||
@@ -7002,8 +6932,6 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         });
       }
 
-      // O schema atual permite somente um
-      // resgate por usuário e cupom.
       const resgateExistente =
         await prisma.cupomResgate.findUnique({
           where: {
@@ -7051,8 +6979,6 @@ export async function startCheckoutBundle(req: Request, res: Response) {
         descontoCentavos
       );
 
-      // Cupom que zera a compra será tratado
-      // em uma etapa específica.
       if (descontoCentavos >= baseCentavos) {
         return res.status(400).json({
           code: "BUNDLE_FULL_DISCOUNT_NOT_SUPPORTED",
@@ -7656,7 +7582,6 @@ async function cancelarPagamentoPendenteComReserva(
         );
       }
 
-      // Cancelamento repetido é idempotente.
       if (pagamento.status === PagamentoStatus.CANCELADO) {
         return {
           pagamentoId,
@@ -7664,8 +7589,6 @@ async function cancelarPagamentoPendenteComReserva(
         };
       }
 
-      // Não cancelar pagamentos aprovados ou reembolsados
-      // por meio do fluxo de cancelamento de pendentes.
       if (pagamento.status !== PagamentoStatus.PENDENTE) {
         throw new Error(
           "BILLING_CANCELLATION_REQUIRES_RECONCILIATION"
@@ -7674,7 +7597,6 @@ async function cancelarPagamentoPendenteComReserva(
 
       const agora = new Date();
 
-      // Disputa atomicamente o pagamento com a aprovação.
       const alteracao = await tx.pagamento.updateMany({
         where: {
           id: pagamentoId,
@@ -7762,9 +7684,6 @@ async function executarEventoPagamento<T>(
     throw new Error("BILLING_EVENT_ID_REQUIRED");
   }
 
-  // Reserva a identidade do evento.
-  // Em entregas simultâneas, outra requisição pode
-  // ter criado o registro primeiro.
   let evento = await prisma.eventoPagamento.findUnique({
     where: {
       providerEventId: chave,
@@ -7785,7 +7704,6 @@ async function executarEventoPagamento<T>(
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
-        // O evento foi criado pela outra requisição.
         evento = await prisma.eventoPagamento.findUnique({
           where: {
             providerEventId: chave,
@@ -7816,7 +7734,6 @@ async function executarEventoPagamento<T>(
     agora.getTime() - WEBHOOK_LEASE_MS
   );
 
-  // Somente um processo pode adquirir o evento.
   const adquirido = await prisma.eventoPagamento.updateMany({
     where: {
       id: evento.id,
@@ -8009,8 +7926,6 @@ export async function providerWebhook(
       });
     }
 
-    // Mantém a chave legada para não perder a
-    // identificação de eventos já registrados.
     const resultado = await executarEventoPagamento(
       providerEventId,
       tipo,
@@ -8129,9 +8044,6 @@ export async function providerWebhook(
         }
 
         if (tipo === "payment_canceled") {
-          // Somente no QA, usando o provedor simulado.
-          // O evento representa um cancelamento definitivo
-          // confirmado pelo próprio teste.
           if (
             !BILLING_CUPOM_RESERVA_QA ||
             provider !== "INTERNAL_FAKE"
@@ -8258,9 +8170,6 @@ async function sincronizarCheckoutPixAprovado(
       },
     });
 
-  // Pagamentos sem operação PIX, incluindo
-  // cartão, preferências e registros legados,
-  // não entram nessa sincronização.
   if (!operacao) {
     return;
   }
@@ -8394,8 +8303,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         ? String(externalRef).trim()
         : null;
 
-    // Se o provedor informou duas identidades,
-    // elas precisam corresponder ao mesmo pagamento.
     if (
       idMetadata &&
       idExterno &&
@@ -8424,8 +8331,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         },
       });
 
-    // Duas referências não podem identificar
-    // pagamentos internos diferentes.
     if (
       pagamentoPorId &&
       pagamentoPorReferencia &&
@@ -8445,8 +8350,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         mpId
       );
 
-      // Não confirmar um evento que ainda
-      // precisa ser conciliado.
       return res.status(503).json({
         ok: false,
         code: "BILLING_PAYMENT_NOT_FOUND",
@@ -8595,9 +8498,7 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
         });
       }
     }
-    // A referência pode começar como uma
-    // preferência de checkout e depois passar
-    // a identificar o pagamento real.
+
     if (pagamento.providerRef !== mpId) {
       if (!pagamentoPorId) {
         throw new Error(
@@ -8632,8 +8533,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
             },
           });
 
-        // A referência precisa continuar vinculada
-        // ao mesmo pagamento interno.
         if (
           !pagamentoAtual ||
           pagamentoAtual.provider !== "MERCADOPAGO" ||
@@ -8645,9 +8544,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
           });
         }
 
-        /// Outro webhook concluiu a aprovação.
-        // Recupera o estado do checkout PIX antes
-        // de retornar, sem reprovisionar benefícios.
         if (
           pagamentoAtual.status === PagamentoStatus.APROVADO &&
           conciliacao.acao === "APROVAR"
@@ -8662,17 +8558,10 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
             idempotent: true,
           });
         }
-        // Outro webhook apenas atualizou providerRef,
-        // mas o pagamento continua pendente.
-        // Nesse caso, seguimos para a transação de
-        // aprovação, que possui controle de concorrência.
         if (
           pagamentoAtual.status === PagamentoStatus.PENDENTE
         ) {
-          // Nenhuma ação: continuar o fluxo abaixo.
         } else {
-          // Cancelamento, falha ou outro estado
-          // não podem ser tratados como aprovação.
           return res.status(503).json({
             ok: false,
             code: "BILLING_MP_CONCURRENT_STATE_CONFLICT",
@@ -8777,8 +8666,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
     }
 
     if (status === "cancelled" || status === "rejected") {
-      // Neste ponto o status foi consultado diretamente
-      // ao Mercado Pago, não confiado ao payload recebido.
       await cancelarPagamentoPendenteComReserva(
         pagamento.id,
         "MERCADOPAGO"
@@ -8891,8 +8778,6 @@ export async function mercadoPagoWebhook(req: Request, res: Response) {
           eventoId,
         });
 
-        // Registrar pendência durável para análise.
-        // Este registro NÃO efetua estorno.
         const auditoriaExistente =
           await prisma.auditLog.findFirst({
             where: {

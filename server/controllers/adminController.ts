@@ -284,15 +284,6 @@ export const adminDashboard = async (
         TipoUsuario.Creator
       );
 
-    /*
-    * "Outros" agora significa:
-    * contas sem nenhum papel
-    * reconhecido.
-    *
-    * Não podemos mais subtrair os
-    * totais, porque uma mesma conta
-    * pode aparecer em vários papéis.
-    */
     let totalOutros =
       0;
 

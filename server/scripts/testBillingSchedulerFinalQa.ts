@@ -103,8 +103,6 @@ async function main() {
         exigir(item?.status === status && item.tentativas === tentativas, `${canal}: esperado ${status}/${tentativas}, encontrado ${item?.status}/${item?.tentativas}`);
       }
     }
-
-    // 1: Retry vencido - os dois canais devem passar de FALHOU/1 para ENVIADO/2.
     {
       const a = await assinatura("retry-vencido");
       await semear(a.id, a.renovaEm.toISOString(), "VENCIMENTO_7_DIAS", "FALHOU", 1, new Date(Date.now() - MS_DIA));
@@ -112,8 +110,6 @@ async function main() {
       conferirCanais(await registros(a.id), "ENVIADO", 2);
       aprovados.push("RETRY_VENCIDO");
     }
-
-    // 2: Retry futuro - nao pode adquirir nem enviar.
     {
       const a = await assinatura("retry-futuro");
       await semear(a.id, a.renovaEm.toISOString(), "VENCIMENTO_7_DIAS", "FALHOU", 1, new Date(Date.now() + MS_DIA));
@@ -121,8 +117,6 @@ async function main() {
       conferirCanais(await registros(a.id), "FALHOU", 1);
       aprovados.push("RETRY_FUTURO");
     }
-
-    // 3: Lease expirado (>30 minutos) - recupera como tentativa 2.
     {
       const a = await assinatura("lease-expirado");
       await semear(a.id, a.renovaEm.toISOString(), "VENCIMENTO_7_DIAS", "PROCESSANDO", 1, null, new Date(Date.now() - 35 * 60 * 1000));
@@ -132,8 +126,6 @@ async function main() {
       conferirCanais(await registros(a.id), "ENVIADO", 2);
       aprovados.push("LEASE_EXPIRADO");
     }
-
-    // 4: Lease ainda valido - nao adquire.
     {
       const a = await assinatura("lease-valido");
       await semear(a.id, a.renovaEm.toISOString(), "VENCIMENTO_7_DIAS", "PROCESSANDO", 1, null, new Date());
@@ -141,8 +133,6 @@ async function main() {
       conferirCanais(await registros(a.id), "PROCESSANDO", 1);
       aprovados.push("LEASE_VALIDO");
     }
-
-    // 5: Limite de cinco tentativas - nao adquire.
     {
       const a = await assinatura("limite-cinco");
       await semear(a.id, a.renovaEm.toISOString(), "VENCIMENTO_7_DIAS", "FALHOU", 5, new Date(Date.now() - MS_DIA));
@@ -151,7 +141,6 @@ async function main() {
       aprovados.push("LIMITE_5_TENTATIVAS");
     }
 
-    // 6: Recuperacao de bloqueio previamente registrado com APP/EMAIL FALHOU.
     {
       const a = await assinatura("bloqueio-recuperacao", true);
       await semear(a.id, a.renovaEm.toISOString(), "BLOQUEIO", "FALHOU", 1, new Date(Date.now() - MS_DIA));
@@ -161,9 +150,6 @@ async function main() {
       exigir(depois?.status === "BLOQUEADA" && depois.ativo === false, "bloqueio recuperado alterou assinatura incorretamente");
       aprovados.push("BLOQUEIO_RECUPERADO");
     }
-
-    // 7: Ciclo antigo pendente - nao pode ser enviado pelo scheduler ao processar ciclo atual.
-    // Nao substitui um teste instrumentado de renovacao entre validacao e entrega externa.
     {
       const a = await assinatura("ciclo-antigo");
       const vencimentoAntigo = new Date(a.renovaEm.getTime() - 10 * MS_DIA);
@@ -182,9 +168,6 @@ async function main() {
       conferirCanais(atuais, "ENVIADO", 1);
       aprovados.push("CICLO_ANTIGO_IGNORADO");
     }
-    
-    // 8: Duas execuções simultâneas do scheduler.
-    // Cada canal deve ser adquirido e enviado apenas uma vez.
     {
       const a = await assinatura("concorrencia-simultanea");
 

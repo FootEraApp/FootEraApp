@@ -1,4 +1,3 @@
-// server/routes/treinos
 import { Router } from "express";
 import { authenticateToken } from "server/middlewares/auth.js";
 import {

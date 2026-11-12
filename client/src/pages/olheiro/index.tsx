@@ -89,23 +89,11 @@ export default function PainelOlheiro() {
             ? r.data
             : []
         ).map((x: any) => {
-          /*
-          * atletaId:
-          * usado em desempenho/indicação.
-          */
           const atletaId =
             x.atletaId ||
             x.atleta?.id ||
             x.id;
 
-          /*
-          * usuarioId:
-          * usado para abrir /perfil/:id.
-          *
-          * Na resposta atual do backend,
-          * quando existe atletaId, x.id
-          * corresponde ao usuário.
-          */
           const usuarioId =
             x.usuarioId ||
             x.usuario?.id ||

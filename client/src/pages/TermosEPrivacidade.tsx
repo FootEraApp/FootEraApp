@@ -1,4 +1,3 @@
-// client/src/pages/TermosEPrivacidade
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Instagram, Facebook } from "lucide-react";

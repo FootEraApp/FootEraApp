@@ -1,30 +1,17 @@
-
 import { prisma } from "../prisma.js";
-
 import {
   consultarPagamentoMercadoPago,
 } from "./billingConciliacaoMercadoPagoService.js";
-
 import {
   obterPagamentoMercadoPago,
 } from "./billingMercadoPagoGateway.js";
-
 import {
   avaliarCompensacaoEvento,
 } from "./billingCompensacaoEventoService.js";
-
 import {
   prepararCompensacaoEvento,
 } from "./billingCompensacaoEventoRegistroService.js";
 
-/**
- * Confere o estado financeiro externo antes de
- * preparar uma compensacao interna.
- *
- * NAO realiza estorno.
- * NAO aprova pagamento.
- * NAO concede inscricao.
- */
 export async function prepararCompensacaoEventoVerificada(
   pagamentoId: string
 ) {
@@ -96,9 +83,6 @@ export async function prepararCompensacaoEventoVerificada(
       }),
     ]);
 
-  // Consultar o Mercado Pago ou o mock autorizado
-  // pelo gateway QA. A falha da consulta bloqueia
-  // qualquer preparacao.
   const mp = await obterPagamentoMercadoPago(
     pendencia.providerRef,
     consultarPagamentoMercadoPago
@@ -129,9 +113,6 @@ export async function prepararCompensacaoEventoVerificada(
     throw erro;
   }
 
-  // A função existente confere novamente o
-  // estado local sob bloqueio FOR UPDATE
-  // e cria somente um registro por pagamento.
   const resultado =
     await prepararCompensacaoEvento(id);
 

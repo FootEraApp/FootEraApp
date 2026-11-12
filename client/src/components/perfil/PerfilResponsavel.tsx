@@ -791,10 +791,6 @@ const [
         }
         );
     } catch (error: any) {
-        /*
-        * Volta ao estado anterior
-        * caso o backend rejeite.
-        */
         if (anterior) {
         atualizarSupervisaoLocal(
             atletaId,
@@ -1511,12 +1507,6 @@ async function desvincularDoAtleta(
           () => ({})
         );
 
-    /*
-     * Se este usuário é o principal
-     * e existem 2 ou mais outros
-     * responsáveis ativos, o backend
-     * exige que ele escolha o sucessor.
-     */
     if (
       resposta.status ===
         409 &&
@@ -1652,9 +1642,6 @@ async function desvincularDoAtleta(
       );
     }
 
-    /*
-     * Remove imediatamente da tela.
-     */
     setItems(
       (atuais) =>
         atuais.filter(
@@ -1664,11 +1651,6 @@ async function desvincularDoAtleta(
         )
     );
 
-    /*
-     * Limpa caches locais daquele
-     * atleta para não deixar informações
-     * supervisionadas na tela.
-     */
     setResponsaveisSecundarios(
       (atual) => {
         const proximo = {

@@ -1,4 +1,3 @@
-// server/controllers/treinosProgramadosController
 import { Request, Response } from "express";
 import { Categoria, Nivel, TipoTreino } from "@prisma/client";
 import { onExercicioIncluidoNoTreino } from "../services/statsService.js";
@@ -173,15 +172,6 @@ async function ownerFromActiveContext(
     return null;
   }
 
-  /*
-   * CONTEXTO DE ORGANIZAÇÃO
-   *
-   * Clube FootEra — Proprietário
-   * Clube FootEra — Professor
-   * Escola X — Administrador
-   *
-   * O DONO do treino é a organização.
-   */
   if (
     contexto.kind ===
     "ORGANIZATION"
@@ -253,9 +243,6 @@ async function ownerFromActiveContext(
     return null;
   }
 
-  /*
-   * CONTEXTO PESSOAL PROFESSOR
-   */
   if (
     contexto.tipoUsuario ===
       "Professor" &&
@@ -281,9 +268,6 @@ async function ownerFromActiveContext(
     };
   }
 
-  /*
-   * ADMIN pessoal.
-   */
   const isAdmin =
     await canPermission(
       usuarioId,
@@ -668,16 +652,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
         req
       );
 
-    /*
-    * Somente Admin pode escolher
-    * explicitamente outro dono
-    * através do body.
-    *
-    * Para todos os demais,
-    * tipoUsuario/tipoUsuarioId/professorId
-    * enviados pelo front são ignorados
-    * como fonte de ownership.
-    */
     if (isAdmin) {
       owner =
         assertOwnerIdsFromBodyOrReq(
@@ -1092,7 +1066,6 @@ export const createTreinoProgramado = async (req: Request, res: Response) => {
       })
     );
 
-    // Pontuação oficial, calculada com os exercícios finais antes de persistir.
     const pontosCalculados = await calcularPontuacaoTreinoPersistencia({
       nivel: nivelNorm,
       tipoTreino: tipoTreinoNorm,
@@ -1379,14 +1352,6 @@ export async function updateTreino(req: Request, res: Response) {
     const dataDono:
       any = {};
 
-    /*
-    * Usuário comum:
-    * ignora tipoUsuario/tipoUsuarioId.
-    *
-    * Fazemos IGNORE em vez de erro
-    * porque o front legado ainda envia
-    * esses campos durante a migração.
-    */
     if (
       isAdmin &&
       (
@@ -1783,7 +1748,6 @@ export async function updateTreino(req: Request, res: Response) {
       })
     );
 
-    // Quando um campo não é reenviado na edição, mantém o valor vigente.
     const anteriorPontuacao = await prisma.treinoProgramado.findUniqueOrThrow({
       where: { id },
       select: { nivel: true, tipoTreino: true, duracao: true },

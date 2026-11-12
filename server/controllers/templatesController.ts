@@ -452,10 +452,6 @@ export async function deletarTemplate(
         owner.ownerId;
     }
 
-    /*
-     * Compatibilidade para templates antigos
-     * que não possuem owner específico.
-     */
     const semOwner =
       !tpl.professorId &&
       !tpl.clubeId &&

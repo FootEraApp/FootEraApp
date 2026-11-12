@@ -14,8 +14,6 @@ type Entrada = {
   providerRef: string;
   valorOriginal: Prisma.Decimal | string | number;
   moeda: string;
-
-  // Obrigatório: transporte HTTP simulado.
   fetchQa: typeof fetch;
 };
 
@@ -45,14 +43,6 @@ function validarAmbienteQa(): void {
   }
 }
 
-/**
- * Integra a leitura HTTP simulada com a
- * avaliação da lista de estornos.
- *
- * Não altera o banco.
- * Não executa reembolso.
- * Não confirma compensação.
- */
 export async function consultarEAnalisarListaEstornosQa(
   entrada: Entrada
 ) {
@@ -71,8 +61,6 @@ export async function consultarEAnalisarListaEstornosQa(
   }
 
   try {
-    // O token é fictício e o transporte
-    // precisa ser fornecido pelo teste.
     const estornos =
       await consultarEstornosPagamentoMercadoPago(
         entrada.providerRef,
@@ -99,8 +87,6 @@ export async function consultarEAnalisarListaEstornosQa(
       atualizarPagamento: false,
     };
   } catch {
-    // Uma falha de consulta não equivale
-    // a uma lista de reembolsos vazia.
     return {
       consultaConcluida: false,
       quantidadeRetornada: null,

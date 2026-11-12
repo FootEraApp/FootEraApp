@@ -909,12 +909,6 @@ export const salvarVinculoProfessor = async (
             tx,
           });
 
-        /*
-         * NÃO encerra os outros vínculos.
-         * Agora Professor pode pertencer a
-         * vários Clubes e Escolinhas.
-         */
-
         const relacaoAnterior =
           await tx.relacaoTreinamento.findFirst({
             where: {
@@ -1012,10 +1006,6 @@ export const salvarVinculoProfessor = async (
           });
         }
 
-        /*
-         * Mantém sincronizado com
-         * MembroOrganizacao.
-         */
         if (
           professorExistente
             .usuarioId
@@ -1042,10 +1032,6 @@ export const salvarVinculoProfessor = async (
           });
         }
 
-        /*
-         * Salva somente o vínculo solicitado.
-         * NÃO apaga os demais.
-         */
         if (
           tipo ===
           "Clube"
@@ -1110,14 +1096,6 @@ export const salvarVinculoProfessor = async (
             },
           });
 
-          /*
-           * Campo legado:
-           * só preenche caso ainda não exista
-           * um Clube principal.
-           *
-           * Os vários vínculos reais ficam
-           * em ProfessorClube.
-           */
           if (
             !professorExistente
               .clubeId
@@ -1203,12 +1181,6 @@ export const salvarVinculoProfessor = async (
           },
         });
 
-        /*
-         * Mesmo princípio:
-         * escolinhaId fica como compatibilidade
-         * legada; todos os vínculos ficam
-         * em ProfessorEscolinha.
-         */
         if (
           !professorExistente
             .escolinhaId

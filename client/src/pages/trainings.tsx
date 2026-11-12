@@ -1,4 +1,3 @@
-// client/src/pages/training
 import { useEffect, useMemo, useState, useContext } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -281,7 +280,6 @@ export default function TrainingsPage() {
           return;
         }
 
-        // A consulta do perfil valida se o visitante tem acesso e fornece o ID do atleta.
         const perfilResponse = await fetch(
           `${API.BASE_URL}/api/perfil/${encodeURIComponent(perfilUsuarioId)}?papel=Atleta`,
           { headers, signal: controller.signal }

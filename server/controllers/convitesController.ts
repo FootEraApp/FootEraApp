@@ -1,4 +1,3 @@
-// server/controllers/convitesController.ts
 import { Request, Response } from "express";
 import {
   ConviteStatus,

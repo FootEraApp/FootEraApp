@@ -62,11 +62,6 @@ function tipoPerfilDoActiveContext(
       contexto.kind ?? ""
     ).toUpperCase();
 
-  /*
-   * Contexto organizacional representa
-   * a organização, independentemente
-   * da função exercida nela.
-   */
   if (
     kind ===
     "ORGANIZATION"

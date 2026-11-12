@@ -1,4 +1,3 @@
-// server/routes/cadastro
 import express from "express";
 import {
   getCadastroIndex,

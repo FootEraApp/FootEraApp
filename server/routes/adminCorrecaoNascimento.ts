@@ -1,4 +1,3 @@
-// server/routes/adminCorrecaoNascimento.ts
 import { Router } from "express";
 import {
   authenticateToken,

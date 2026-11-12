@@ -206,7 +206,6 @@ export default function PaginaLogin() {
 
         navigate(destino);
 
-        // Push é secundário e não deve bloquear autenticação
         void inicializarPushDepoisDoLogin();
 
       } catch (err: any) {

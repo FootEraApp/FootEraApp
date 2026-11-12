@@ -54,7 +54,6 @@ export default function ResponsaveisAtleta() {
     return json;
   }, [token]);
 
-  // Confirma no backend que o ID corresponde a uma conta com papel Responsável ativo.
   useEffect(() => {
     setBuscaResponsavel(null);
     setIdNaoEncontrado(false);

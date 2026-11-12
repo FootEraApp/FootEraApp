@@ -58,11 +58,6 @@ export function readPrivacyConfig(
       c.visibilidadePerfil
     );
 
-  // Compatibilidade com o modelo antigo.
-  // Se ainda não existe visibilidadePerfil:
-  //
-  // perfilVisivel !== false -> PUBLICO
-  // perfilVisivel === false -> PRIVADO
   const visibilidadePerfil:
     VisibilidadePerfil =
       visibilidadeNova ??
@@ -643,7 +638,6 @@ export async function avaliarPrivacidadePerfil(
       priv.mostrarEmail = false;
     }
 
-    // Não expor presença por padrão para menores.
     priv.mostrarOnline = false;
   }
 

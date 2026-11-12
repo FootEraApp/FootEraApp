@@ -114,9 +114,6 @@ export async function requireElencoOwner(
     let permitido =
       false;
 
-    /*
-     * Professor pessoal.
-     */
     if (
       contexto.kind ===
         "PERSONAL" &&
@@ -129,9 +126,6 @@ export async function requireElencoOwner(
         contexto.tipoUsuarioId;
     }
 
-    /*
-     * Organização ativa.
-     */
     if (
       contexto.kind ===
         "ORGANIZATION" &&
@@ -257,9 +251,6 @@ export async function requireVinculoComAtleta(
       | null =
       null;
 
-    /*
-     * Professor pessoal.
-     */
     if (
       contexto.kind ===
         "PERSONAL" &&
@@ -273,16 +264,6 @@ export async function requireVinculoComAtleta(
       };
     }
 
-    /*
-     * Dentro de uma organização,
-     * o vínculo usado é o da própria
-     * organização ativa.
-     *
-     * Assim um Professor que pertence
-     * a Clube A e Clube B não consegue
-     * usar os atletas de B enquanto
-     * está em "Clube A — Professor".
-     */
     if (
       contexto.kind ===
         "ORGANIZATION" &&

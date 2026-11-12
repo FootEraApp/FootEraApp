@@ -266,15 +266,6 @@ async function carregarMapas() {
     });
   }
 
-
-  /*
-   * O Seguidor antigo aponta para Usuario.
-   *
-   * Para não duplicar um follow em TODAS
-   * as organizações de uma conta multi-papel,
-   * usamos a organização correspondente
-   * ao tipo atualmente ativo do usuário.
-   */
   const idsUsuarios =
     Array.from(
       new Set(
@@ -399,11 +390,6 @@ async function carregarMapas() {
       }
     }
 
-    /*
-     * Fallback seguro:
-     * só usamos se a conta possuir
-     * exatamente UMA organização.
-     */
     if (
       candidatos.length === 1
     ) {
@@ -481,14 +467,6 @@ async function migrarPostagens(
       result.count;
   }
 
-
-  /*
-   * Posts antigos de Marca/Federação
-   * normalmente só possuem usuarioId.
-   *
-   * Também cobre Clube/Escola quando
-   * o post antigo não tinha clubeId/escolinhaId.
-   */
   for (
     const [
       usuarioId,
@@ -626,11 +604,6 @@ async function migrarEventos(
       result.count;
   }
 
-
-  /*
-   * Fallback para eventos antigos
-   * que só possuem creatorUsuarioId.
-   */
   for (
     const [
       usuarioId,

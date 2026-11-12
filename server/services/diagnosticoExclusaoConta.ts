@@ -113,9 +113,6 @@ export async function diagnosticarExclusaoConta(
   });
 
   const impedimentos: ImpedimentoExclusao[] = [];
-
-  // Históricos e avisos que exigem preservação ou revisão,
-  // mas não são automaticamente bloqueios da exclusão lógica.
   const avisos: ImpedimentoExclusao[] = [];
 
   if (usuario.administrador) {
@@ -181,7 +178,6 @@ export async function diagnosticarExclusaoConta(
     if (legadosRegistrados.has(chave)) continue;
     legadosRegistrados.add(chave);
 
-    // Organização já identificada como propriedade atual.
     if (
       registro.organizacaoId &&
       organizacoesRegistradas.has(registro.organizacaoId)
@@ -190,8 +186,6 @@ export async function diagnosticarExclusaoConta(
     }
 
     if (registro.organizacaoId) {
-      // A propriedade atual vem de MembroOrganizacao,
-      // não do usuarioId histórico da entidade legada.
       const proprietariosAtuais =
         await prisma.membroOrganizacao.findMany({
           where: {
@@ -213,9 +207,6 @@ export async function diagnosticarExclusaoConta(
         proprietariosAtuais.length > 0 &&
         !pertenceAoUsuario
       ) {
-        // A organização pertence a outra pessoa.
-        // O vínculo legado será preservado como histórico,
-        // mas não impede a exclusão lógica dessa conta.
         avisos.push({
           codigo: "ORGANIZATION_LEGACY_TRANSFERRED",
           categoria: "ORGANIZACAO",
@@ -236,8 +227,6 @@ export async function diagnosticarExclusaoConta(
       }
     }
 
-    // Sem proprietário atual diferente comprovado:
-    // manter impedimento até regularizar a titularidade.
     impedimentos.push({
       codigo: "ORGANIZATION_LEGACY_OWNER",
       categoria: "ORGANIZACAO",
@@ -326,7 +315,6 @@ export async function diagnosticarExclusaoConta(
     }),
   ]);
 
-  // RESPONSÁVEL
   if (vinculosComoResponsavel > 0) {
     impedimentos.push({
       codigo: "RESPONSAVEL_VINCULOS_PENDENTES",
@@ -341,7 +329,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // ATLETA
   if (atleta) {
     const [
       responsaveisDoAtleta,
@@ -398,7 +385,6 @@ export async function diagnosticarExclusaoConta(
     }
   }
 
-  // PROFESSOR
   if (professor) {
     const [gestorias, treinamentos] =
       await Promise.all([
@@ -433,7 +419,6 @@ export async function diagnosticarExclusaoConta(
     }
   }
 
-  // CREATOR PESSOAL
   if (creatorPessoal) {
     const vendas = await prisma.creatorVenda.count({
       where: {
@@ -459,7 +444,6 @@ export async function diagnosticarExclusaoConta(
     }
   }
 
-  // ASSINATURAS
   if (assinaturasAtivas > 0) {
     impedimentos.push({
       codigo: "ASSINATURAS_ATIVAS",
@@ -475,7 +459,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // PAGAMENTOS
   if (pagamentosPendentes > 0) {
     impedimentos.push({
       codigo: "PAGAMENTOS_PENDENTES",
@@ -490,7 +473,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // TRANSFERÊNCIAS
   if (transferenciasPendentes > 0) {
     impedimentos.push({
       codigo: "TRANSFERENCIAS_PENDENTES",
@@ -504,17 +486,6 @@ export async function diagnosticarExclusaoConta(
         "pendentes, conforme sua participação e permissões.",
     });
   }
-
-    /*
-   * ETAPA 2.3 — Conteúdos e obrigações operacionais.
-   *
-   * Conteúdos pessoais não possuem vínculos com
-   * Clube, Escolinha, Marca ou Federação.
-   *
-   * Isso evita responsabilizar automaticamente o
-   * antigo proprietário por conteúdos institucionais
-   * transferidos para outra pessoa.
-   */
 
   const conteudoPessoal = {
     criadorUsuarioId: usuarioId,
@@ -628,7 +599,6 @@ export async function diagnosticarExclusaoConta(
     metodologiasLearning.filter((m) => m.ativo).length +
     metodologiasAvulsas.filter((m) => m.ativo).length;
 
-  // METODOLOGIAS PESSOAIS
   if (
     totalAssinantes > 0 ||
     totalMetodologiasPublicadas > 0
@@ -647,7 +617,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // AULAS AO VIVO
   if (aulasPessoaisPendentes > 0) {
     impedimentos.push({
       codigo: "AULAS_PESSOAIS_PENDENTES",
@@ -662,7 +631,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // EVENTOS PESSOAIS
   if (eventosPessoaisPendentes > 0) {
     impedimentos.push({
       codigo: "EVENTOS_PESSOAIS_ABERTOS",
@@ -677,7 +645,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // INSCRIÇÕES DO USUÁRIO
   if (inscricoesPendentes > 0) {
     impedimentos.push({
       codigo: "INSCRICOES_PENDENTES",
@@ -692,7 +659,6 @@ export async function diagnosticarExclusaoConta(
     });
   }
 
-  // OLHEIRO
   if (olheiro) {
     const indicacoesPendentes =
       await prisma.indicacao.count({

@@ -43,10 +43,6 @@ export async function consultarRecuperacaoCompensacaoQa(
     );
   }
 
-  // Não consultar o banco antes de validar o
-  // ambiente QA e a instalação do simulador.
-  // Uma chamada com referência inválida precisa
-  // ser bloqueada igualmente pelo gateway.
   const compensacao =
     await prisma.billingCompensacaoEvento.findUnique({
       where: { pagamentoId: id },
@@ -96,8 +92,6 @@ export async function consultarRecuperacaoCompensacaoQa(
     );
   }
 
-  // A consulta ao simulador nunca deve autorizar
-  // uma nova devolução quando a resposta é ambígua.
   let evidencia: EvidenciaEstornoQa;
 
   try {
@@ -123,9 +117,6 @@ export async function consultarRecuperacaoCompensacaoQa(
       evidencia,
     });
 
-  
-  // Registrar a evidência simulada no PostgreSQL.
-  // Nenhum status financeiro será atualizado.
   const valorEstorno =
     evidencia.tipo === "ENCONTRADO" &&
     /^\d+(?:\.\d+)?$/.test(evidencia.valor)

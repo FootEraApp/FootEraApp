@@ -3600,7 +3600,6 @@ model ExclusaoDocumentoNascimentoPendente {
   ultimoErro         String?
   proximaTentativaEm DateTime @default(now())
 
-  // Reserva exclusiva do worker
   reservadoPor String?
   reservadoAte DateTime?
 

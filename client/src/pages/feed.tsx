@@ -1,4 +1,3 @@
-// client/src/pages/feed
 import { toast } from "@/lib/toast";
 import React, { useEffect, useRef, useState } from "react";
 import {

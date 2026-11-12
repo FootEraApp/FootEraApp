@@ -41,14 +41,9 @@ export function avaliarRecuperacaoCompensacaoEvento(
     decisao,
     motivo,
     identidadeConfirmada,
-
-    // A avaliacao nunca altera o banco.
     atualizarPagamento: false,
     executarNovoEstorno: false,
     estornoConfirmadoLocalmente: false,
-
-    // Identidade do pagamento nao comprova autoria
-    // do estorno pela tentativa desta compensacao.
     vinculoOperacaoComprovado: false,
   });
 
@@ -64,10 +59,6 @@ export function avaliarRecuperacaoCompensacaoEvento(
     );
   }
 
-  // No QA atual, false significa apenas que
-  // o simulador nao executou uma operacao real.
-  // Nunca usar esse campo isoladamente como
-  // evidencia de inexistencia de estorno.
   if (
     entrada.evidencia.tipo === "CONSULTA_FALHOU"
   ) {
@@ -131,8 +122,6 @@ export function avaliarRecuperacaoCompensacaoEvento(
     .toLowerCase();
 
   if (status === "approved") {
-    // Evidencia de confirmacao externa,
-    // mas ainda sem reconciliacao local.
     return resposta(
       "ESTORNO_CONFIRMADO_PARA_REVISAO",
       "ESTORNO_EXTERNO_CONFIRMADO",

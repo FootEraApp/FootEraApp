@@ -26,9 +26,6 @@ export async function registrarPendenciaEventoExcedente(
       },
     });
 
-  // Somente pagamentos externos de eventos,
-  // ainda pendentes no sistema, podem gerar
-  // uma pendencia de compensacao financeira.
   if (
     !pagamento ||
     pagamento.plano !==
@@ -44,10 +41,6 @@ export async function registrarPendenciaEventoExcedente(
     );
   }
 
-  // pagamentoId possui UNIQUE no schema.
-  // Assim, varias notificacoes referentes
-  // ao mesmo pagamento compartilham o
-  // mesmo registro de pendencia.
   const pendencia =
     await prisma.billingPendenciaEvento.upsert({
       where: {
@@ -65,9 +58,6 @@ export async function registrarPendenciaEventoExcedente(
       update: {},
     });
 
-  // Rejeita reutilizacao de uma pendencia
-  // com evento ou dados financeiros
-  // inconsistentes.
   if (
     pendencia.eventoId !== args.eventoId ||
     pendencia.motivo !== MOTIVO ||

@@ -444,9 +444,6 @@ export const atualizarCreator = async (
 
     const body = req.body ?? {};
 
-    // Não permitir que uma edição comum converta um
-    // Creator institucional em pessoal ou vice-versa.
-    // Essa transição exige um fluxo administrativo próprio.
     if (
       body.tipo !== undefined &&
       body.tipo !== contexto.creator.tipo
@@ -880,8 +877,6 @@ export const getPerfilPublicoCreator = async (
 
     const receitaBruta = vendasConfirmadas.reduce((acc, v) => acc + toNumber(v.valorBruto), 0);
     const ganhoCreator = vendasConfirmadas.reduce((acc, v) => acc + toNumber(v.valorCreator), 0);
-    // Apenas campos explicitamente permitidos no perfil público.
-    // Nunca retornar o objeto completo do usuário ou da entidade.
     const dadosUsuario = creator.usuario ?? {
       id: null,
       nome: creator.nomePublico ?? "Creator institucional",
@@ -1088,8 +1083,6 @@ export const getDashboardCreator = async (
       });
     }
 
-    // Resolve o Creator pessoal ou o institucional
-    // conforme o contexto ativo e suas permissões.
     const contexto = await resolverCreatorAdministravel(
       usuarioId
     );
@@ -1106,8 +1099,6 @@ export const getDashboardCreator = async (
     const ehInstitucional =
       contexto.kind === "ORGANIZATION";
 
-    // A autoria pessoal continua separada da
-    // propriedade administrativa da organização.
     let filtroAutoria:
       | { criadorUsuarioId: string }
       | { escolinhaId: string }
@@ -1241,8 +1232,6 @@ export const getDashboardCreator = async (
       metodologias,
       avulsas,
     ] = await Promise.all([
-      // As vendas continuam associadas ao ID
-      // original do Creator, não ao usuário atual.
       prisma.creatorVenda.findMany({
         where: {
           creatorId: creator.id,

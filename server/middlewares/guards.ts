@@ -124,10 +124,6 @@ export function requireOrgSeat(
       });
     }
 
-    /*
-     * Admin global não depende
-     * do contexto selecionado.
-     */
     const isAdmin =
       await canPermission(
         usuarioId,
@@ -172,9 +168,6 @@ export function requireOrgSeat(
     const idsPermitidos =
       new Set<string>();
 
-    /*
-     * Professor pessoal.
-     */
     if (
       contexto.kind ===
         "PERSONAL" &&
@@ -189,13 +182,6 @@ export function requireOrgSeat(
       );
     }
 
-    /*
-     * Organização.
-     *
-     * Aceitamos tanto o ID da nova
-     * Organizacao quanto o ID legado
-     * de Clube/Escolinha.
-     */
     if (
       contexto.kind ===
       "ORGANIZATION"
@@ -222,14 +208,6 @@ export function requireOrgSeat(
         );
       }
 
-      /*
-       * Enquanto alguns endpoints antigos
-       * ainda mandarem professorId no body,
-       * permite o Professor daquele contexto.
-       *
-       * Na 105.2 os controllers deixarão
-       * de depender desse ID vindo do cliente.
-       */
       if (
         contexto.tipoUsuario ===
           TipoUsuario.Professor &&

@@ -111,9 +111,6 @@ async function resolverEscopoSessao(
     throw err;
   }
 
-  /*
-   * Professor pessoal.
-   */
   if (
     contexto.kind ===
       "PERSONAL" &&
@@ -138,9 +135,6 @@ async function resolverEscopoSessao(
     };
   }
 
-  /*
-   * Contexto de organização.
-   */
   if (
     contexto.kind ===
       "ORGANIZATION" &&
@@ -739,9 +733,6 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
     if (
       escopo.isAdmin
     ) {
-      // Admin:
-      // mantém somente os filtros
-      // de data existentes.
     } else if (
       escopo.professorId
     ) {
@@ -1490,8 +1481,6 @@ export async function finalizarSessao(
 
     const finalizada = await prisma.$transaction(
       async (tx) => {
-        // Impede que a mesma sessão seja finalizada
-        // simultaneamente por duas requisições.
         await tx.$queryRaw`
           SELECT pg_advisory_xact_lock(
             hashtext('footera_training_session'),
@@ -1517,8 +1506,6 @@ export async function finalizarSessao(
         }
 
         for (const atletaId of idsPresentes) {
-          // Mesmo bloqueio usado pelos treinos livres
-          // e pelas conclusões individuais.
           await tx.$queryRaw`
             SELECT pg_advisory_xact_lock(
               hashtext('footera_daily_training'),
@@ -1543,8 +1530,6 @@ export async function finalizarSessao(
             },
           });
 
-          // Não escolher arbitrariamente um agendamento
-          // quando há registros duplicados para o dia.
           if (agendamentos.length !== 1) {
             throw new Error(
               `AGENDAMENTO_TURMA_AMBIGUO:${atletaId}`
@@ -1640,8 +1625,6 @@ export async function finalizarSessao(
               });
             }
 
-            // Evita creditar novamente uma submissão
-            // que já estava aprovada anteriormente.
             if (!submissaoExistente?.aprovado) {
               if (usuarioId) {
                 await tx.atividadeRecente.create({
@@ -1664,8 +1647,6 @@ export async function finalizarSessao(
             }
           }
 
-          // Persiste o consumo da vaga mesmo
-          // se o agendamento for apagado depois.
           await registrarRealizacaoDiaria(tx, {
             atletaId,
             origem: "AGENDADO",

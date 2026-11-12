@@ -19,19 +19,15 @@ function dataBrasil(agora: Date) {
 }
 
 function aniversarioNesteDia(nascimento: Date, hoje: ReturnType<typeof dataBrasil>) {
-  // O banco deve armazenar dataNascimento como data civil, normalizada em UTC.
-  // Confirme isso no cadastro/edição antes da publicação.
   const mes = nascimento.getUTCMonth() + 1;
   const dia = nascimento.getUTCDate();
   if (mes === 2 && dia === 29 && new Date(Date.UTC(hoje.ano, 1, 29)).getUTCMonth() !== 1) {
-    // Regra explícita: nascidos em 29/02 comemoram em 28/02 nos anos não bissextos.
     return hoje.mes === 2 && hoje.dia === 28;
   }
   return hoje.mes === mes && hoje.dia === dia;
 }
 
 function inicioDiaSeguinteBR(hoje: ReturnType<typeof dataBrasil>): Date {
-  // O aniversário é uma janela civil [00:00, 00:00 do dia seguinte) em Brasília.
   const inicio = new Date(
     `${hoje.ano}-${String(hoje.mes).padStart(2, "0")}-${String(hoje.dia).padStart(2, "0")}T00:00:00-03:00`
   );
@@ -154,14 +150,6 @@ export async function consultarBeneficioAniversario(
   };
 }
 
-/**
- * Resolve o código público para um Cupom distinto por usuário e ano.
- * Isso preserva o índice único existente de CupomResgate(cupomId, usuarioId)
- * e permite uma nova utilização em um aniversário posterior.
- *
- * IMPORTANTE: o checkout e o webhook devem continuar usando o cupomId
- * persistido, não o código enviado pelo cliente.
- */
 export async function obterCupomAniversario(
   usuarioId: string,
   codigoInformado: string,
@@ -196,9 +184,6 @@ export async function obterCupomAniversario(
     update: {},
   });
 
-  // Segurança: um cupom interno de aniversário
-    // não pode ter suas condições financeiras alteradas.
-
     if (
     cupom.concedidoParaUsuarioId !== usuarioId ||
     cupom.tipo !== "PERCENTUAL" ||
@@ -213,8 +198,6 @@ export async function obterCupomAniversario(
     );
     }
 
-    // Uma confirmação já contabilizada impede
-    // novo uso, mesmo se o resgate estiver inconsistente.
     if (cupom.usosAtuais >= 1) {
     throw new CupomAniversarioError(
         "BIRTHDAY_COUPON_ALREADY_USED",

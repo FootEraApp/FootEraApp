@@ -243,17 +243,6 @@ function validarEstadoPendente(
   }
 }
 
-/**
- * Núcleo transacional compartilhado.
- *
- * REAL:
- * somente após evidência externa verificada.
- *
- * QA:
- * somente após validação estrita do ambiente.
- *
- * Nunca realiza HTTP e nunca envia estorno.
- */
 async function executarFinalizacaoTransacional(
   pagamentoId: string,
   original: CompensacaoCarregada,
@@ -414,13 +403,6 @@ async function executarFinalizacaoTransacional(
   );
 }
 
-/**
- * Finalização REAL.
- *
- * Não cria estorno.
- * Exige comprovante externo do Mercado Pago.
- * Não utiliza mock QA.
- */
 export async function finalizarCompensacaoEventoVerificada(
   pagamentoId: string
 ) {
@@ -538,13 +520,6 @@ export async function finalizarCompensacaoEventoVerificada(
   );
 }
 
-/**
- * Entrada exclusiva de testes no banco local QA.
- *
- * Não envia requisição HTTP.
- * Não produz estorno real.
- * Não conectar a rotas ou jobs.
- */
 export async function finalizarCompensacaoEventoTransacionalQa(
   pagamentoId: string,
   opcoes: {

@@ -1,4 +1,3 @@
-// client/src/pages/novoTreino
 import { toast } from "@/lib/toast";
 import { useContext, useEffect, useMemo, useRef, useState, ReactNode, memo, type UIEvent } from "react";
 import { Link, useLocation } from "wouter";
@@ -1123,9 +1122,6 @@ export default function NovoTreino() {
         };
       }
 
-      /*
-      * Professor pessoal.
-      */
       if (
         activeContext?.kind ===
           "PERSONAL" &&
@@ -1780,11 +1776,6 @@ export default function NovoTreino() {
         atletaIdGerenciado
       );
 
-    /*
-    * Essa regra só se aplica à tela
-    * de Atleta / Responsável
-    * gerenciando Atleta.
-    */
     if (
       !ehAtleta &&
       !ehResponsavel
@@ -1887,9 +1878,6 @@ export default function NovoTreino() {
 
   const professorLogadoId =
     useMemo(() => {
-      /*
-      * Professor pessoal.
-      */
       if (
         activeContext?.kind ===
           "PERSONAL" &&
@@ -2524,8 +2512,6 @@ export default function NovoTreino() {
         await assertOk(r, "Falha ao carregar seus treinos salvos");
         const data = await r.json();
         const items = Array.isArray(data?.items) ? data.items : [];
-
-        // O agendamento utiliza o ID de TreinoProgramado, nunca o ID de TreinoSalvo.
         const programados = items
           .filter((item: any) =>
             item?.treinoProgramado &&
@@ -4355,14 +4341,6 @@ export default function NovoTreino() {
         return;
       }
 
-      /*
-      * Atleta:
-      *   salva na própria biblioteca.
-      *
-      * Responsável:
-      *   salva na biblioteca do atleta
-      *   que está sendo gerenciado.
-      */
       const queryAtleta =
         ehResponsavelGerenciando &&
         atletaIdGerenciado
@@ -4410,10 +4388,6 @@ export default function NovoTreino() {
           resposta.status ===
           409
         ) {
-          /*
-          * Se o backend diz que já existe,
-          * sincronizamos o estado local.
-          */
           setTreinosSalvosAtleta(
             (atuais) => {
               const existe =

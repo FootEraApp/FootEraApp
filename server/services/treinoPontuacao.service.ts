@@ -60,7 +60,6 @@ export function calcularPontuacaoTreinoOficial(entrada: EntradaPontuacaoTreino) 
   };
 }
 
-/** Resolve dificuldade por ID real no banco, nunca confia no nível enviado pelo cliente. */
 export async function calcularPontuacaoTreinoPersistencia(entrada: EntradaPontuacaoTreino) {
   const catalogoIds = [...new Set(entrada.exercicios.map(e => e.exercicioId).filter((id): id is string => Boolean(id)))];
   const personalizadosIds = [...new Set(entrada.exercicios.map(e => e.exercicioPersonalizadoId).filter((id): id is string => Boolean(id)))];

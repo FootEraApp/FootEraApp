@@ -1,14 +1,3 @@
-
-/*
- * server/scripts/adminEstornoEvento.ts
- *
- * Prévia administrativa QA.
- * NÃO executa estorno nem consulta o Mercado Pago.
- *
- * Uso:
- * npx tsx server/scripts/adminEstornoEvento.ts status UUID
- */
-
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -36,7 +25,6 @@ async function main(): Promise<void> {
     throw new Error("BILLING_COMANDO_AMBIENTE_NAO_AUTORIZADO");
   }
 
-  // Importar o Prisma somente após verificar o ambiente.
   const { prisma } = await import("../prisma.js");
 
   try {
