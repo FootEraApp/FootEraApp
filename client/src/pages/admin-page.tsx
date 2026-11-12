@@ -10,6 +10,8 @@ import LearningCard from "../components/learning/LearningCard.js";
 import { Pencil, Trash2, ChevronDown, ChevronUp, Play } from "lucide-react";
 import Avatar from "../components/shared/Avatar.js";
 import CoverImage from "../components/shared/CoverImage.js";
+import CorrecoesNascimentoAdmin from
+  "../components/admin/CorrecoesNascimentoAdmin.js";
 import { ativarPushNotifications, desativarPushNotifications } from "../services/pushNotifications.js";
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
@@ -27,6 +29,8 @@ import {
 type Tab =
   | "dashboard"
   | "usuarios"
+  | "correcoes-nascimento"
+  | "pendencias-financeiras"
   | "exercicios"
   | "treinos"
   | "professores"
@@ -66,8 +70,9 @@ type UsuarioTipo =
   | "professor"
   | "admin"
   | "creator"
-  | "olheiro";
-  
+  | "olheiro"
+  | "responsavel";
+
 type StatusConta =
   | "ATIVO"
   | "BLOQUEADO"
@@ -119,6 +124,49 @@ type OrdenacaoAssinaturasAdmin =
   | "inicio_desc"
   | "inicio_asc";
 
+type StatusPendenciaFinanceira =
+  | "PENDENTE_ANALISE"
+  | "EM_ANALISE"
+  | "AGUARDANDO_ESTORNO"
+  | "ESTORNO_CONFIRMADO"
+  | "RESOLVIDA_MANUALMENTE";
+
+interface PendenciaFinanceiraAdmin {
+  id: string;
+  pagamentoId: string;
+  eventoId: string;
+  motivo: string;
+  status: StatusPendenciaFinanceira;
+  providerRef: string;
+  valor: string;
+  moeda: string;
+  observacao: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  resolvidoEm: string | null;
+  pagamento: {
+    usuarioId: string;
+    plano: string;
+    status: string;
+    provider: string;
+    criadoEm: string;
+    pagoEm: string | null;
+    usuario: {
+      id: string;
+      nome: string;
+    };
+  };
+}
+
+interface RespostaPendenciasFinanceiras {
+  ok: boolean;
+  pagina: number;
+  limite: number;
+  total: number;
+  totalPaginas: number;
+  items: PendenciaFinanceiraAdmin[];
+}
+
 const tipoToServer: Record<UsuarioTipo, string> = {
   "": "",
   atleta: "Atleta",
@@ -131,6 +179,7 @@ const tipoToServer: Record<UsuarioTipo, string> = {
   creator: "Creator",
   admin: "Admin",
   olheiro: "Olheiro",
+  responsavel: "Responsavel",
 };
 
 interface UsuarioAdmin {
@@ -146,7 +195,7 @@ interface UsuarioAdmin {
   destaque?: boolean;
   ultimaAtividade?: string | null;
   ultimaAtividadeNome?: string | null;
-  assinatura?: AssinaturaDTO | null; 
+  assinatura?: AssinaturaDTO | null;
   status?: StatusConta;
   deletedAt?: string | null;
   blockedReason?: string | null;
@@ -338,6 +387,7 @@ const EMPTY_DASH = {
   totalDesafios: 0,
   totalPostsCriados: 0,
   totalAtletas: 0,
+  totalResponsaveis: 0,
   totalEscolinhas: 0,
   totalClubes: 0,
   totalProfessores: 0,
@@ -621,15 +671,152 @@ export default function AdminDashboard() {
       "dashboard"
     );
 
+  const [pendenciasFinanceiras, setPendenciasFinanceiras] =
+    useState<PendenciaFinanceiraAdmin[]>([]);
+
+  const [pendenciasLoading, setPendenciasLoading] =
+    useState(false);
+
+  const [pendenciasErro, setPendenciasErro] =
+    useState("");
+
+  const [pendenciasStatus, setPendenciasStatus] =
+    useState("");
+
+  const [pendenciasPagamentoId, setPendenciasPagamentoId] =
+    useState("");
+
+  const [pendenciasPagina, setPendenciasPagina] =
+    useState(1);
+
+  const [pendenciasTotal, setPendenciasTotal] =
+    useState(0);
+
+  const [pendenciasTotalPaginas, setPendenciasTotalPaginas] =
+    useState(0);
+
+  const [verificandoMpId, setVerificandoMpId] =
+    useState<string | null>(null);
+
+  const [resultadoConsultaMp, setResultadoConsultaMp] =
+    useState<Record<string, {
+      status: string;
+      statusDetail: string | null;
+      motivo: string;
+      identidadeFinanceiraConfirmada: boolean;
+    }>>({});
+
+  const [erroConsultaMp, setErroConsultaMp] =
+    useState<Record<string, string>>({});
+
+  type AutorizacaoEstornoAdmin = {
+    id: string;
+    pagamentoId: string;
+    status: string;
+    motivo: string;
+    valor: string;
+    moeda: string;
+    solicitanteId: string;
+    aprovadorId: string | null;
+    criadoEm: string;
+    aprovadoEm: string | null;
+    expiraEm: string | null;
+    consumidoEm: string | null;
+    revogadoEm: string | null;
+  };
+
+  type PreviaEstornoAdmin = {
+    pagamentoId: string;
+    somenteConsulta: boolean;
+    preflightAprovado: boolean;
+    motivoBloqueio: string | null;
+    execucaoRealHabilitada: boolean;
+    pagamento: {
+      id: string;
+      valor: string;
+      moeda: string;
+      providerRef: string | null;
+      status: string;
+    };
+    compensacao: {
+      status: string;
+      tentativas: number;
+    } | null;
+    autorizacao: {
+      status: string;
+      expiraEm: string | null;
+    } | null;
+  };
+
+  type StatusOperacionalEstornoAdmin = {
+    ok: boolean;
+    pagamento: {
+      id: string;
+      plano: string;
+      status: string;
+      valor: string;
+      moeda: string;
+      providerRef: string | null;
+      reembolsadoEm: string | null;
+    };
+    compensacao: {
+      id: string;
+      status: string;
+      tentativas: number;
+      confirmadoEm: string | null;
+    };
+    pendencia: {
+      status: string;
+      motivo: string;
+      resolvidoEm: string | null;
+    } | null;
+    tentativas: Array<{
+      id: string;
+      numero: number;
+      ambiente: string;
+      status: string;
+      requisicaoEnviadaEm: string | null;
+      postAutorizacaoConsumidaEm: string | null;
+      operacaoExternaExecutada: boolean;
+      estornoProviderRef: string | null;
+    }>;
+    podeExecutarNovoEstorno: boolean;
+    operacaoExecutada: boolean;
+  };
+
+  const [autorizacoesEstornoAdmin, setAutorizacoesEstornoAdmin] =
+    useState<Record<string, AutorizacaoEstornoAdmin | null>>({});
+
+  const [previasEstornoAdmin, setPreviasEstornoAdmin] =
+    useState<Record<string, PreviaEstornoAdmin>>({});
+
+  const [
+    statusOperacionalEstornoAdmin,
+    setStatusOperacionalEstornoAdmin,
+  ] = useState<
+    Record<string, StatusOperacionalEstornoAdmin>
+  >({});
+
+  const [carregandoOperacaoEstornoId, setCarregandoOperacaoEstornoId] =
+    useState<string | null>(null);
+
+  const [errosOperacaoEstorno, setErrosOperacaoEstorno] =
+    useState<Record<string, string>>({});
+
+  const [mensagensOperacaoEstorno, setMensagensOperacaoEstorno] =
+    useState<Record<string, string>>({});
+
   const tabs: Tab[] = [
     "dashboard",
     "usuarios",
+    "correcoes-nascimento",
     "exercicios",
     "treinos",
     "professores",
     "metodologias",
     ...(FLAGS.DESAFIOS_ENABLED ? (["desafios", "validacao", "moderacao"] as Tab[]) : []),
     "assinaturas",
+    "pendencias-financeiras",
     "feedback",
     "analises",
     "diagnostico",
@@ -637,6 +824,461 @@ export default function AdminDashboard() {
   ];
 
   type DiagnosticoStatus = "ok" | "erro" | "carregando";
+
+  async function carregarPendenciasFinanceiras(
+    pagina: number,
+    status: string,
+    pagamentoId: string
+  ) {
+    setPendenciasLoading(true);
+    setPendenciasErro("");
+
+    try {
+      const params = new URLSearchParams({
+        pagina: String(pagina),
+        limite: "20",
+      });
+
+      if (status) {
+        params.set("status", status);
+      }
+
+      if (pagamentoId.trim()) {
+        params.set(
+          "pagamentoId",
+          pagamentoId.trim()
+        );
+      }
+
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/admin/billing/pendencias-eventos?${params.toString()}`,
+        {
+          method: "GET",
+          headers: authHeaders(),
+        }
+      );
+
+      if (!resposta.ok) {
+        if (resposta.status === 401) {
+          throw new Error(
+            "Sua sessão expirou. Entre novamente."
+          );
+        }
+
+        if (resposta.status === 403) {
+          throw new Error(
+            "Seu usuário não possui permissão administrativa."
+          );
+        }
+
+        throw new Error(
+          `Falha ao consultar pendências (HTTP ${resposta.status}).`
+        );
+      }
+
+      const dados =
+        (await resposta.json()) as
+          RespostaPendenciasFinanceiras;
+
+      if (!dados.ok) {
+        throw new Error(
+          "Resposta inválida do servidor."
+        );
+      }
+
+      setPendenciasFinanceiras(dados.items);
+      setPendenciasPagina(dados.pagina);
+      setPendenciasTotal(dados.total);
+      setPendenciasTotalPaginas(
+        dados.totalPaginas
+      );
+    } catch (erro) {
+      setPendenciasFinanceiras([]);
+      setPendenciasTotal(0);
+      setPendenciasTotalPaginas(0);
+
+      setPendenciasErro(
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível consultar as pendências."
+      );
+    } finally {
+      setPendenciasLoading(false);
+    }
+  }
+
+  async function verificarPagamentoNoMp(
+    pagamentoId: string
+  ) {
+    setVerificandoMpId(pagamentoId);
+
+    setErroConsultaMp((prev) => ({
+      ...prev,
+      [pagamentoId]: "",
+    }));
+
+    try {
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/admin/billing/pendencias-eventos/${encodeURIComponent(
+          pagamentoId
+        )}/verificar-provedor`,
+        {
+          method: "GET",
+          headers: authHeaders(),
+        }
+      );
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(
+          dados?.code ||
+          `Erro HTTP ${resposta.status}`
+        );
+      }
+
+      setResultadoConsultaMp((prev) => ({
+        ...prev,
+        [pagamentoId]: {
+          status: dados.mercadoPago.status,
+          statusDetail:
+            dados.mercadoPago.statusDetail,
+          motivo: dados.classificacao.motivo,
+          identidadeFinanceiraConfirmada:
+            dados.classificacao
+              .identidadeFinanceiraConfirmada,
+        },
+      }));
+    } catch (erro) {
+      setErroConsultaMp((prev) => ({
+        ...prev,
+        [pagamentoId]:
+          erro instanceof Error
+            ? erro.message
+            : "Falha ao verificar pagamento.",
+      }));
+    } finally {
+      setVerificandoMpId(null);
+    }
+  }
+
+async function requisicaoEstornoAdmin(
+  pagamentoId: string,
+  acao: "autorizacao" | "previa" | "solicitar" | "aprovar" | "revogar",
+  body?: Record<string, unknown>
+): Promise<any> {
+  const somenteConsulta =
+    acao === "autorizacao" || acao === "previa";
+
+  const resposta = await fetch(
+    `${API.BASE_URL}/api/admin/billing/estornos/${encodeURIComponent(
+      pagamentoId
+    )}/${acao}`,
+    {
+      method: somenteConsulta ? "GET" : "POST",
+      headers: authHeaders(
+        somenteConsulta
+          ? {}
+          : { "Content-Type": "application/json" }
+      ),
+      credentials: "same-origin",
+      ...(somenteConsulta
+        ? {}
+        : { body: JSON.stringify(body ?? {}) }),
+    }
+  );
+
+  const dados = await resposta.json().catch(() => null);
+
+  if (!resposta.ok || dados?.ok !== true) {
+    const codigo = String(
+      dados?.code ??
+      dados?.message ??
+      `HTTP_${resposta.status}`
+    );
+
+    if (resposta.status === 401) {
+      throw new Error(
+        "Sessão expirada. Entre novamente no FootEra."
+      );
+    }
+
+    if (resposta.status === 403) {
+      throw new Error(
+        `Permissão financeira negada: ${codigo}`
+      );
+    }
+
+    throw new Error(codigo);
+  }
+
+  return dados;
+}
+
+async function carregarAutorizacaoEstornoAdmin(
+  pagamentoId: string
+): Promise<void> {
+  setCarregandoOperacaoEstornoId(pagamentoId);
+
+  setErrosOperacaoEstorno((anterior) => ({
+    ...anterior,
+    [pagamentoId]: "",
+  }));
+
+  try {
+    const dados = await requisicaoEstornoAdmin(
+      pagamentoId,
+      "autorizacao"
+    );
+
+    setAutorizacoesEstornoAdmin((anterior) => ({
+      ...anterior,
+      [pagamentoId]: dados.autorizacao,
+    }));
+  } catch (erro) {
+    // Uma autorizacao ainda nao solicitada
+    // retorna 404, sem representar falha financeira.
+    const mensagem =
+      erro instanceof Error ? erro.message : "";
+
+    if (mensagem === "BILLING_AUTORIZACAO_NAO_ENCONTRADA") {
+      setAutorizacoesEstornoAdmin((anterior) => ({
+        ...anterior,
+        [pagamentoId]: null,
+      }));
+    } else {
+      setErrosOperacaoEstorno((anterior) => ({
+        ...anterior,
+        [pagamentoId]: mensagem || "Falha na consulta.",
+      }));
+    }
+  } finally {
+    setCarregandoOperacaoEstornoId(null);
+  }
+}
+
+async function carregarPreviaEstornoAdmin(
+  pagamentoId: string
+): Promise<void> {
+  setCarregandoOperacaoEstornoId(pagamentoId);
+
+  setErrosOperacaoEstorno((anterior) => ({
+    ...anterior,
+    [pagamentoId]: "",
+  }));
+
+  try {
+    const dados = await requisicaoEstornoAdmin(
+      pagamentoId,
+      "previa"
+    );
+
+    setPreviasEstornoAdmin((anterior) => ({
+      ...anterior,
+      [pagamentoId]: dados,
+    }));
+  } catch (erro) {
+    setErrosOperacaoEstorno((anterior) => ({
+      ...anterior,
+      [pagamentoId]:
+        erro instanceof Error
+          ? erro.message
+          : "Falha ao consultar a prévia.",
+    }));
+  } finally {
+    setCarregandoOperacaoEstornoId(null);
+  }
+}
+
+async function carregarStatusOperacionalEstornoAdmin(
+  pagamentoId: string
+): Promise<void> {
+  if (carregandoOperacaoEstornoId !== null) {
+    return;
+  }
+
+  setCarregandoOperacaoEstornoId(pagamentoId);
+
+  setErrosOperacaoEstorno((anterior) => ({
+    ...anterior,
+    [pagamentoId]: "",
+  }));
+
+  try {
+    const resposta = await fetch(
+      `${API.BASE_URL}/api/admin/billing/estornos/${encodeURIComponent(
+        pagamentoId
+      )}/status`,
+      {
+        method: "GET",
+        headers: authHeaders(),
+        credentials: "same-origin",
+      }
+    );
+
+    const dados = await resposta.json().catch(() => null);
+
+    if (!resposta.ok || dados?.ok !== true) {
+      const codigo = String(
+        dados?.code ?? `HTTP_${resposta.status}`
+      );
+
+      if (resposta.status === 401) {
+        throw new Error(
+          "Sessão expirada. Entre novamente no FootEra."
+        );
+      }
+
+      if (resposta.status === 403) {
+        throw new Error(
+          `Permissão financeira negada: ${codigo}`
+        );
+      }
+
+      throw new Error(codigo);
+    }
+
+    setStatusOperacionalEstornoAdmin((anterior) => ({
+      ...anterior,
+      [pagamentoId]:
+        dados as StatusOperacionalEstornoAdmin,
+    }));
+  } catch (erro) {
+    setErrosOperacaoEstorno((anterior) => ({
+      ...anterior,
+      [pagamentoId]:
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível consultar o estado financeiro.",
+    }));
+  } finally {
+    setCarregandoOperacaoEstornoId(null);
+  }
+}
+
+async function executarAcaoAutorizacaoEstornoAdmin(
+  item: PendenciaFinanceiraAdmin,
+  acao: "solicitar" | "aprovar" | "revogar"
+): Promise<void> {
+  const pagamentoId = item.pagamentoId;
+
+  if (carregandoOperacaoEstornoId !== null) {
+    return;
+  }
+
+  let corpo: Record<string, unknown> = {};
+
+  if (acao === "solicitar") {
+    const motivo = window.prompt(
+      "Descreva por que este pagamento exige estorno. " +
+      "Informe pelo menos 20 caracteres:"
+    );
+
+    if (motivo === null) {
+      return;
+    }
+
+    const motivoNormalizado = motivo.trim();
+
+    if (
+      motivoNormalizado.length < 20 ||
+      motivoNormalizado.length > 1000
+    ) {
+      setErrosOperacaoEstorno((anterior) => ({
+        ...anterior,
+        [pagamentoId]:
+          "O motivo deve conter entre 20 e 1000 caracteres.",
+      }));
+      return;
+    }
+
+    corpo = { motivo: motivoNormalizado };
+  } else {
+    const mensagem =
+      acao === "aprovar"
+        ? `Aprovar a autorização administrativa para o pagamento ${pagamentoId}, no valor de ${item.moeda} ${item.valor}? Isso NÃO executa o estorno.`
+        : `Revogar a autorização do pagamento ${pagamentoId}? Uma autorização consumida não pode ser revogada por esta operação.`;
+
+    if (!window.confirm(mensagem)) {
+      return;
+    }
+  }
+
+  setCarregandoOperacaoEstornoId(pagamentoId);
+
+  setErrosOperacaoEstorno((anterior) => ({
+    ...anterior,
+    [pagamentoId]: "",
+  }));
+
+  setMensagensOperacaoEstorno((anterior) => ({
+    ...anterior,
+    [pagamentoId]: "",
+  }));
+
+  try {
+    await requisicaoEstornoAdmin(
+      pagamentoId,
+      acao,
+      corpo
+    );
+
+    setMensagensOperacaoEstorno((anterior) => ({
+      ...anterior,
+      [pagamentoId]:
+        acao === "solicitar"
+          ? "Solicitação registrada. Outro administrador autorizado deverá aprovar."
+          : acao === "aprovar"
+            ? "Autorização aprovada. Nenhum estorno foi executado."
+            : "Autorização revogada. Nenhum estorno foi executado.",
+    }));
+
+    // A consulta posterior usa a rota ja existente.
+    // Atualiza a listagem sem realizar outro POST.
+    await carregarPendenciasFinanceiras(
+      pendenciasPagina,
+      pendenciasStatus,
+      pendenciasPagamentoId
+    );
+
+    // Invalida a previa antiga apos qualquer alteracao.
+    setPreviasEstornoAdmin((anterior) => {
+      const novo = { ...anterior };
+      delete novo[pagamentoId];
+      return novo;
+    });
+
+    // Consulta novamente o estado persistido.
+    // Nao repete o POST administrativo.
+    try {
+      const atualizada = await requisicaoEstornoAdmin(
+        pagamentoId,
+        "autorizacao"
+      );
+
+      setAutorizacoesEstornoAdmin((anterior) => ({
+        ...anterior,
+        [pagamentoId]: atualizada.autorizacao,
+      }));
+    } catch {
+      setAutorizacoesEstornoAdmin((anterior) => {
+        const novo = { ...anterior };
+        delete novo[pagamentoId];
+        return novo;
+      });
+    }
+  } catch (erro) {
+    setErrosOperacaoEstorno((anterior) => ({
+      ...anterior,
+      [pagamentoId]:
+        erro instanceof Error
+          ? erro.message
+          : "Operação administrativa não concluída.",
+    }));
+  } finally {
+    setCarregandoOperacaoEstornoId(null);
+  }
+}
 
   type DiagnosticoItem = {
     nome: string;
@@ -655,7 +1297,7 @@ export default function AdminDashboard() {
     type: "success" | "error";
     msg: string;
   } | null>(null);
-  
+
   type PushPermissaoStatus = "granted" | "denied" | "default" | "unsupported";
 
   const [adminPushBusy, setAdminPushBusy] = useState(false);
@@ -718,6 +1360,23 @@ export default function AdminDashboard() {
   const [treinoAdminDetalhes, setTreinoAdminDetalhes] = useState<Record<string, any>>({});
   const [treinoAdminLoadingId, setTreinoAdminLoadingId] = useState<string | null>(null);
   const [treinoAdminErros, setTreinoAdminErros] = useState<Record<string, string>>({});
+  const [usuarioParaExcluir, setUsuarioParaExcluir] =
+    useState<UsuarioAdmin | null>(null);
+
+  const [modoExclusaoAdmin, setModoExclusaoAdmin] =
+    useState<"papeis" | "conta">("papeis");
+
+  const [papeisSelecionadosAdmin, setPapeisSelecionadosAdmin] =
+    useState<string[]>([]);
+
+  const [confirmacaoExclusaoAdmin, setConfirmacaoExclusaoAdmin] =
+    useState("");
+
+  const [motivoExclusaoAdmin, setMotivoExclusaoAdmin] =
+    useState("");
+
+  const [exclusaoAdminBusy, setExclusaoAdminBusy] =
+    useState(false);
   const [detalheAberto, setDetalheAberto] = useState(false);
   const [userSelecionado, setUserSelecionado] = useState<UsuarioDetalhe | null>(null);
   const [loadingDetalhe, setLoadingDetalhe] = useState(false);
@@ -1398,46 +2057,104 @@ async function bloquearOuReativarConta(
   }
 }
 
-async function excluirContaPermanente(usuario: any) {
-  const confirmado = window.confirm(
-    `Tem certeza que deseja EXCLUIR PERMANENTEMENTE a conta de "${usuario?.nome}"?\n\n` +
-      `Isso apagará o usuário e dados relacionados do banco e ele nunca mais poderá logar.`
+function abrirGerenciamentoExclusao(u: UsuarioAdmin) {
+  setUsuarioParaExcluir(u);
+  setModoExclusaoAdmin("papeis");
+  setPapeisSelecionadosAdmin([]);
+  setConfirmacaoExclusaoAdmin("");
+  setMotivoExclusaoAdmin("");
+}
+
+function fecharGerenciamentoExclusao() {
+  if (exclusaoAdminBusy) return;
+
+  setUsuarioParaExcluir(null);
+  setPapeisSelecionadosAdmin([]);
+  setConfirmacaoExclusaoAdmin("");
+  setMotivoExclusaoAdmin("");
+}
+
+async function excluirContaPermanente(u: UsuarioAdmin) {
+  if (!canManageAdmins) {
+    notify.error(
+      "Esta operação exige permissão de superadministrador."
+    );
+    return;
+  }
+
+  if (u.id === meId) {
+    notify.error(
+      "Você não pode excluir sua própria conta pelo Admin."
+    );
+    return;
+  }
+
+  const nome =
+    u.nome ||
+    u.nomeDeUsuario ||
+    u.email ||
+    "este usuário";
+
+  const confirmacao = window.prompt(
+    `Você deseja colocar a conta de ${nome} na lixeira por 30 dias?\n\n` +
+    `Digite exatamente: Excluir Conta Footera`
   );
 
-  if (!confirmado) return;
+  if (confirmacao === null) return;
 
-  const typed = window.prompt('Digite EXCLUIR para confirmar:');
-  if (typed !== "EXCLUIR") {
-    notify.success("Exclusão cancelada.");
+  if (confirmacao.trim() !== "Excluir Conta Footera") {
+    notify.error("Frase de confirmação incorreta.");
+    return;
+  }
+
+  const motivo = window.prompt(
+    "Informe o motivo da exclusão administrativa (mínimo de 10 caracteres):"
+  );
+
+  if (motivo === null) return;
+
+  if (motivo.trim().length < 10) {
+    notify.error(
+      "O motivo deve ter pelo menos 10 caracteres."
+    );
     return;
   }
 
   try {
-    const token = Storage.token; 
-    if (!token) {
-      notify.error("Sessão expirada. Faça login novamente.");
+    const resposta = await fetch(
+      `${API.BASE_URL}/api/admin/usuarios/${encodeURIComponent(u.id)}`,
+      {
+        method: "DELETE",
+        headers: authHeaders({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          confirm: confirmacao.trim(),
+          motivo: motivo.trim(),
+        }),
+      }
+    );
+
+    const data = await resposta.json().catch(() => ({}));
+
+    if (!resposta.ok) {
+      notify.error(
+        data?.message ||
+        "Não foi possível solicitar a exclusão."
+      );
       return;
     }
 
-    await axios.delete(`${API.BASE_URL}/api/admin/usuarios/${usuario.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    notify.success(
+      data?.message ||
+      "Conta enviada para a lixeira."
+    );
 
-    notify.success("Conta excluída permanentemente.");
-
-    setUsuarios((prev: any[]) => prev.filter((u) => u.id !== usuario.id));
-
-    if (userSelecionado?.id === usuario.id) {
-      setUserSelecionado(null);
-      setDetalheAberto(false);
-    }
-  } catch (err: any) {
-    console.error("[Admin] erro hard-delete:", err?.response?.status, err?.response?.data, err?.message);
+    await carregarUsuarios(pagina);
+  } catch (error: any) {
     notify.error(
-      err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Erro ao excluir a conta."
+      error?.message ||
+      "Erro de conexão ao solicitar exclusão."
     );
   }
 }
@@ -1501,6 +2218,23 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
   }, [trQ]);
 
   useEffect(() => {
+    if (aba !== "pendencias-financeiras") {
+      return;
+    }
+
+    void carregarPendenciasFinanceiras(
+      pendenciasPagina,
+      pendenciasStatus,
+      pendenciasPagamentoId
+    );
+  }, [
+    aba,
+    pendenciasPagina,
+    pendenciasStatus,
+    pendenciasPagamentoId,
+  ]);
+
+  useEffect(() => {
     if (aba !== "assinaturas") return;
 
     void carregarAssinantes(1);
@@ -1524,7 +2258,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
 
     const id = window.setInterval(() => {
       void carregarExercicios();
-    }, 8000); 
+    }, 8000);
 
     return () => window.clearInterval(id);
   }, [aba]);
@@ -1917,7 +2651,7 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
       arr = [...arr].sort((a, b) => {
         const da = new Date(a.createdAt).getTime();
         const db = new Date(b.createdAt).getTime();
-        return da - db; 
+        return da - db;
       });
 
       setFbItems(arr);
@@ -2766,8 +3500,8 @@ async function toggleParceiroProfessor(professorId: string, next: boolean) {
     if (deletedAtRaw) {
       const deletedAt = new Date(deletedAtRaw);
       const days = daysBetween(new Date(), deletedAt);
-      if (days <= 30) return "RESTORE" as const;  
-      return "DELETED_EXPIRED" as const;         
+      if (days <= 30) return "RESTORE" as const;
+      return "DELETED_EXPIRED" as const;
     }
 
     if (status === "BLOQUEADO") return "UNBLOCK" as const;
@@ -3436,7 +4170,11 @@ async function agendarManutencaoPersonalizada() {
             className={`px-4 py-2 rounded ${aba === t ? "bg-green-800 text-white" : "bg-gray-200"}`}
             onClick={() => setAba(t)}
           >
-            {t === "moderacao"
+            {t === "correcoes-nascimento"
+              ? "Correções de nascimento"
+              : t === "pendencias-financeiras"
+              ? "Pendências financeiras"
+              : t === "moderacao"
               ? "Moderação"
               : t === "validacao"
               ? "Validar desafios"
@@ -3693,7 +4431,16 @@ async function agendarManutencaoPersonalizada() {
               </div>
             </div>
 
-            <h4 className="font-semibold mb-2 text-green-900">Distribuição de Usuários</h4>
+            <h4 className="font-semibold mb-2 text-green-900">
+              Distribuição de Papéis
+            </h4>
+
+            <p className="mb-3 text-xs text-gray-500">
+              Uma conta pode possuir vários papéis.
+              Cada papel é contabilizado separadamente,
+              mas cada conta conta apenas uma vez
+              no Total de Usuários.
+            </p>
               <div className="bg-white p-3 sm:p-4 rounded shadow overflow-hidden">
               {(() => {
                 const distData = [
@@ -3701,6 +4448,13 @@ async function agendarManutencaoPersonalizada() {
                   label: "Atletas",
                   value: Number(
                     dados.totalAtletas || 0
+                  ),
+                },
+
+                {
+                  label: "Responsáveis",
+                  value: Number(
+                    dados.totalResponsaveis || 0
                   ),
                 },
 
@@ -3773,10 +4527,7 @@ async function agendarManutencaoPersonalizada() {
                     dados.totalOutros || 0
                   ),
                 },
-                ].filter(
-                  (item) =>
-                    item.value > 0
-                ); 
+                ];
                 return <PieChart data={distData} size={150} />;
               })()}
             </div>
@@ -3800,14 +4551,16 @@ async function agendarManutencaoPersonalizada() {
               >
                 <option value="">Todos os tipos</option>
                 <option value="atleta">Atletas</option>
+                <option value="professor">Professores</option>
+                <option value="responsavel">Responsáveis</option>
+                <option value="creator">Creators</option>
+                <option value="olheiro">Olheiros</option>
                 <option value="learning">Learning</option>
-                <option value="escola">Escolas</option>
                 <option value="clube">Clubes</option>
+                <option value="escola">Escolas/Escolinhas</option>
                 <option value="marca">Marcas</option>
                 <option value="federacao">Federações</option>
-                <option value="professor">Professores</option>
-                <option value="admin">Administrador</option>
-                <option value="olheiro">Olheiro</option>
+                <option value="admin">Administradores</option>
               </select>
               <select
                 value={destaqueFiltro}
@@ -3925,26 +4678,26 @@ async function agendarManutencaoPersonalizada() {
                       </label>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-3 grid grid-cols-3 gap-2">
                       <button
                         onClick={() =>
                           abrirDetalhes(
                             u.id,
                           )
                         }
-                        className="rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
+                        className="min-h-10 w-full text-center rounded-xl bg-green-700 px-3 py-2 text-xs font-semibold text-white"
                       >
                         Detalhes
                       </button>
 
                       {act === "DELETED_EXPIRED" ? (
-                        <span className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-500">
+                        <span className="min-h-10 w-full text-center rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-500">
                           Conta apagada
                         </span>
                       ) : act === "RESTORE" ? (
                         <button
                           onClick={() => bloquearOuReativarConta(u.id, "restaurar")}
-                          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
+                          className="min-h-10 w-full text-center rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
                           disabled={acaoBusyId === u.id}
                         >
                           {acaoBusyId === u.id ? "Processando..." : "Restaurar"}
@@ -3952,7 +4705,7 @@ async function agendarManutencaoPersonalizada() {
                       ) : act === "UNBLOCK" ? (
                         <button
                           onClick={() => bloquearOuReativarConta(u.id, "desbloquear")}
-                          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
+                          className="min-h-10 w-full text-center rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700"
                           disabled={acaoBusyId === u.id}
                         >
                           {acaoBusyId === u.id ? "Processando..." : "Desbloquear"}
@@ -3960,7 +4713,7 @@ async function agendarManutencaoPersonalizada() {
                       ) : (
                         <button
                           onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
-                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                          className="min-h-10 w-full text-center rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
                           disabled={acaoBusyId === u.id}
                         >
                           {acaoBusyId === u.id ? "Processando..." : "Bloquear"}
@@ -3968,10 +4721,10 @@ async function agendarManutencaoPersonalizada() {
                       )}
 
                       <button
-                        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-800"
-                        onClick={() => excluirContaPermanente(u)}
+                        className="min-h-10 w-full text-center rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-800"
+                        onClick={() => abrirGerenciamentoExclusao(u)}
                       >
-                        Excluir
+                        Gerenciar exclusão
                       </button>
 
                       {canManageAdmins &&
@@ -3979,7 +4732,7 @@ async function agendarManutencaoPersonalizada() {
                         u.id !== meId && (
                         <button
                           onClick={() => deletarAdmin(u.id)}
-                          className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600"
+                          className="min-h-10 w-full text-center rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600"
                         >
                           Remover admin
                         </button>
@@ -4158,9 +4911,9 @@ async function agendarManutencaoPersonalizada() {
                             })()}
                             <button
                                 className="text-red-800 hover:underline ml-3"
-                                onClick={() => excluirContaPermanente(u)}
+                                onClick={() => abrirGerenciamentoExclusao(u)}
                               >
-                                Excluir conta
+                                Enviar conta para lixeira
                             </button>
 
                             {canManageAdmins &&
@@ -4718,7 +5471,7 @@ async function agendarManutencaoPersonalizada() {
 
                 const qualificacoes = Array.isArray(p.qualificacoes) ? p.qualificacoes : [];
                 const certificacoes = Array.isArray(p.certificacoes) ? p.certificacoes : [];
-                
+
                 const parceiro = !!p.usuario?.parceiro;
                 const parceiroBusy = profParceiroBusyId === p.id;
 
@@ -5176,7 +5929,7 @@ async function agendarManutencaoPersonalizada() {
 
           </div>
         )}
-        
+
         {aba === "desafios" &&
           (FLAGS.DESAFIOS_ENABLED ? (
             <div>
@@ -5332,6 +6085,641 @@ async function agendarManutencaoPersonalizada() {
             </div>
           ) : null)}
 
+        {aba === "pendencias-financeiras" && (
+            <section className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-green-900">
+                    Pendências financeiras
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Pagamentos de eventos que precisam de análise
+                    ou compensação financeira.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={pendenciasLoading}
+                  onClick={() =>
+                    void carregarPendenciasFinanceiras(
+                      pendenciasPagina,
+                      pendenciasStatus,
+                      pendenciasPagamentoId
+                    )
+                  }
+                  className="rounded bg-green-800 px-4 py-2 text-white disabled:opacity-50"
+                >
+                  Atualizar
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white rounded-lg border p-4">
+                  <p className="text-sm text-gray-500">
+                    Pendências encontradas
+                  </p>
+                  <strong className="text-2xl">
+                    {pendenciasTotal}
+                  </strong>
+                </div>
+
+                <div className="bg-white rounded-lg border p-4">
+                  <p className="text-sm text-gray-500">
+                    Página atual
+                  </p>
+                  <strong className="text-2xl">
+                    {pendenciasPagina} /{" "}
+                    {Math.max(1, pendenciasTotalPaginas)}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="bg-white border rounded-lg p-4 flex flex-col sm:flex-row gap-3">
+                <select
+                  value={pendenciasStatus}
+                  onChange={(e) => {
+                    setPendenciasPagina(1);
+                    setPendenciasStatus(e.target.value);
+                  }}
+                  className="border rounded px-3 py-2"
+                >
+                  <option value="">Todos os status</option>
+                  <option value="PENDENTE_ANALISE">
+                    Pendente de análise
+                  </option>
+                  <option value="EM_ANALISE">
+                    Em análise
+                  </option>
+                  <option value="AGUARDANDO_ESTORNO">
+                    Aguardando estorno
+                  </option>
+                  <option value="ESTORNO_CONFIRMADO">
+                    Estorno confirmado
+                  </option>
+                  <option value="RESOLVIDA_MANUALMENTE">
+                    Resolvida manualmente
+                  </option>
+                </select>
+
+                <input
+                  type="text"
+                  value={pendenciasPagamentoId}
+                  onChange={(e) => {
+                    setPendenciasPagina(1);
+                    setPendenciasPagamentoId(e.target.value);
+                  }}
+                  placeholder="Buscar por ID do pagamento"
+                  className="border rounded px-3 py-2 flex-1 min-w-0"
+                />
+              </div>
+
+              {pendenciasErro && (
+                <div className="border border-red-200 bg-red-50 rounded-lg p-4 text-red-700">
+                  {pendenciasErro}
+                </div>
+              )}
+
+              {pendenciasLoading ? (
+                <div className="p-6 text-center text-gray-500">
+                  Carregando pendências...
+                </div>
+              ) : pendenciasFinanceiras.length === 0 ? (
+                <div className="bg-white border rounded-lg p-6 text-center text-gray-500">
+                  Nenhuma pendência encontrada.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendenciasFinanceiras.map((item) => (
+                    <article
+                      key={item.id}
+                      className="bg-white border rounded-lg p-4 space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            {item.pagamento.usuario.nome}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Evento: {item.eventoId}
+                          </p>
+                        </div>
+
+                        <span className="text-sm font-medium bg-yellow-100 text-yellow-800 rounded px-3 py-1 self-start">
+                          {item.status.replaceAll("_", " ")}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-gray-500">
+                            Valor da cobrança
+                          </p>
+                          <p className="font-semibold">
+                            {new Intl.NumberFormat("pt-BR", {
+                              style: "currency",
+                              currency: item.moeda,
+                            }).format(Number(item.valor))}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">
+                            Status do pagamento local
+                          </p>
+                          <p className="font-medium">
+                            {item.pagamento.status}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="text-gray-500">
+                            ID do pagamento
+                          </p>
+                          <p className="break-all font-mono text-xs">
+                            {item.pagamentoId}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="text-gray-500">
+                            Referência Mercado Pago
+                          </p>
+                          <p className="break-all font-mono text-xs">
+                            {item.providerRef}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">
+                            Data da pendência
+                          </p>
+                          <p>
+                            {new Date(item.criadoEm).toLocaleString(
+                              "pt-BR",
+                              { timeZone: "America/Sao_Paulo" }
+                            )}
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-gray-500">
+                            Motivo
+                          </p>
+                          <p className="break-words">
+                            {item.motivo}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 border-t pt-3">
+                        <button
+                          type="button"
+                          disabled={verificandoMpId === item.pagamentoId}
+                          onClick={() => {
+                            void verificarPagamentoNoMp(
+                              item.pagamentoId
+                            );
+                          }}
+                          className="rounded-lg bg-green-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {verificandoMpId === item.pagamentoId
+                            ? "Consultando..."
+                            : "Verificar no Mercado Pago"}
+                        </button>
+
+                        {resultadoConsultaMp[item.pagamentoId] && (
+                          <div className="rounded-lg border bg-gray-50 p-3 text-sm space-y-1">
+                            <p>
+                              <strong>Status externo:</strong>{" "}
+                              {resultadoConsultaMp[item.pagamentoId].status}
+                            </p>
+
+                            <p>
+                              <strong>Detalhe:</strong>{" "}
+                              {resultadoConsultaMp[item.pagamentoId].statusDetail ?? "—"}
+                            </p>
+
+                            <p>
+                              <strong>Classificação:</strong>{" "}
+                              {resultadoConsultaMp[item.pagamentoId].motivo}
+                            </p>
+
+                            <p>
+                              <strong>Identidade e valor:</strong>{" "}
+                              {resultadoConsultaMp[item.pagamentoId]
+                                .identidadeFinanceiraConfirmada
+                                ? "Sem divergências identificadas"
+                                : "Requer verificação manual"}
+                            </p>
+
+                            <p className="font-semibold text-amber-800">
+                              Este pagamento continua exigindo análise
+                              financeira. Nenhum estorno foi executado.
+                            </p>
+                          </div>
+                        )}
+
+                        {erroConsultaMp[item.pagamentoId] && (
+                          <p className="text-sm text-red-700">
+                            {erroConsultaMp[item.pagamentoId]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 border-t pt-4 space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">
+                            Autorização administrativa de estorno
+                          </h4>
+
+                          <p className="mt-1 text-xs text-gray-500">
+                            Solicitação, aprovação e revogação exigem
+                            permissões financeiras específicas. Aprovar
+                            não significa executar o reembolso.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() =>
+                              void carregarAutorizacaoEstornoAdmin(
+                                item.pagamentoId
+                              )
+                            }
+                            className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                          >
+                            Consultar autorização
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() =>
+                              void carregarPreviaEstornoAdmin(
+                                item.pagamentoId
+                              )
+                            }
+                            className="rounded-lg border px-3 py-2 text-sm disabled:opacity-50"
+                          >
+                            Consultar prévia
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() => {
+                              void carregarStatusOperacionalEstornoAdmin(
+                                item.pagamentoId
+                              );
+                            }}
+                            className="rounded-lg border border-blue-300 px-3 py-2 text-sm text-blue-800 disabled:opacity-50"
+                          >
+                            Consultar estado financeiro
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() =>
+                              void executarAcaoAutorizacaoEstornoAdmin(
+                                item,
+                                "solicitar"
+                              )
+                            }
+                            className="rounded-lg bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-50"
+                          >
+                            Solicitar
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() =>
+                              void executarAcaoAutorizacaoEstornoAdmin(
+                                item,
+                                "aprovar"
+                              )
+                            }
+                            className="rounded-lg bg-green-800 px-3 py-2 text-sm text-white disabled:opacity-50"
+                          >
+                            Aprovar
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={carregandoOperacaoEstornoId !== null}
+                            onClick={() =>
+                              void executarAcaoAutorizacaoEstornoAdmin(
+                                item,
+                                "revogar"
+                              )
+                            }
+                            className="rounded-lg border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-50"
+                          >
+                            Revogar
+                          </button>
+                        </div>
+
+                        {carregandoOperacaoEstornoId === item.pagamentoId && (
+                          <p className="text-xs text-gray-500">
+                            Processando operação administrativa...
+                          </p>
+                        )}
+
+                        {mensagensOperacaoEstorno[item.pagamentoId] && (
+                          <p
+                            role="status"
+                            className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800"
+                          >
+                            {mensagensOperacaoEstorno[item.pagamentoId]}
+                          </p>
+                        )}
+
+                        {errosOperacaoEstorno[item.pagamentoId] && (
+                          <div
+                            role="alert"
+                            className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+                          >
+                            {errosOperacaoEstorno[item.pagamentoId]}
+
+                            <p className="mt-1 text-xs">
+                              Antes de repetir uma operação, consulte a
+                              autorização para verificar se ela foi registrada.
+                            </p>
+                          </div>
+                        )}
+
+                        {Object.prototype.hasOwnProperty.call(
+                          autorizacoesEstornoAdmin,
+                          item.pagamentoId
+                        ) && (
+                          <div className="rounded-lg border bg-gray-50 p-3 text-sm space-y-1">
+                            <p className="font-semibold">
+                              Autorização registrada
+                            </p>
+
+                            {autorizacoesEstornoAdmin[item.pagamentoId] ? (
+                              <>
+                                <p>
+                                  Status:{" "}
+                                  <strong>
+                                    {autorizacoesEstornoAdmin[
+                                      item.pagamentoId
+                                    ]!.status}
+                                  </strong>
+                                </p>
+
+                                <p>
+                                  Valor:{" "}
+                                  {
+                                    autorizacoesEstornoAdmin[
+                                      item.pagamentoId
+                                    ]!.moeda
+                                  }{" "}
+                                  {
+                                    autorizacoesEstornoAdmin[
+                                      item.pagamentoId
+                                    ]!.valor
+                                  }
+                                </p>
+
+                                <p>
+                                  Solicitante:{" "}
+                                  {
+                                    autorizacoesEstornoAdmin[
+                                      item.pagamentoId
+                                    ]!.solicitanteId
+                                  }
+                                </p>
+
+                                <p>
+                                  Aprovador:{" "}
+                                  {autorizacoesEstornoAdmin[
+                                    item.pagamentoId
+                                  ]!.aprovadorId ?? "Ainda não aprovado"}
+                                </p>
+
+                                <p>
+                                  Expiração:{" "}
+                                  {autorizacoesEstornoAdmin[
+                                    item.pagamentoId
+                                  ]!.expiraEm
+                                    ? new Date(
+                                        autorizacoesEstornoAdmin[
+                                          item.pagamentoId
+                                        ]!.expiraEm!
+                                      ).toLocaleString("pt-BR", {
+                                        timeZone: "America/Sao_Paulo",
+                                      })
+                                    : "—"}
+                                </p>
+                              </>
+                            ) : (
+                              <p>Nenhuma autorização encontrada.</p>
+                            )}
+                          </div>
+                        )}
+
+                        {statusOperacionalEstornoAdmin[item.pagamentoId] && (() => {
+                          const estado =
+                            statusOperacionalEstornoAdmin[item.pagamentoId];
+
+                          const tentativaComPostConsumido =
+                            estado.tentativas.some(
+                              (tentativa) =>
+                                tentativa.postAutorizacaoConsumidaEm !== null
+                            );
+
+                          const precisaRevisao =
+                            estado.compensacao.status ===
+                              "AGUARDANDO_CONFIRMACAO" ||
+                            tentativaComPostConsumido &&
+                              estado.compensacao.confirmadoEm === null;
+
+                          return (
+                            <div className="rounded-lg border p-3 text-sm space-y-2">
+                              <h5 className="font-semibold">
+                                Estado financeiro persistido
+                              </h5>
+
+                              <p>
+                                Pagamento:{" "}
+                                <strong>{estado.pagamento.status}</strong>
+                              </p>
+
+                              <p>
+                                Compensação:{" "}
+                                <strong>{estado.compensacao.status}</strong>
+                              </p>
+
+                              <p>
+                                Tentativas registradas:{" "}
+                                <strong>{estado.compensacao.tentativas}</strong>
+                              </p>
+
+                              <p>
+                                Pendência:{" "}
+                                <strong>
+                                  {estado.pendencia?.status ?? "Não encontrada"}
+                                </strong>
+                              </p>
+
+                              <p>
+                                Confirmado em:{" "}
+                                {estado.compensacao.confirmadoEm
+                                  ? new Date(
+                                      estado.compensacao.confirmadoEm
+                                    ).toLocaleString("pt-BR", {
+                                      timeZone: "America/Sao_Paulo",
+                                    })
+                                  : "Sem confirmação persistida"}
+                              </p>
+
+                              {estado.tentativas.map((tentativa) => (
+                                <div
+                                  key={tentativa.id}
+                                  className="rounded-lg border p-2 space-y-1"
+                                >
+                                  <p>
+                                    Tentativa #{tentativa.numero}:{" "}
+                                    <strong>{tentativa.status}</strong>
+                                  </p>
+
+                                  <p>
+                                    Ambiente: {tentativa.ambiente}
+                                  </p>
+
+                                  <p>
+                                    POST autorizado e consumido:{" "}
+                                    {tentativa.postAutorizacaoConsumidaEm
+                                      ? "Sim"
+                                      : "Não"}
+                                  </p>
+
+                                  <p>
+                                    Referência externa do estorno:{" "}
+                                    {tentativa.estornoProviderRef ?? "Não registrada"}
+                                  </p>
+                                </div>
+                              ))}
+
+                              {precisaRevisao && (
+                                <p
+                                  role="alert"
+                                  className="font-semibold text-amber-800"
+                                >
+                                  Resultado financeiro pendente de confirmação.
+                                  Consultar a conciliação autorizada. Não repetir
+                                  o envio do estorno.
+                                </p>
+                              )}
+
+                              <p className="font-medium text-gray-700">
+                                Nova execução automática: não permitida por
+                                esta consulta.
+                              </p>
+                            </div>
+                          );
+                        })()}
+
+                        {previasEstornoAdmin[item.pagamentoId] && (
+                          <div className="rounded-lg border bg-gray-50 p-3 text-sm space-y-1">
+                            <p className="font-semibold">
+                              Prévia operacional
+                            </p>
+
+                            <p>
+                              Status da compensação:{" "}
+                              {previasEstornoAdmin[
+                                item.pagamentoId
+                              ].compensacao?.status ?? "Não encontrada"}
+                            </p>
+
+                            <p>
+                              Tentativas:{" "}
+                              {previasEstornoAdmin[
+                                item.pagamentoId
+                              ].compensacao?.tentativas ?? 0}
+                            </p>
+
+                            <p>
+                              Pré-validação:{" "}
+                              <strong>
+                                {previasEstornoAdmin[
+                                  item.pagamentoId
+                                ].preflightAprovado
+                                  ? "Aprovada"
+                                  : "Bloqueada"}
+                              </strong>
+                            </p>
+
+                            {previasEstornoAdmin[
+                              item.pagamentoId
+                            ].motivoBloqueio && (
+                              <p className="text-amber-800">
+                                Motivo:{" "}
+                                {previasEstornoAdmin[
+                                  item.pagamentoId
+                                ].motivoBloqueio}
+                              </p>
+                            )}
+
+                            <p className="font-medium text-amber-800">
+                              Prévia somente leitura. Nenhum estorno foi executado.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="border-t pt-3 text-xs text-gray-500">
+                        Consulta somente leitura. Nenhum estorno
+                        será executado por esta tela.
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end items-center gap-3">
+                <button
+                  type="button"
+                  disabled={
+                    pendenciasLoading || pendenciasPagina <= 1
+                  }
+                  onClick={() =>
+                    setPendenciasPagina((p) =>
+                      Math.max(1, p - 1)
+                    )
+                  }
+                  className="border rounded px-3 py-2 disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+
+                <span className="text-sm">
+                  Página {pendenciasPagina}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={
+                    pendenciasLoading ||
+                    pendenciasPagina >= pendenciasTotalPaginas
+                  }
+                  onClick={() =>
+                    setPendenciasPagina((p) => p + 1)
+                  }
+                  className="border rounded px-3 py-2 disabled:opacity-50"
+                >
+                  Próxima
+                </button>
+              </div>
+            </section>
+        )}
+
         {aba === "assinaturas" && (
           <div>
             <h3 className="text-xl font-bold mb-3">Gerenciar Assinaturas</h3>
@@ -5362,13 +6750,16 @@ async function agendarManutencaoPersonalizada() {
               >
                 <option value="">Todos os tipos</option>
                 <option value="Atleta">Atleta</option>
+                <option value="Professor">Professor</option>
+                <option value="Responsavel">Responsável</option>
+                <option value="Creator">Creator</option>
+                <option value="Olheiro">Olheiro</option>
                 <option value="Learning">Learning</option>
-                <option value="Escolinha">Escola/Escolinha</option>
                 <option value="Clube">Clube</option>
+                <option value="Escolinha">Escola/Escolinha</option>
                 <option value="Marca">Marca</option>
                 <option value="Federacao">Federação</option>
-                <option value="Professor">Professor</option>
-                <option value="Olheiro">Olheiro</option>
+                <option value="Admin">Administrador</option>
               </select>
               <select value={assAtivo} onChange={(e) => setAssAtivo(e.target.value)} className="border rounded px-3 py-2 w-full sm:w-auto">
                 <option value="">Status (todos)</option>
@@ -5886,6 +7277,10 @@ async function agendarManutencaoPersonalizada() {
           </div>
         )}
 
+        {aba === "correcoes-nascimento" && (
+          <CorrecoesNascimentoAdmin />
+        )}
+
         {aba === "analises" && (
           <div className="space-y-6">
             <h3 className="text-xl font-bold">Análises</h3>
@@ -5912,7 +7307,7 @@ async function agendarManutencaoPersonalizada() {
 
                 <ToggleSwitch
                   checked={!!configuracoes?.[item.key]}
-                  disabled={false} 
+                  disabled={false}
                   onChange={async (next) => {
                     setConfiguracoes((prev: any) => ({ ...(prev || {}), [item.key]: next }));
 
@@ -6302,11 +7697,11 @@ async function agendarManutencaoPersonalizada() {
           <div className="relative bg-white w-full max-w-3xl rounded shadow-lg p-5">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Detalhes da Metodologia</h4>
-              <button 
+              <button
                 onClick={() => {
                   setMetDetailOpen(false);
                   setExpandedTreinoItemId(null);
-                }} 
+                }}
                 className="text-gray-600"
               >
                 ✕
@@ -6568,10 +7963,297 @@ async function agendarManutencaoPersonalizada() {
         </div>
       )}
 
+      {usuarioParaExcluir && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-bold text-gray-900">
+                Gerenciar exclusão
+              </h3>
+              <button
+                type="button"
+                onClick={fecharGerenciamentoExclusao}
+                disabled={exclusaoAdminBusy}
+                className="rounded-lg px-3 py-2 text-gray-500 hover:bg-gray-100"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Usuário:{" "}
+              <strong>
+                {usuarioParaExcluir.nome ||
+                  usuarioParaExcluir.nomeDeUsuario ||
+                  usuarioParaExcluir.email}
+              </strong>
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setModoExclusaoAdmin("papeis")}
+                className={`rounded-lg border px-3 py-3 text-sm font-semibold ${
+                  modoExclusaoAdmin === "papeis"
+                    ? "border-green-700 bg-green-50 text-green-800"
+                    : "border-gray-200 text-gray-600"
+                }`}
+              >
+                Excluir papéis
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModoExclusaoAdmin("conta")}
+                className={`rounded-lg border px-3 py-3 text-sm font-semibold ${
+                  modoExclusaoAdmin === "conta"
+                    ? "border-red-600 bg-red-50 text-red-700"
+                    : "border-gray-200 text-gray-600"
+                }`}
+              >
+                Conta inteira
+              </button>
+            </div>
+
+            {modoExclusaoAdmin === "papeis" ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-gray-600">
+                  Papéis ativos identificados nesta conta:
+                </p>
+
+                {papeisDoUsuarioFront(usuarioParaExcluir).length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Nenhum papel ativo disponível.
+                  </p>
+                ) : (
+                  papeisDoUsuarioFront(usuarioParaExcluir).map(
+                    (papel) => (
+                      <label
+                        key={papel}
+                        className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={papeisSelecionadosAdmin.includes(papel)}
+                          onChange={(e) => {
+                            setPapeisSelecionadosAdmin((anterior) =>
+                              e.target.checked
+                                ? [...anterior, papel]
+                                : anterior.filter((p) => p !== papel)
+                            );
+                          }}
+                        />
+                        <span>{papel}</span>
+                      </label>
+                    )
+                  )
+                )}
+
+                <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+                  É possível desativar Atleta, Professor, Olheiro, Responsavel,
+                  Learning e Creator, desde que não existam responsabilidades pendentes.
+                  A operação será bloqueada quando houver responsabilidades
+                  ou vínculos ativos que precisem ser encerrados.
+                  Os históricos serão preservados.
+                </p>
+
+                <button
+                  type="button"
+                  disabled={
+                    exclusaoAdminBusy ||
+                    !canManageAdmins ||
+                    papeisSelecionadosAdmin.length === 0 ||
+                    papeisSelecionadosAdmin.some(
+                      (papel) =>
+                        !["Atleta", "Responsavel", "Professor", "Olheiro", "Learning", "Creator"].includes(papel)
+                    )
+                  }
+                  onClick={async () => {
+                    if (!usuarioParaExcluir) return;
+
+                    const frase = "Desativar Papéis FootEra";
+
+                    const confirmacao = window.prompt(
+                      `Você vai desativar os papéis:\n\n` +
+                      papeisSelecionadosAdmin.join(", ") +
+                      `\n\nDa conta: ${
+                        usuarioParaExcluir.nome ||
+                        usuarioParaExcluir.nomeDeUsuario ||
+                        usuarioParaExcluir.email
+                      }` +
+                      `\n\nDigite exatamente: ${frase}`
+                    );
+
+                    if (confirmacao !== frase) {
+                      return;
+                    }
+
+                    try {
+                      setExclusaoAdminBusy(true);
+
+                      const resposta = await fetch(
+                        `${API.BASE_URL}/api/admin/usuarios/${encodeURIComponent(
+                          usuarioParaExcluir.id
+                        )}/desativar-papeis`,
+                        {
+                          method: "POST",
+                          headers: authHeaders({
+                            "Content-Type": "application/json",
+                          }),
+                          body: JSON.stringify({
+                            papeis: papeisSelecionadosAdmin,
+                            confirm: confirmacao,
+                          }),
+                        }
+                      );
+
+                      const data = await resposta.json().catch(() => ({}));
+
+                      if (!resposta.ok) {
+                        notify.error(
+                          data?.message ||
+                          "Não foi possível desativar os papéis."
+                        );
+                        return;
+                      }
+
+                      notify.success(
+                        data?.message ||
+                        "Papéis desativados com sucesso."
+                      );
+
+                      setUsuarioParaExcluir(null);
+                      setPapeisSelecionadosAdmin([]);
+
+                      await carregarUsuarios(pagina);
+                    } catch (error: any) {
+                      notify.error(
+                        error?.message ||
+                        "Erro ao desativar os papéis."
+                      );
+                    } finally {
+                      setExclusaoAdminBusy(false);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {exclusaoAdminBusy
+                    ? "Processando..."
+                    : "Desativar papéis selecionados"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-gray-600">
+                  A conta será colocada na lixeira por 30 dias.
+                  Nenhum registro será apagado imediatamente.
+                </p>
+
+                <label className="block text-sm font-medium">
+                  Digite Excluir Conta Footera
+                </label>
+                <input
+                  value={confirmacaoExclusaoAdmin}
+                  onChange={(e) =>
+                    setConfirmacaoExclusaoAdmin(e.target.value)
+                  }
+                  placeholder="Excluir Conta Footera"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+
+                <label className="block text-sm font-medium">
+                  Motivo administrativo
+                </label>
+                <textarea
+                  value={motivoExclusaoAdmin}
+                  onChange={(e) =>
+                    setMotivoExclusaoAdmin(e.target.value)
+                  }
+                  rows={3}
+                  placeholder="Informe por que a conta será excluída"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+
+                <button
+                  type="button"
+                  disabled={
+                    exclusaoAdminBusy ||
+                    !canManageAdmins ||
+                    usuarioParaExcluir.id === meId ||
+                    confirmacaoExclusaoAdmin.trim() !==
+                      "Excluir Conta Footera" ||
+                    motivoExclusaoAdmin.trim().length < 10
+                  }
+                  onClick={async () => {
+                    try {
+                      setExclusaoAdminBusy(true);
+
+                      const resposta = await fetch(
+                        `${API.BASE_URL}/api/admin/usuarios/${encodeURIComponent(
+                          usuarioParaExcluir.id
+                        )}`,
+                        {
+                          method: "DELETE",
+                          headers: authHeaders({
+                            "Content-Type": "application/json",
+                          }),
+                          body: JSON.stringify({
+                            confirm: confirmacaoExclusaoAdmin.trim(),
+                            motivo: motivoExclusaoAdmin.trim(),
+                          }),
+                        }
+                      );
+
+                      const data = await resposta
+                        .json()
+                        .catch(() => ({}));
+
+                      if (!resposta.ok) {
+                        notify.error(
+                          data?.message ||
+                            "Não foi possível solicitar a exclusão."
+                        );
+                        return;
+                      }
+
+                      notify.success(
+                        data?.message || "Conta enviada para a lixeira."
+                      );
+
+                      setUsuarioParaExcluir(null);
+                      await carregarUsuarios(pagina);
+                    } catch (error: any) {
+                      notify.error(
+                        error?.message || "Erro de conexão."
+                      );
+                    } finally {
+                      setExclusaoAdminBusy(false);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {exclusaoAdminBusy
+                    ? "Processando..."
+                    : "Enviar conta para lixeira"}
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={fecharGerenciamentoExclusao}
+              className="mt-3 w-full rounded-lg border border-gray-300 px-4 py-2 text-sm"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {detalheAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDetalheAberto(false)} />
-          <div className="relative bg-white w-full max-w-2xl rounded shadow-lg p-5">
+          <div className="relative w-[calc(100%-2rem)] max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-lg font-semibold">Detalhes da Conta</h4>
               <button onClick={() => setDetalheAberto(false)} className="text-gray-600">
@@ -6844,37 +8526,11 @@ async function agendarManutencaoPersonalizada() {
                           </button>
                         )}
 
-                        <div className="border-t pt-3 flex flex-wrap gap-2">
-                        {(() => {
-                          const status = String((u as any).status ?? "").toUpperCase();
-                          const deletada = !!(u as any).deletedAt;
-                          const precisaReativar = deletada || status === "BLOQUEADO";
-
-                          return precisaReativar ? (
-                            <button
-                              onClick={() => bloquearOuReativarConta(u.id, "reativar")}
-                              disabled={acaoBusyId === u.id}
-                              className="px-3 py-2 rounded bg-green-700 text-white disabled:opacity-50"
-                            >
-                              Reativar conta
-                            </button>
-                          ) : (
-                            <button
-                              disabled={acaoBusyId === u.id}
-                              onClick={() => bloquearOuReativarConta(u.id, "bloquear")}
-                              className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-50"
-                            >
-                              {acaoBusyId === u.id ? "Processando..." : "Bloquear conta"}
-                            </button>
-                          );
-                        })()}
-                      </div>
-
-                        <div className="ml-auto flex gap-2">
+                        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
                           <button
                             disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "posts")}
-                            className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                            className="min-h-10 w-full rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
                           >
                             Remover posts
@@ -6882,7 +8538,7 @@ async function agendarManutencaoPersonalizada() {
                           <button
                             disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "comentarios")}
-                            className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                            className="min-h-10 w-full rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
                           >
                             Remover comentários
@@ -6890,7 +8546,7 @@ async function agendarManutencaoPersonalizada() {
                           <button
                             disabled={!isAdminBase || acaoBusyId === u.id}
                             onClick={() => removerConteudo(u.id, "todos")}
-                            className="px-3 py-2 rounded bg-gray-200 disabled:opacity-50"
+                            className="min-h-10 w-full rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
                             title={!isAdminBase ? "Requer permissão de admin" : ""}
                           >
                             Remover tudo
@@ -7185,7 +8841,10 @@ function PieChart({
 
   let currentAngle = 0;
 
-  const segments = data.map((d, idx) => {
+  const segments = data
+    .map((d, idx) => ({ ...d, colorIndex: idx }))
+    .filter((d) => d.value > 0)
+    .map((d) => {
     const value = d.value || 0;
     const angle = (value / total) * Math.PI * 2;
     const startAngle = currentAngle;
@@ -7207,7 +8866,7 @@ function PieChart({
 
     return {
       d: pathData,
-      fill: colors[idx] ?? colors[colors.length - 1],
+      fill: colors[d.colorIndex % colors.length],
       label: d.label,
       value,
     };
@@ -7227,17 +8886,17 @@ function PieChart({
         ))}
       </svg>
       <div className="text-sm w-full min-w-0 grid grid-cols-1 gap-1">
-        {segments.map((s, i) => (
+        {data.map((item, i) => (
           <div key={i} className="grid grid-cols-[14px_1fr_auto] items-start gap-2">
             <span
               className="inline-block w-3 h-3 rounded mt-1 shrink-0"
-              style={{ backgroundColor: s.fill }}
+              style={{ backgroundColor: colors[i % colors.length] }}
             />
             <span className="font-medium leading-snug break-words">
-              {s.label}
+              {item.label}
             </span>
             <span className="text-gray-600 whitespace-nowrap">
-              {s.value} ({Math.round((s.value * 100) / total)}%)
+              {item.value} ({Math.round((item.value * 100) / total)}%)
             </span>
           </div>
         ))}

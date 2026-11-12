@@ -190,12 +190,19 @@ export default function PaginaLogin() {
         }
 
         const { isAdmin } = applyAuthSession(data, {
-          lembrar: lembrarDeMim
+          lembrar: lembrarDeMim,
         });
 
-        const destino = isAdmin
-          ? "/admin"
-          : consumirRetornoAuth("/perfil");
+        const somenteGestaoConta =
+          data.somenteGestaoConta === true;
+
+        const retorno = consumirRetornoAuth("/perfil");
+
+        const destino = somenteGestaoConta
+          ? "/configuracoes"
+          : isAdmin
+            ? "/admin"
+            : retorno;
 
         navigate(destino);
 
@@ -304,10 +311,14 @@ export default function PaginaLogin() {
         setRecoverSenha("");
         setDeletedInfo(null);
 
+        const retorno = consumirRetornoAuth("/perfil");
+
         navigate(
-          isAdmin
-            ? "/admin"
-            : consumirRetornoAuth("/perfil")
+          data.somenteGestaoConta === true
+            ? "/configuracoes"
+            : isAdmin
+              ? "/admin"
+              : retorno,
         );
 
         void inicializarPushDepoisDoLogin();
@@ -371,9 +382,13 @@ export default function PaginaLogin() {
           }
         );
 
-      const destino = isAdmin
-        ? "/admin"
-        : consumirRetornoAuth("/perfil");
+      const retorno = consumirRetornoAuth("/perfil");
+
+      const destino = data.somenteGestaoConta === true
+        ? "/configuracoes"
+        : isAdmin
+          ? "/admin"
+          : retorno;
 
       navigate(destino);
 

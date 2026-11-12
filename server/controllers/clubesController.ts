@@ -4,6 +4,7 @@ import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 import {
   garantirOrganizacaoLegada,
 } from "../services/organizacoes.js";
+import type { Prisma } from "@prisma/client";
 
 export const desvincularAtletaDoClube = async (req: Request, res: Response) => {
   const { clubeId } = req.params;
@@ -167,40 +168,112 @@ export const createClube = async (req: Request, res: Response) => {
 export const updateClube = async (req: Request, res: Response) => {
   const { id } = req.params;
 
+  const camposProtegidos = [
+    "id",
+    "usuarioId",
+    "organizacaoId",
+    "usuario",
+    "organizacao",
+  ] as const;
+
+  for (const campo of camposProtegidos) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        req.body ?? {},
+        campo,
+      )
+    ) {
+      return res.status(400).json({
+        code: "PROTECTED_ORGANIZATION_FIELD",
+        message:
+          `O campo "${campo}" não pode ser alterado pela edição comum. ` +
+          "Para trocar o proprietário, utilize a transferência de propriedade.",
+      });
+    }
+  }
+
   try {
-    const clubeExistente = await prisma.clube.findUnique({ where: { id } });
+    const clubeExistente = await prisma.clube.findUnique({
+      where: { id },
+      select: { id: true },
+    });
 
     if (!clubeExistente) {
-      return res.status(404).json({ message: "Clube não encontrado." });
+      return res.status(404).json({
+        message: "Clube não encontrado.",
+      });
+    }
+
+    const camposPermitidos = [
+      "nome",
+      "cnpj",
+      "telefone1",
+      "telefone2",
+      "email",
+      "siteOficial",
+      "sede",
+      "estadio",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+      "cidade",
+      "estado",
+      "pais",
+      "cep",
+      "logo",
+      "descricao",
+      "responsavel",
+    ] as const;
+
+    const dados: Record<string, unknown> = {};
+
+    for (const campo of camposPermitidos) {
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, campo)) {
+        const valor = req.body[campo];
+
+        if (typeof valor !== "string" && valor !== null) {
+          return res.status(400).json({
+            code: "INVALID_FIELD_VALUE",
+            message: `Valor inválido para ${campo}.`,
+          });
+        }
+
+        dados[campo] = valor;
+      }
+    }
+
+    if (Object.keys(dados).length === 0) {
+      return res.status(400).json({
+        code: "NO_EDITABLE_FIELDS",
+        message: "Nenhum campo editável informado.",
+      });
     }
 
     const clubeAtualizado = await prisma.clube.update({
       where: { id },
-      data: req.body,
+      data: dados as Prisma.ClubeUncheckedUpdateInput,
     });
 
-    res.json(clubeAtualizado);
+    return res.json(clubeAtualizado);
   } catch (error) {
-    console.error("Erro ao atualizar clube:", error);
-    res.status(500).json({ message: "Erro ao atualizar clube." });
+    console.error("[updateClube]", error);
+
+    return res.status(500).json({
+      message: "Erro ao atualizar clube.",
+    });
   }
 };
 
-export const deleteClube = async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  try {
-    const clubeExistente = await prisma.clube.findUnique({ where: { id } });
-
-    if (!clubeExistente) {
-      return res.status(404).json({ message: "Clube não encontrado." });
-    }
-
-    await prisma.clube.delete({ where: { id } });
-
-    res.json({ message: "Clube deletado com sucesso." });
-  } catch (error) {
-    console.error("Erro ao deletar clube:", error);
-    res.status(500).json({ message: "Erro ao deletar clube." });
-  }
+export const deleteClube = async (
+  _req: Request,
+  res: Response,
+) => {
+  return res.status(409).json({
+    code: "ORGANIZATION_DELETION_REQUIRES_REVIEW",
+    message:
+      "A exclusão definitiva de clubes está desativada. " +
+      "Utilize a transferência de propriedade ou o futuro " +
+      "procedimento de encerramento institucional.",
+  });
 };

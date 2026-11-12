@@ -810,32 +810,82 @@ export async function listMinhasMetodologiasAdmin(req: Request, res: Response) {
   }
 }
 
-export async function deleteMinhaMetodologiaAdmin(req: Request, res: Response) {
+export async function deleteMinhaMetodologiaAdmin(
+  req: Request,
+  res: Response
+) {
   try {
-    const userId = (req as any).user?.id || (req as any).userId;
+    const userId = String(
+      (req as any).user?.id ??
+      (req as any).userId ??
+      ""
+    ).trim();
+
     const { id } = req.params;
-    const origemTipo = String(req.query.origemTipo || req.body?.origemTipo || "LEARNING").toUpperCase();
+
+    const origemTipo = String(
+      req.query.origemTipo ??
+      req.body?.origemTipo ??
+      "LEARNING"
+    ).toUpperCase();
 
     if (!userId) {
-      return res.status(401).json({ message: "Não autenticado." });
+      return res.status(401).json({
+        message: "Não autenticado.",
+      });
     }
 
-    if (origemTipo === "AVULSA") {
-      const metodologiaAvulsa = await prisma.metodologiaAvulsa.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          criadorUsuarioId: true,
-        },
+    if (origemTipo !== "AVULSA" && origemTipo !== "LEARNING") {
+      return res.status(400).json({
+        message: "Tipo de metodologia inválido.",
       });
+    }
 
-      if (!metodologiaAvulsa) {
-        return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
+    // EXCLUSÃO DE METODOLOGIA AVULSA
+    if (origemTipo === "AVULSA") {
+      const metodologia =
+        await prisma.metodologiaAvulsa.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            criadorUsuarioId: true,
+            clubeId: true,
+            escolinhaId: true,
+            marcaId: true,
+            federacaoId: true,
+          },
+        });
+
+      if (!metodologia) {
+        return res.status(404).json({
+          message: "Metodologia avulsa não encontrada.",
+        });
       }
 
-      if (String(metodologiaAvulsa.criadorUsuarioId) !== String(userId)) {
+      // Não permitir exclusão institucional
+      // pela rota pessoal do administrador.
+      const institucional = Boolean(
+        metodologia.clubeId ||
+        metodologia.escolinhaId ||
+        metodologia.marcaId ||
+        metodologia.federacaoId
+      );
+
+      if (institucional) {
         return res.status(403).json({
-          message: "Você só pode apagar metodologias criadas por você.",
+          message:
+            "Esta metodologia pertence a uma organização. " +
+            "Não pode ser excluída pela área de metodologias pessoais.",
+        });
+      }
+
+      if (
+        !metodologia.criadorUsuarioId ||
+        metodologia.criadorUsuarioId !== userId
+      ) {
+        return res.status(403).json({
+          message:
+            "Você só pode apagar metodologias pessoais criadas por você.",
         });
       }
 
@@ -846,21 +896,48 @@ export async function deleteMinhaMetodologiaAdmin(req: Request, res: Response) {
       return res.json({ ok: true });
     }
 
-    const metodologia = await prisma.metodologia.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        criadorUsuarioId: true,
-      },
-    });
+    // EXCLUSÃO DE METODOLOGIA LEARNING
+    const metodologia =
+      await prisma.metodologia.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          criadorUsuarioId: true,
+          clubeId: true,
+          escolinhaId: true,
+          marcaId: true,
+          federacaoId: true,
+        },
+      });
 
     if (!metodologia) {
-      return res.status(404).json({ message: "Metodologia não encontrada." });
+      return res.status(404).json({
+        message: "Metodologia não encontrada.",
+      });
     }
 
-    if (String(metodologia.criadorUsuarioId) !== String(userId)) {
+    const institucional = Boolean(
+      metodologia.clubeId ||
+      metodologia.escolinhaId ||
+      metodologia.marcaId ||
+      metodologia.federacaoId
+    );
+
+    if (institucional) {
       return res.status(403).json({
-        message: "Você só pode apagar metodologias criadas por você.",
+        message:
+          "Esta metodologia pertence a uma organização. " +
+          "Não pode ser excluída pela área de metodologias pessoais.",
+      });
+    }
+
+    if (
+      !metodologia.criadorUsuarioId ||
+      metodologia.criadorUsuarioId !== userId
+    ) {
+      return res.status(403).json({
+        message:
+          "Você só pode apagar metodologias pessoais criadas por você.",
       });
     }
 
@@ -870,6 +947,10 @@ export async function deleteMinhaMetodologiaAdmin(req: Request, res: Response) {
 
     return res.json({ ok: true });
   } catch (e: any) {
-    return sendError(res, e, "Erro ao apagar metodologia do admin.");
+    return sendError(
+      res,
+      e,
+      "Erro ao apagar metodologia do admin."
+    );
   }
 }

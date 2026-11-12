@@ -1,0 +1,646 @@
+﻿
+Path                                                                       LineNumber Line                                                                                                   
+----                                                                       ---------- ----                                                                                                   
+C:\dev\FootEraApp-app\server\controllers\adminController.ts                       382         isAdmin:                                                                                       
+C:\dev\FootEraApp-app\server\controllers\auditoriaController.ts                     5 async function isAdmin(usuarioId: string) {                                                            
+C:\dev\FootEraApp-app\server\controllers\auditoriaController.ts                    14   if (!(await isAdmin(userId))) return res.status(403).json({ code: 'FORBIDDEN' });                    
+C:\dev\FootEraApp-app\server\controllers\authController.ts                        255       isAdmin: contexto?.isAdmin === true,                                                             
+C:\dev\FootEraApp-app\server\controllers\convitesController.ts                     36     (req as any).user?.isAdmin === true ||                                                             
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts         53     let isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts         58     if (!isAdmin && req.user?.id) {                                                                    
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts         64         isAdmin = !!adminRow;                                                                          
+C:\dev\FootEraApp-app\server\controllers\dashboardOrganizacaoController.ts         77     if (!isAdmin && !isSameOwner) {                                                                    
+C:\dev\FootEraApp-app\server\controllers\eventoConvocacaoController.ts             63   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\eventoConvocacaoController.ts             64     req.user?.isAdmin ===                                                                              
+C:\dev\FootEraApp-app\server\controllers\eventoConvocacaoController.ts             67   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     107       isAdmin:                                                                                         
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     108         contexto.isAdmin === true,                                                                     
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     156   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     162   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     250   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     256   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     865     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     866       req.user?.isAdmin ===                                                                            
+C:\dev\FootEraApp-app\server\controllers\eventosController.ts                     953             isAdmin ||                                                                                 
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                   10 function isAdminRequest(req: Request): boolean {                                                       
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                   14     anyReq?.isAdmin === true ||                                                                        
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                   15     anyReq?.user?.isAdmin === true                                                                     
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                  460         !isAdminRequest(req) &&                                                                        
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                  553       !isAdminRequest(req) &&                                                                          
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                  703     if (!isAdminRequest(req)) {                                                                        
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                  860         !isAdminRequest(req) &&                                                                        
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                  876       !isAdminRequest(req) &&                                                                          
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                 1034         !isAdminRequest(req) &&                                                                        
+C:\dev\FootEraApp-app\server\controllers\exerciciosController.ts                 1050       !isAdminRequest(req) &&                                                                          
+C:\dev\FootEraApp-app\server\controllers\googleAuthController.ts                  216     isAdmin: contexto?.isAdmin === true,                                                               
+C:\dev\FootEraApp-app\server\controllers\jogosElencoController.ts                 124   if (req.user?.isAdmin) {                                                                             
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts                275 async function isAdminUser(                                                                            
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               1106   const isAdmin = await isAdminUser(userId);                                                           
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               1108   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               1236   const isAdmin = await isAdminUser(userId);                                                           
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               1238   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3493     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3568       !isAdmin &&                                                                                      
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3744       isAdmin ||                                                                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3760     } else if (isOwner || isAdmin) {                                                                   
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3888         isAdmin,                                                                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3893           : isAdmin                                                                                    
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3899         podeAssinarAgora: isAdmin || isOwner ? false : podeAssinarAgora,                               
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               3900         motivoBloqueio: isAdmin || isOwner ? null : motivoBloqueio,                                    
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               4202     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               4257     const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               4265     if (!isAdmin && !assinatura?.concluiuEm) {                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5401     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5421     if (!isAdmin && metodologiaBase.ativo === false) {                                                 
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5461     if (!assinatura && isAdmin) {                                                                      
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5533     const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5539     if (!isAdmin && assinatura?.status === MetodologiaAssinaturaStatus.CANCELADA) {                    
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               5544       !isAdmin &&                                                                                      
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6590     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6608       !isAdmin &&                                                                                      
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6618     const acessoFinal = hasAccess || isAdmin || isOwner;                                               
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6770       isAdmin,                                                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6791         isAdmin,                                                                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6794         assinaturaTipo: hasAccess || isAdmin || isOwner                                                
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6796           : isAdmin                                                                                    
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6806           isAdmin || isOwner                                                                           
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               6814           !isAdmin &&                                                                                  
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               7622     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               7623     if (!isAdmin) return res.status(403).json({ message: "Apenas admin pode acessar esta listagem." });
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               7919     const isAdmin = await isAdminUser(userId);                                                         
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               8029     if (!assinatura && isAdmin) {                                                                      
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               8101     const temAcesso = assinaturaDaAcesso(assinatura) || isAdmin;                                       
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               8109     if (!isAdmin && assinatura?.status === MetodologiaAssinaturaStatus.CANCELADA) {                    
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts               8115     if (!isAdmin && assinatura?.expiraEm && new Date(assinatura.expiraEm) <= new Date()) {             
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts                      144 function isAdminFromReq(                                                                               
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts                      149       ?.isAdmin === true ||                                                                            
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts                      151       ?.isAdmin === true                                                                               
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts                     2090     const isAdmin = isAdminFromReq(req);                                                               
+C:\dev\FootEraApp-app\server\controllers\perfilController.ts                     5047       solicitanteId === learning.usuarioId || isAdminFromReq(req);                                     
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                 16   isAdmin: boolean;                                                                                    
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                 50   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                 56   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                 59       isAdmin: true,                                                                                   
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                117       isAdmin: false,                                                                                  
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                147         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                169         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                208   if (escopo.isAdmin) {                                                                                
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                276   if (escopo.isAdmin) {                                                                                
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                364     escopo.isAdmin                                                                                     
+C:\dev\FootEraApp-app\server\controllers\sessoesTurmaController.ts                715       escopo.isAdmin                                                                                   
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   150     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   151       !!req.user?.isAdmin;                                                                             
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   156     if (!owner && !isAdmin) {                                                                          
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   398     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   399       !!req.user?.isAdmin;                                                                             
+C:\dev\FootEraApp-app\server\controllers\templatesController.ts                   420     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                     816   if (escopo.isAdmin) {                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                     863     !escopo.isAdmin                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1398   isAdmin:                                                                                             
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1441   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1447   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1450       isAdmin: true,                                                                                   
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1506         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1538         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1579         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1607         isAdmin:                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1637         isAdmin: false,                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    1662     isAdmin: false,                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    2027     escopo.isAdmin                                                                                     
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    3460         escopo.isAdmin                                                                                 
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    4534         escopo.isAdmin                                                                                 
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    4543         !escopo.isAdmin &&                                                                             
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    5510     if (!escopo.isAdmin) {                                                                             
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    5607       escopo.isAdmin                                                                                   
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    8686       !escopo.isAdmin                                                                                  
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    8746       escopo.isAdmin ||                                                                                
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    8977           isAdmin:                                                                                     
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    8978             escopo.isAdmin,                                                                            
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    9385       !escopo.isAdmin &&                                                                               
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    9429       !escopo.isAdmin                                                                                  
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    9523                 escopo.isAdmin                                                                         
+C:\dev\FootEraApp-app\server\controllers\treinosController.ts                    9607       !escopo.isAdmin                                                                                  
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          287   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          293   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          335   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          378   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          660     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          681     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts          719         isAdmin &&                                                                                     
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts         1373     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts         1391       isAdmin &&                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts         1976     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosProgramadosController.ts         2048       isAdmin &&                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts                35   isAdmin: boolean;                                                                                    
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               211   const isAdmin =                                                                                      
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               221   if (isAdmin) {                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               225       isAdmin:                                                                                         
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               271       isAdmin:                                                                                         
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               323         isAdmin:                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               342         isAdmin:                                                                                       
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               419         contexto.isAdmin &&                                                                            
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               434         !contexto.isAdmin &&                                                                           
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts               831         contexto.isAdmin &&                                                                            
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts              1189         !contexto.isAdmin                                                                              
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts              1349         !contexto.isAdmin &&                                                                           
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts              1426       const isAdmin =                                                                                  
+C:\dev\FootEraApp-app\server\controllers\treinosSalvosController.ts              1432       if (!isAdmin) {                                                                                  
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                       60     isAdmin,                                                                                           
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                      158     isAdmin,                                                                                           
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                      226     contexto.isAdmin ||                                                                                
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                      995     if (!contexto.isAdmin) {                                                                           
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                     1267     if (contexto.isAdmin) {                                                                            
+C:\dev\FootEraApp-app\server\controllers\turmasController.ts                     1346       !contexto.isAdmin                                                                                
+C:\dev\FootEraApp-app\server\controllers\uploadController.ts                       45   isAdminUser: boolean;                                                                                
+C:\dev\FootEraApp-app\server\controllers\uploadController.ts                       54   if (params.isAdminUser) return true;                                                                 
+C:\dev\FootEraApp-app\server\controllers\uploadController.ts                      155       const isAdminUser = Boolean((req as any).user?.isAdmin);                                         
+C:\dev\FootEraApp-app\server\controllers\uploadController.ts                      158         isAdminUser,                                                                                   
+C:\dev\FootEraApp-app\server\controllers\usuarioController.ts                     140     const isAdmin = authUserTipo === "Admin" || authUserTipo === "ADMIN";                              
+C:\dev\FootEraApp-app\server\controllers\usuarioController.ts                     146     if (authUserId !== id && !isAdmin) {                                                               
+C:\dev\FootEraApp-app\server\controllers\usuarioController.ts                     198       const isAdmin =                                                                                  
+C:\dev\FootEraApp-app\server\controllers\usuarioController.ts                     356           !isAdmin                                                                                     
+C:\dev\FootEraApp-app\server\routes\admin.ts                                        3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\admin.ts                                        4 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       17   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       18   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       23   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       24   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       29   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       30   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       35   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       36   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       41   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       42   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\admin.ts                                       45 router.get("/", authenticateToken, requireAdmin, adminDashboard);                                      
+C:\dev\FootEraApp-app\server\routes\adminAdmins.ts                                  2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\adminAdmins.ts                                  5   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\adminAdmins.ts                                 13 router.get("/me", authenticateToken, requireAdmin, getMe);                                             
+C:\dev\FootEraApp-app\server\routes\adminAdmins.ts                                 14 router.post("/admins", authenticateToken, requireSuperAdmin, createAdmin);                             
+C:\dev\FootEraApp-app\server\routes\adminAdmins.ts                                 15 router.delete("/admins/:id", authenticateToken, requireSuperAdmin, deleteAdmin);                       
+C:\dev\FootEraApp-app\server\routes\adminAssinantes.ts                              4   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\adminAssinantes.ts                              7   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\adminAssinantes.ts                             13   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\adminAssinantes.ts                             14   requireAdmin                                                                                         
+C:\dev\FootEraApp-app\server\routes\adminBilling.ts                                 3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\adminBilling.ts                                 4 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\adminBilling.ts                                10   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\adminBilling.ts                                11   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\adminMetodologiasRoutes.ts                      2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\adminMetodologiasRoutes.ts                      3 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\adminMetodologiasRoutes.ts                     15 router.use(authenticateToken, requireAdmin);                                                           
+C:\dev\FootEraApp-app\server\routes\adminModeracao.ts                               2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\adminModeracao.ts                               4   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\adminModeracao.ts                              14 router.use(authenticateToken, requireAdmin);                                                           
+C:\dev\FootEraApp-app\server\routes\adminUsuarios.ts                               13 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\adminUsuarios.ts                               14 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\adminUsuarios.ts                               21 router.use(authenticateToken, requireAdmin);                                                           
+C:\dev\FootEraApp-app\server\routes\ads.ts                                          2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\ads.ts                                          7 router.post("/impression", authenticateToken, registrarImpressaoAd);                                   
+C:\dev\FootEraApp-app\server\routes\agendamentos.ts                                 2 import { authenticateToken } from '../middlewares/auth.js';                                            
+C:\dev\FootEraApp-app\server\routes\agendamentos.ts                                 8 router.post('/', authenticateToken, async (req, res) => {                                              
+C:\dev\FootEraApp-app\server\routes\analises.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\analises.ts                                     8 r.use(authenticateToken, requireSuperAdmin);                                                           
+C:\dev\FootEraApp-app\server\routes\assinaturas.ts                                  2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\assinaturas.ts                                  4 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\assinaturas.ts                                  9   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\assinaturas.ts                                 10   requireAdmin                                                                                         
+C:\dev\FootEraApp-app\server\routes\atleta.ts                                      13 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\atleta.ts                                      19 router.get("/:id/vinculos-basic", authenticateToken, vinculosBasic);                                   
+C:\dev\FootEraApp-app\server\routes\atleta.ts                                      22 router.get("/:atletaId/professor", authenticateToken, getProfessorDoAtleta);                           
+C:\dev\FootEraApp-app\server\routes\auditoria.ts                                    2 import { authenticateToken } from '../middlewares/auth.js';                                            
+C:\dev\FootEraApp-app\server\routes\auditoria.ts                                    7 router.get('/', authenticateToken, listarAuditoria);                                                   
+C:\dev\FootEraApp-app\server\routes\aulasAoVivoRoutes.ts                           22 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\aulasAoVivoRoutes.ts                           36 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\auth.ts                                         4 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\auth.ts                                        10 router.post("/logout", authenticateToken, logout);                                                     
+C:\dev\FootEraApp-app\server\routes\auth.ts                                        13 router.get("/me", authenticateToken, me);                                                              
+C:\dev\FootEraApp-app\server\routes\billing.ts                                      2 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";                 
+C:\dev\FootEraApp-app\server\routes\billing.ts                                      3 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\billing.ts                                     43   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\billing.ts                                     49   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\billing.ts                                     62 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\billing.ts                                     71   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\billing.ts                                    136   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\catalogo.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\catalogo.ts                                    11 r.get("/clubes", authenticateToken, catalogoClubes);                                                   
+C:\dev\FootEraApp-app\server\routes\catalogo.ts                                    12 r.get("/escolinhas", authenticateToken, catalogoEscolinhas);                                           
+C:\dev\FootEraApp-app\server\routes\catalogo.ts                                    13 r.get("/professores", authenticateToken, catalogoProfessores);                                         
+C:\dev\FootEraApp-app\server\routes\checklists.ts                                   2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\checklists.ts                                   7 r.get("/templates", authenticateToken, listarTemplates);                                               
+C:\dev\FootEraApp-app\server\routes\checklists.ts                                   8 r.post("/templates", authenticateToken, criarTemplate);                                                
+C:\dev\FootEraApp-app\server\routes\checklists.ts                                  10   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\clube.ts                                       12 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\clube.ts                                       23 router.post("/", requireAdmin, createClube);                                                           
+C:\dev\FootEraApp-app\server\routes\clube.ts                                       29 router.delete("/:id", requireAdmin, deleteClube);                                                      
+C:\dev\FootEraApp-app\server\routes\comentarios.ts                                  2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\comentarios.ts                                  7 router.post("/", authenticateToken, criarComentario);                                                  
+C:\dev\FootEraApp-app\server\routes\comentarios.ts                                  8 router.delete("/:comentarioId", authenticateToken, deletarComentario);                                 
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                                8 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                                9 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                               16   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                               17   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                               22   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\configuracoes.ts                               27   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                          2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         17 r.get("/privacidade", authenticateToken, getPrivacidade);                                              
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         18 r.patch("/privacidade", authenticateToken, patchPrivacidade);                                          
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         21   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         26   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         29 r.get("/notificacoes", authenticateToken, getNotificacoes);                                            
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         30 r.patch("/notificacoes", authenticateToken, patchNotificacoes);                                        
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         31 r.put("/seguranca/senha", authenticateToken, trocarSenha);                                             
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         32 r.post("/seguranca/encerrar-sessoes", authenticateToken, encerrarSessoes);                             
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         33 r.get("/seguranca/google", authenticateToken, getGoogleStatus);                                        
+C:\dev\FootEraApp-app\server\routes\configuracoesPerfil.ts                         34 r.delete("/seguranca/google", authenticateToken, unlinkGoogle);                                        
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  13 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  17 router.get("/certificados/count", authenticateToken, getCertificadosCount);                            
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  18 router.get("/certificados/:usuarioId", authenticateToken, getCertificadosByUsuarioId);                 
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  19 router.get("/certificados", authenticateToken, getCertificadosByUsuarioId);                            
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  23 router.get("/count", authenticateToken, getConquistasCount);                                           
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  24 router.post("/sync-all", authenticateToken, syncAllUsuarios);                                          
+C:\dev\FootEraApp-app\server\routes\conquistas.ts                                  25 router.post("/compartilhar", authenticateToken, compartilharConquista);                                
+C:\dev\FootEraApp-app\server\routes\consentimento.ts                                2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\consentimento.ts                                7 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\convites.ts                                     6   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\convites.ts                                     7   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\convites.ts                                    23   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\convites.ts                                    29   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\convites.ts                                    35   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\convites.ts                                    41   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\convites.ts                                    47   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\creator.ts                                      2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\creator.ts                                     24 router.get("/me", authenticateToken, getMeuCreator);                                                   
+C:\dev\FootEraApp-app\server\routes\creator.ts                                     25 router.post("/ativar", authenticateToken, ativarCreator);                                              
+C:\dev\FootEraApp-app\server\routes\creator.ts                                     26 router.put("/me", authenticateToken, atualizarCreator);                                                
+C:\dev\FootEraApp-app\server\routes\creator.ts                                     27 router.get("/dashboard", authenticateToken, getDashboardCreator);                                      
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                     2 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                    35 router.get("/minhas-submissoes", authenticateToken, async (req, res) => {                              
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                    59 router.get("/submissoes", authenticateToken, async (req, res) => {                                     
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                    88 router.post("/em-grupo", authenticateToken, async (req, res) => {                                      
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   165 router.post("/submissoes-grupo", authenticateToken, async (req, res) => {                              
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   197 router.post("/upload/file", authenticateToken, (req, res) => {                                         
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   218 router.get("/em-grupo/:grupoId/ativo", authenticateToken, async (req, res) => {                        
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   275 router.get("/oficiais", authenticateToken, async (_req, res) => {                                      
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   287 router.get("/:id", authenticateToken, async (req, res) => {                                            
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   306 router.post("/submissoes/:id/like", authenticateToken, async (req, res) => {                           
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   331 router.post("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {                    
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   356 router.get("/submissoes/:id/comentarios", authenticateToken, async (req, res) => {                     
+C:\dev\FootEraApp-app\server\routes\desafios.ts                                   376 router.get("/", authenticateToken, async (req, res) => {                                               
+C:\dev\FootEraApp-app\server\routes\desafiosEmGrupo.ts                              2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\desafiosEmGrupo.ts                              6 router.get("/:desafioEmGrupoId/progresso", authenticateToken, progressoDesafioEmGrupo);                
+C:\dev\FootEraApp-app\server\routes\escolinha.ts                                   13 import { requireAdmin } from "../middlewares/guards.js";                                               
+C:\dev\FootEraApp-app\server\routes\escolinha.ts                                   26 router.post("/", requireAdmin, createEscolinha);                                                       
+C:\dev\FootEraApp-app\server\routes\escolinha.ts                                   32 router.delete("/:id", requireAdmin, deleteEscolinha);                                                  
+C:\dev\FootEraApp-app\server\routes\estatisticas.ts                                 2 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\estatisticas.ts                                 7 r.post("/exercicios/rebuild", authenticateToken, rebuildEstatisticaExercicios);                        
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                      3 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";                 
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                     37 r.get("/:eventoId/convocacao", authenticateToken, getConvocacaoEvento);                                
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                     38 r.put("/:eventoId/convocacao", authenticateToken, upsertConvocacaoEvento);                             
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                     42   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                     47   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\eventos.ts                                     53   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                   2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  19 router.get("/meus", authenticateToken, listarMeusExercicios);                                          
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  22   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  25 router.get("/:id", authenticateToken, buscarExercicioPorId);                                           
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  26 router.put("/:id", authenticateToken, uploadToS3.single("video"), editarExercicio);                    
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  27 router.delete("/:id", authenticateToken, excluirExercicio);                                            
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  28 router.post("/:id/duplicar", authenticateToken, duplicarExercicio);                                    
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  29 router.patch("/:id/favoritar", authenticateToken, favoritarExercicio);                                 
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  33   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\exercicios.ts                                  37 router.post("/", authenticateToken, uploadToS3.single("video"), criarExercicio);                       
+C:\dev\FootEraApp-app\server\routes\explorar.ts                                     8 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\explorar.ts                                    12 r.get("/atletas", authenticateToken, listarAtletasExplorar);                                           
+C:\dev\FootEraApp-app\server\routes\explorar.ts                                    13 r.get("/buscar", authenticateToken, buscarExplorar);                                                   
+C:\dev\FootEraApp-app\server\routes\explorar.ts                                    14 r.get("/", authenticateToken, explorar);                                                               
+C:\dev\FootEraApp-app\server\routes\favorito.ts                                     3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\favorito.ts                                     8 router.get("/", authenticateToken, async (req, res) => {                                               
+C:\dev\FootEraApp-app\server\routes\favorito.ts                                    24 router.get("/status/:alvoId", authenticateToken, async (req, res) => {                                 
+C:\dev\FootEraApp-app\server\routes\favorito.ts                                    43 router.post("/:alvoId", authenticateToken, async (req, res) => {                                       
+C:\dev\FootEraApp-app\server\routes\favorito.ts                                    73 router.delete("/:alvoId", authenticateToken, async (req, res) => {                                     
+C:\dev\FootEraApp-app\server\routes\feed.ts                                         4   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                         5   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\feed.ts                                         8   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        27   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        33   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        39   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        45   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        46   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        52   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        58   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        65   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        72   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        78   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        84   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feed.ts                                        90   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                     5   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    13   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    19   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    25   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    26   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    32   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\feedback.ts                                    33   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                   3 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  10 router.get("/dashboard", authenticateToken, formadoresController.dashboard);                           
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  11 router.get("/vinculos", authenticateToken, formadoresController.listarAtletas);                        
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  12 router.post("/vinculos", authenticateToken, formadoresController.criarVinculo);                        
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  13 router.get("/transferencias", authenticateToken, formadoresController.listarTransferencias);           
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  14 router.post("/transferencias", authenticateToken, formadoresController.criarTransferencia);            
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  15 router.post("/solidariedade/calc", authenticateToken, formadoresController.calcularSolidariedade);     
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  16 router.get("/badges", authenticateToken, formadoresController.listarBadges);                           
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  17 router.get("/documentos", authenticateToken, formadoresController.listarDocumentos);                   
+C:\dev\FootEraApp-app\server\routes\formadores.ts                                  20   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\gerenciarAtletas.ts                             4 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\gerenciarAtletas.ts                             8 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\gerenciarOrganizacoesRoutes.ts                  3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\gerenciarOrganizacoesRoutes.ts                 21 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\googleAuth.ts                                   8 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\googleAuth.ts                                  13 router.post("/link", authenticateToken, googleLinkAccount);                                            
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                       2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      23 router.post("/desafios-grupo/:desafioEmGrupoId/submissoes", authenticateToken, submeterDesafioGrupo);  
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      24 router.get("/me", authenticateToken, listarMeusGrupos);                                                
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      25 router.get("/:grupoId/usuarios-adicionaveis", authenticateToken, listarUsuariosAdicionaveisNoGrupo);   
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      26 router.patch("/:grupoId/membros/:membroId/tipo", authenticateToken, alterarTipoMembroGrupo);           
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      27 router.post("/:grupoId/membros", authenticateToken, adicionarMembrosGrupo);                            
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      28 router.delete("/:grupoId/membros/:membroId", authenticateToken, removerMembroGrupo);                   
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      29 router.post("/:grupoId/sair", authenticateToken, sairDoGrupo);                                         
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      30 router.post("/:grupoId/desafios/assign", authenticateToken, assignDesafioAoGrupo);                     
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      31 router.get("/desafios-grupo/:id", authenticateToken, getDesafioEmGrupo);                               
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      32 router.post("/desafios/submissoes-grupo", authenticateToken, submeterDesafioGrupo);                    
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      33 router.get("/:grupoId/mensagens", authenticateToken, listarMensagensGrupo);                            
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      34 router.post("/:grupoId/mensagens", authenticateToken, enviarMensagemGrupo);                            
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      35 router.get("/:grupoId", authenticateToken, detalharGrupo);                                             
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      36 router.delete("/:grupoId", authenticateToken, deletarGrupo);                                           
+C:\dev\FootEraApp-app\server\routes\grupos.ts                                      37 router.post("/", authenticateToken, criarGrupo);                                                       
+C:\dev\FootEraApp-app\server\routes\jogosElencoRoutes.ts                            2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\jogosElencoRoutes.ts                           12 router.get("/eventos/:id", authenticateToken, obterEvento);                                            
+C:\dev\FootEraApp-app\server\routes\jogosElencoRoutes.ts                           13 router.post("/eventos/:id/reseed", authenticateToken, reSeedEvento);                                   
+C:\dev\FootEraApp-app\server\routes\jogosElencoRoutes.ts                           14 router.patch("/partidas/:id", authenticateToken, atualizarPartida);                                    
+C:\dev\FootEraApp-app\server\routes\jogosElencoRoutes.ts                           15 router.post("/eventos", authenticateToken, criarEvento);                                               
+C:\dev\FootEraApp-app\server\routes\learningEventos.ts                             16   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\learningEventos.ts                             24   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\legal.ts                                        3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\legal.ts                                        8 router.post("/consentimentos", authenticateToken, async (req, res) => {                                
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                 2 import { authenticateToken } from '../middlewares/auth.js';                                            
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                 9 router.get('/', authenticateToken, minhasListas);                                                      
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                10 router.post('/', authenticateToken, criarLista);                                                       
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                11 router.delete('/:id', authenticateToken, deletarLista);                                                
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                13 router.post('/:id/itens', authenticateToken, adicionarAtleta);                                         
+C:\dev\FootEraApp-app\server\routes\listaOlheiro.ts                                14 router.delete('/:id/itens/:atletaId', authenticateToken, removerAtleta);                               
+C:\dev\FootEraApp-app\server\routes\mensagem.ts                                     3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\mensagem.ts                                    23 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                           3 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";                 
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          51   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          56 router.get("/minhas", authenticateToken, listMinhasMetodologiasAssinadas);                             
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          57 router.get("/criadas", authenticateToken, listMinhasMetodologiasCriadas);                              
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          58 router.get("/assinadas", authenticateToken, listMinhasMetodologiasAssinadas);                          
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          61   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          67   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          70 router.post("/avaliacoes", authenticateToken, criarAvaliacaoMetodologia);                              
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          71 router.get("/favoritos", authenticateToken, listarFavoritosLearning);                                  
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          72 router.post("/favoritos/toggle", authenticateToken, alternarFavoritoLearning);                         
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          73 router.delete("/favoritos/:tipo/:id", authenticateToken, removerFavoritoLearning);                     
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          77   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          84   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          90   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          95   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                          99 router.get("/metodologias-avulsas/:id", optionalAuthenticateToken, getMetodologiaAvulsaById);          
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         102   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         107   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         113   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         119   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         124   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         130   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         134 router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaOwnership, createMeto...
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         135 router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership...
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         136 router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwners...
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         137 router.post("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologiaOw...
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         138 router.delete("/:metodologiaId/estruturas/:estruturaId/itens", authenticateToken, requireMetodologia...
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         141   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         148   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         155   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         160   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         165   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         171   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         175 router.get("/:id/detalhe", optionalAuthenticateToken, getMetodologiaDetalhe);                          
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         176 router.post("/:id/assinar", authenticateToken, assinarMetodologia);                                    
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         177 router.get("/:id", authenticateToken, getMetodologiaById);                                             
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         178 router.put("/:id", authenticateToken, requireMetodologiaOwnership, updateMetodologia);                 
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         179 router.delete("/:id", authenticateToken, requireMetodologiaOwnership, deleteMetodologia);              
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         180 router.get("/", authenticateToken, listMetodologias);                                                  
+C:\dev\FootEraApp-app\server\routes\metodologiasRoutes.ts                         181 router.post("/", authenticateToken, requireMetodologiaCreateAccess, createMetodologia);                
+C:\dev\FootEraApp-app\server\routes\metrics.ts                                      3 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\metrics.ts                                      7 router.get("/metrics", authenticateToken, getMetrics);                                                 
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                18 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                23 router.delete("/lote", authenticateToken, deletarNotificacoesEmLote);                                  
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                24 router.patch("/me/lidas", authenticateToken, marcarTodasComoLidas);                                    
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                25 router.delete("/:id", authenticateToken, deletarNotificacao);                                          
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                26 router.get("/me", authenticateToken, listarMinhasNotificacoes);                                        
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                27 router.get("/badge", authenticateToken, getBadge);                                                     
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                28 router.post("/push/native/subscribe", authenticateToken, salvarPushNativeToken);                       
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                29 router.post("/push/native/unsubscribe", authenticateToken, removerPushNativeToken);                    
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                30 router.get("/push/public-key", authenticateToken, getPushPublicKey);                                   
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                31 router.post("/push/subscribe", authenticateToken, salvarPushSubscription);                             
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                32 router.post("/push/unsubscribe", authenticateToken, removerPushSubscription);                          
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                33 router.post("/push/test", authenticateToken, testarPushAtual);                                         
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                34 router.get("/push/status", authenticateToken, getPushStatusAtual);                                     
+C:\dev\FootEraApp-app\server\routes\notificacoes.ts                                35 router.patch("/:id/lida", authenticateToken, async (req: any, res) => {                                
+C:\dev\FootEraApp-app\server\routes\observados.ts                                   2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  14 router.get("/resolve/:usuarioId", authenticateToken, async (req, res) => {                             
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  31 router.patch("/:atletaId", authenticateToken, atualizarObservado);                                     
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  32 router.delete("/:atletaId", authenticateToken, pararDeObservar);                                       
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  33 router.get("/status/:atletaId", authenticateToken, statusObservacao);                                  
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  34 router.get("/", authenticateToken, listarObservados);                                                  
+C:\dev\FootEraApp-app\server\routes\observados.ts                                  35 router.post("/", authenticateToken, observarAtleta);                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    34 router.get("/perfil/olheiro/:id", authenticateToken, perfilOlheiro);                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    35 router.get("/:olheiroId/observados", authenticateToken, listarObservadosPorOlheiro);                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    36 router.get("/notas/:atletaId", authenticateToken, getNota);                                            
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    37 router.put("/notas/:atletaId", authenticateToken, setNota);                                            
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    40   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    46   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    52   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    58   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    64   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    70   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\olheiros.ts                                    73 router.patch("/:id", authenticateToken, patchColaboracao);                                             
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      31 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";                 
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      46 router.get("/professor/:id", authenticateToken, getPerfilProfessor);                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      49   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      52 router.get("/clube/:id", authenticateToken, getPerfilClube);                                           
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      53 router.get("/escola/:id", authenticateToken, getPerfilEscola);                                         
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      54 router.get("/olheiro/me", authenticateToken, (req, res) => {                                           
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      58 router.get("/olheiro/:id", authenticateToken, getPerfilOlheiro);                                       
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      59 router.get("/federacao/:id", authenticateToken, getPerfilFederacao);                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      62   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      67   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      72   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      75 router.get("/marca/:id", authenticateToken, getPerfilMarca);                                           
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      76 router.get("/learning/me", authenticateToken, (req, res) => {                                          
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      80 router.put("/learning/upgrade", authenticateToken, upgradeLearningProfile);                            
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      81 router.get("/learning/:id", authenticateToken, getPerfilLearning);                                     
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      82 router.get("/me/pontuacao", authenticateToken, getPontuacaoMe);                                        
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      83 router.get("/me/atividades", authenticateToken, getAtividadesRecentesMe);                              
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      84 router.get("/me/badges", authenticateToken, getBadgesMe);                                              
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      87   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      92   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      95 router.get("/me/posicao-atual", authenticateToken, getPosicaoAtualAtleta);                             
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      96 router.get("/me/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideosMe);             
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                      97 router.get("/me", authenticateToken, getPerfilUsuarioMe);                                              
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     100   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     106   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     109 router.get("/:usuarioId/pontuacao", authenticateToken, getPontuacaoPerfil);                            
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     110 router.get("/:id/desafios-videos", authenticateToken, getUltimasSubmissoesDesafioVideos);              
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     111 router.get("/:id/atividades", authenticateToken, getAtividadesRecentes);                               
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     112 router.get("/:id/badges", authenticateToken, getBadges);                                               
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     113 router.get("/:id/treinos", authenticateToken, getTreinosResumo);                                       
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     114 router.get("/:id/progresso", authenticateToken, getProgressoTreinos);                                  
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     115 router.get("/:id/posicao-atual", authenticateToken, getPosicaoAtualAtleta);                            
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     116 router.get("/:id", optionalAuthenticateToken, getPerfilUsuario);                                       
+C:\dev\FootEraApp-app\server\routes\perfil.ts                                     117 router.put("/:id", authenticateToken, uploadToS3.single("foto"), atualizarPerfil);                     
+C:\dev\FootEraApp-app\server\routes\permissoesRoutes.ts                             5   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\permissoesRoutes.ts                            19   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\pontuacao.ts                                    8 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\pontuacao.ts                                   12 router.get("/:usuarioId", authenticateToken, pontuacaoDoPerfil);                                       
+C:\dev\FootEraApp-app\server\routes\pontuacao.ts                                   16 router.get("/", authenticateToken, pontuacaoDoPerfil);                                                 
+C:\dev\FootEraApp-app\server\routes\post.ts                                         6   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\post.ts                                         7   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\post.ts                                        73   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\post.ts                                        79   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\post.ts                                        84 router.post("/:postId/like", authenticateToken, curtirPostagem);                                       
+C:\dev\FootEraApp-app\server\routes\post.ts                                        88   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\post.ts                                        94   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\post.ts                                        97 router.delete("/:id", authenticateToken, deletarPost);                                                 
+C:\dev\FootEraApp-app\server\routes\post.ts                                        98 router.get("/editar/:id", authenticateToken, editarPostagemGet);                                       
+C:\dev\FootEraApp-app\server\routes\post.ts                                        99 router.post("/editar/:id", authenticateToken, editarPostagemPost);                                     
+C:\dev\FootEraApp-app\server\routes\post.ts                                       102   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\presenca.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\presenca.ts                                     7 router.get("/:id", authenticateToken, getPresenca);                                                    
+C:\dev\FootEraApp-app\server\routes\presenca.ts                                     8 router.post("/ping", authenticateToken, pingPresenca);                                                 
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 18 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 20   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 26 router.get("/vinculados", authenticateToken, listarProfessoresVinculados);                             
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 29   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 30   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 35   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 38 router.get("/:professorId/atletas", authenticateToken, listarAtletasDoProfessor);                      
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 41   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 46   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 49 router.get("/:id/vinculos", authenticateToken, listarVinculosProfessor);                               
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 50 router.post("/:id/vinculo", authenticateToken, salvarVinculoProfessor);                                
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 51 router.put("/:id/vinculos", authenticateToken, salvarVinculoProfessor);                                
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 52 router.get("/:id", authenticateToken, buscarProfessorPorId);                                           
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 55   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 56   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 62   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 63   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 69   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 70   requireAdmin,                                                                                        
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 74 router.delete("/:id", authenticateToken, requireAdmin, excluirProfessor);                              
+C:\dev\FootEraApp-app\server\routes\professores.ts                                 75 router.get("/", authenticateToken, listarProfessores);                                                 
+C:\dev\FootEraApp-app\server\routes\ranking.ts                                      6 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\ranking.ts                                     32 router.get("/", authenticateToken, getRanking);                                                        
+C:\dev\FootEraApp-app\server\routes\relacoes.ts                                     2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\relacoes.ts                                     7 router.get("/atletas-por-tipo", authenticateToken, getAtletasVinculadosPorTipoUsuarioId);              
+C:\dev\FootEraApp-app\server\routes\relacoes.ts                                     8 router.get("/atletas", authenticateToken, getAtletasPorVinculo);                                       
+C:\dev\FootEraApp-app\server\routes\schedule.routes.ts                              2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\schedule.routes.ts                             10   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\scoutNotes.ts                                   2 import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";                      
+C:\dev\FootEraApp-app\server\routes\scoutNotes.ts                                   7 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\seguidorMutuo.ts                                3 import {authenticateToken} from "../middlewares/auth.js";                                              
+C:\dev\FootEraApp-app\server\routes\seguidorMutuo.ts                                7 router.get("/", authenticateToken, buscarSeguidoresMutuos);                                            
+C:\dev\FootEraApp-app\server\routes\seguir.ts                                       2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\seguir.ts                                      15 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                 2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                 7 r.get("/minhas", authenticateToken, ctrl.listarSessoesInstrutor);                                      
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                 8 r.patch("/:id/iniciar", authenticateToken, ctrl.iniciarSessao);                                        
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                 9 r.patch("/:id/progresso", authenticateToken, ctrl.atualizarProgresso);                                 
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                10 r.patch("/:id/finalizar", authenticateToken, ctrl.finalizarSessao);                                    
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                11 r.post("/:id/videos-execucao", authenticateToken, ctrl.salvarVideosExecucaoSessao);                    
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                12 r.patch("/:id/remarcar", authenticateToken, ctrl.remarcarSessao);                                      
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                13 r.delete("/:id", authenticateToken, ctrl.excluirSessao);                                               
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                14 r.get("/:id", authenticateToken, ctrl.obterSessao);                                                    
+C:\dev\FootEraApp-app\server\routes\sessoesTurma.ts                                15 r.post("/", authenticateToken, ctrl.criarSessao);                                                      
+C:\dev\FootEraApp-app\server\routes\solicitacaoTreino.ts                            2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\solicitacaoTreino.ts                           16 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\solicitacaoTreino.ts                           21 router.delete("/vinculo", authenticateToken, desvincularTreino);                                       
+C:\dev\FootEraApp-app\server\routes\submissoes.ts                                   3 import { authenticateToken, AuthenticatedRequest } from "../middlewares/auth.js";                      
+C:\dev\FootEraApp-app\server\routes\submissoes.ts                                  24   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\submissoes.ts                                  31   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\submissoes.ts                                  38   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\submissoes.ts                                  45   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\templates.ts                                    2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\templates.ts                                   14   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\templates.ts                                   19 router.get("/", authenticateToken, listarTemplates);                                                   
+C:\dev\FootEraApp-app\server\routes\templates.ts                                   20 router.delete("/:id", authenticateToken, deletarTemplate);                                             
+C:\dev\FootEraApp-app\server\routes\treinarJuntos.ts                                2 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\treinarJuntos.ts                                7 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\treinoLivre.ts                                  4 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\treinoLivre.ts                                 12 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                             4 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                             5 import { requireAdminOrTreinoOwner } from "../middlewares/treinoProgramadoGuards.js";                  
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            17 router.get("/:id", authenticateToken, getTreinoById);                                                  
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            18 router.get("/", authenticateToken, getAllTreinos);                                                     
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            21   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            22   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            28   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            29   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinoProgramado.ts                            33 router.delete("/:id", authenticateToken, requireAdminOrTreinoOwner, deleteTreino);                     
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                      3 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                     64   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                     68 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    114   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    120   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    126   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    138 router.get("/alunos", authenticateToken, listarAlunosTreinoAgendadoTurma);                             
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    162 router.post("/avaliacoes", authenticateToken, criarAvaliacaoTreino);                                   
+C:\dev\FootEraApp-app\server\routes\treinos.ts                                    188   requireAdminOrTreinoOwner,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               11 import { authenticateToken } from '../middlewares/auth.js';                                            
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               15 router.post('/:id/reutilizar', authenticateToken, reutilizarTreinoSalvo);                              
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               16 router.delete('/:id', authenticateToken, deletarTreinoSalvo);                                          
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               17 router.delete('/__maintenance__/expirados', authenticateToken, limparTreinosSalvosExpirados);          
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               18 router.get('/', authenticateToken, listarTreinosSalvos);                                               
+C:\dev\FootEraApp-app\server\routes\treinosSalvos.ts                               19 router.post("/", authenticateToken, criarTreinoSalvo);                                                 
+C:\dev\FootEraApp-app\server\routes\treinoUnico.ts                                  6   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\treinoUnico.ts                                  7   optionalAuthenticateToken                                                                            
+C:\dev\FootEraApp-app\server\routes\treinoUnico.ts                                 20   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\treinoUnico.ts                                 26   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\turmas.ts                                      16 import { authenticateToken, optionalAuthenticateToken } from "../middlewares/auth.js";                 
+C:\dev\FootEraApp-app\server\routes\turmas.ts                                      22   optionalAuthenticateToken,                                                                           
+C:\dev\FootEraApp-app\server\routes\turmas.ts                                      28   authenticateToken                                                                                    
+C:\dev\FootEraApp-app\server\routes\uploadMetodologias.ts                           5 import { authenticateToken } from "../middlewares/auth.js";                                            
+C:\dev\FootEraApp-app\server\routes\uploadMetodologias.ts                          33 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\routes\usage.ts                                        2 import { authenticateToken } from '../middlewares/auth.js';                                            
+C:\dev\FootEraApp-app\server\routes\usage.ts                                        7 router.get('/', authenticateToken, getUsage);                                                          
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     11 import { authenticateToken } from "server/middlewares/auth.js";                                        
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     16 router.get("/buscar", authenticateToken, buscarUsuarios);                                              
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     18 router.get("/:id/challenges", authenticateToken, getUsuarioChallenges);                                
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     19 router.get("/:id/presenca", authenticateToken, getPresenca);                                           
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     20 router.get("/:id/parceiro", authenticateToken, getUsuarioParceiro);                                    
+C:\dev\FootEraApp-app\server\routes\usuario.ts                                     22 router.get("/", authenticateToken, listAdminUsers);                                                    
+C:\dev\FootEraApp-app\server\routes\usuarioPapel.ts                                18   authenticateToken,                                                                                   
+C:\dev\FootEraApp-app\server\routes\usuarioPapel.ts                                23 router.use(authenticateToken);                                                                         
+C:\dev\FootEraApp-app\server\middlewares\adminGuard.ts                             54 export async function requireAdmin(                                                                    
+C:\dev\FootEraApp-app\server\middlewares\adminGuard.ts                            100     (req as any).isAdmin =                                                                             
+C:\dev\FootEraApp-app\server\middlewares\adminGuard.ts                            106       "[ADMIN_GUARD] requireAdmin:",                                                                   
+C:\dev\FootEraApp-app\server\middlewares\adminGuard.ts                            227     (req as any).isAdmin =                                                                             
+C:\dev\FootEraApp-app\server\middlewares\auth.ts                                   36 export const authenticateToken: RequestHandler = async (req, res, next) => {                           
+C:\dev\FootEraApp-app\server\middlewares\auth.ts                                  213       isAdmin:                                                                                         
+C:\dev\FootEraApp-app\server\middlewares\auth.ts                                  214         !!ctx.isAdmin,                                                                                 
+C:\dev\FootEraApp-app\server\middlewares\auth.ts                                  335 export const optionalAuthenticateToken: RequestHandler = (                                             
+C:\dev\FootEraApp-app\server\middlewares\auth.ts                                  351   return authenticateToken(                                                                            
+C:\dev\FootEraApp-app\server\middlewares\guards.ts                                131     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\middlewares\guards.ts                                137     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\middlewares\guards.ts                                264 export async function requireAdmin(                                                                    
+C:\dev\FootEraApp-app\server\middlewares\membership.ts                             51     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\middlewares\membership.ts                             57     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\middlewares\membership.ts                            222     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\middlewares\membership.ts                            228     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\middlewares\treinoProgramadoGuards.ts                 24 export async function requireAdminOrTreinoOwner(                                                       
+C:\dev\FootEraApp-app\server\middlewares\treinoProgramadoGuards.ts                 49     const isAdmin =                                                                                    
+C:\dev\FootEraApp-app\server\middlewares\treinoProgramadoGuards.ts                 55     if (isAdmin) {                                                                                     
+C:\dev\FootEraApp-app\server\middlewares\treinoProgramadoGuards.ts                224       "[requireAdminOrTreinoOwner]",                                                                   
+
+
+

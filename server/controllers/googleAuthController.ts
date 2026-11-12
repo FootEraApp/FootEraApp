@@ -15,11 +15,19 @@ import { validateGoogleCredential } from "../services/googleTokenService.js";
 import { recomputeAndEmitBadge } from "./notificacoesController.js";
 import { calcularIdadePorNascimento, categoriaAtletaPorIdade } from "../utils/categoriaAtleta.js";
 import {
-  getProfileIdForRole,
-} from "../services/roles.js";
+  obterSupervisaoMenor,
+} from "../services/supervisaoMenor.js";
 import { resolveUserContext } from "../services/planResolver.js";
 
-const JWT_SECRET: jwt.Secret = process.env.JWT_SECRET || "footera_secret";
+const JWT_SECRET: jwt.Secret = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error("JWT_SECRET não configurado.");
+  }
+
+  return secret;
+})();
 
 function stringParaTipoUsuario(tipo: string): TipoUsuario | null {
   const t = String(tipo || "").trim().toUpperCase();
@@ -168,10 +176,21 @@ async function montarRespostaAuth(usuarioId: string) {
     throw new Error("Usuário não encontrado após autenticação.");
   }
 
-  const contexto =
-    await resolveUserContext(
-      usuario.id
-    );
+  let contexto:
+    Awaited<ReturnType<typeof resolveUserContext>> | null = null;
+
+  try {
+    contexto = await resolveUserContext(usuario.id);
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.message !== "NO_ACTIVE_CONTEXT"
+    ) {
+      throw error;
+    }
+  }
+
+  const somenteGestaoConta = contexto === null;
 
   const token = gerarJwt(usuario);
 
@@ -190,21 +209,18 @@ async function montarRespostaAuth(usuarioId: string) {
     token,
     nomeDeUsuario: usuario.nomeDeUsuario,
     id: usuario.id,
-    tipo:
-      contexto.tipo,
-    tipoUsuarioId:
-      contexto.tipoUsuarioId,
-    activeContext:
-      contexto.activeContext,
-    isAdmin:
-      contexto.isAdmin === true,
+
+    tipo: contexto?.tipo ?? null,
+    tipoUsuarioId: contexto?.tipoUsuarioId ?? null,
+    activeContext: contexto?.activeContext ?? null,
+    isAdmin: contexto?.isAdmin === true,
+    somenteGestaoConta,
+
     usuario: {
       id: usuario.id,
       nomeDeUsuario: usuario.nomeDeUsuario,
-      tipo:
-        contexto.tipo,
-      activeContext:
-        contexto.activeContext,
+      tipo: contexto?.tipo ?? null,
+      activeContext: contexto?.activeContext ?? null,
       email: usuario.email,
       verified: usuario.verified,
     },
@@ -365,6 +381,21 @@ export async function googleLogin(req: Request, res: Response) {
           message:
             "Esta conta da FootEra já está vinculada a outra conta Google.",
         });
+      }
+
+      if (!usuarioMesmoEmail.googleSub) {
+        const supervisao = await obterSupervisaoMenor(
+          usuarioMesmoEmail.id
+        );
+
+        if (supervisao.supervisionado) {
+          return res.status(403).json({
+            ok: false,
+            code: "GUARDIAN_APPROVAL_REQUIRED_FOR_GOOGLE_LINK",
+            message:
+              "A vinculação de uma conta Google a este perfil precisa ser autorizada pelo responsável principal.",
+          });
+        }
       }
 
       const novoProvider =
@@ -613,19 +644,49 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
       .slice(-7)}`;
   }
 
-  function dataNascimentoPermitida(valor?: string | null) {
-    if (!valor) return false;
+  function dataNascimentoPermitida(
+    valor?: string | null
+  ): boolean {
+    if (
+      typeof valor !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+    ) {
+      return false;
+    }
 
-    const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return false;
+    const nascimento = new Date(
+      `${valor}T00:00:00.000Z`
+    );
 
-    const min = new Date("1900-01-01T00:00:00.000Z");
-    const hoje = new Date();
+    if (
+      Number.isNaN(nascimento.getTime()) ||
+      nascimento.toISOString().slice(0, 10) !== valor
+    ) {
+      return false;
+    }
 
-    data.setHours(0, 0, 0, 0);
-    hoje.setHours(23, 59, 59, 999);
+    const partes = new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).formatToParts(new Date());
 
-    return data >= min && data <= hoje;
+    const parte = (tipo: string) =>
+      partes.find(
+        (p) => p.type === tipo
+      )?.value ?? "";
+
+    const hojeBrasil =
+      `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+    return (
+      valor >= "1900-01-01" &&
+      valor <= hojeBrasil
+    );
   }
 
   try {
@@ -759,7 +820,12 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
     }
 
     const dataNascFinal =
-      precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+      precisaNascimento && dataNascimento
+        ? new Date(
+            `${dataNascimento}T00:00:00.000Z`
+          )
+        : null;
+
     const idadeCalcInicial = dataNascFinal ? calcularIdade(dataNascFinal) : null;
 
     const exigeMaisDe16Anos =
@@ -1150,6 +1216,9 @@ export async function googleCompleteRegistration(req: Request, res: Response) {
         cep: cep ?? null,
         cpf: cpf ?? null,
         dataNascimento: dataNascFinal,
+        aniversarioElegivelApartirDe: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ),
         responsavelNome:
           precisaResponsavel
             ? responsavelNomeFinal
@@ -1639,6 +1708,16 @@ export async function googleLinkAccount(req: any, res: Response) {
       return res.status(404).json({ message: "Usuário não encontrado." });
     }
 
+    const supervisao = await obterSupervisaoMenor(userId);
+
+    if (supervisao.supervisionado) {
+      return res.status(403).json({
+        ok: false,
+        code: "GUARDIAN_APPROVAL_REQUIRED_FOR_GOOGLE_LINK",
+        message:
+          "A vinculação Google desta conta precisa ser realizada pelo responsável principal.",
+      });
+    }
     const novoProvider =
       usuarioAtual.authProvider === AuthProvider.LOCAL
         ? AuthProvider.LOCAL_GOOGLE

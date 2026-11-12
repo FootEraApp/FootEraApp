@@ -1067,31 +1067,264 @@ async function upsertAulaAoVivoParaItem(params: {
   return aula;
 }
 
-async function validarMetodologiaDoCriador(metodologiaId: string, userId: string) {
-  const metodologia = await prisma.metodologia.findUnique({
-    where: { id: metodologiaId },
-    select: {
-      id: true,
-      criadorUsuarioId: true,
-      tipo: true,
-      estruturaTipo: true,
-      ativo: true,
-      geraBadge: true,
-      geraCertificado: true,
-    },
-  });
+async function validarMetodologiaDoCriador(
+  metodologiaId: string,
+  userId: string
+) {
+  const metodologia =
+    await prisma.metodologia.findUnique({
+      where: {
+        id: metodologiaId,
+      },
+      select: {
+        id: true,
+        criadorUsuarioId: true,
+        tipo: true,
+        estruturaTipo: true,
+        ativo: true,
+        geraBadge: true,
+        geraCertificado: true,
+
+        // Identificação da organização proprietária.
+        clubeId: true,
+        escolinhaId: true,
+        federacaoId: true,
+        marcaId: true,
+      },
+    });
 
   if (!metodologia) {
-    return { erro: { status: 404, message: "Metodologia não encontrada." } };
+    return {
+      erro: {
+        status: 404,
+        message: "Metodologia não encontrada.",
+      },
+    };
   }
 
+  // Administrador global da FootEra.
   const isAdmin = await isAdminUser(userId);
 
+  if (isAdmin) {
+    return { metodologia };
+  }
+
+  const pertenceAOrganizacao = Boolean(
+    metodologia.clubeId ||
+    metodologia.escolinhaId ||
+    metodologia.federacaoId ||
+    metodologia.marcaId
+  );
+
+  if (!pertenceAOrganizacao) {
+    const contextoPessoal = await getActiveContext(userId);
+
+    if (
+      metodologia.criadorUsuarioId === userId &&
+      contextoPessoal?.kind === "PERSONAL"
+    ) {
+      return { metodologia };
+    }
+
+    return {
+      erro: {
+        status: 403,
+        message: "Sem permissão para gerenciar esta metodologia pessoal.",
+      },
+    };
+  }
+
+  // Verifica a organização ativa do usuário.
+  const contexto =
+    await getActiveContext(userId);
+
   if (
-    metodologia.criadorUsuarioId !== userId &&
-    !isAdmin
+    contexto?.kind !== "ORGANIZATION" ||
+    !contexto.organizationId ||
+    !contexto.legacyOrganizationId
   ) {
-    return { erro: { status: 403, message: "Sem permissão." } };
+    return {
+      erro: {
+        status: 403,
+        message: "Sem permissão.",
+      },
+    };
+  }
+
+  // A permissão deve estar ativa no contexto
+  // organizacional selecionado.
+  const podeGerenciar =
+    await canPermission(
+      userId,
+      "GERENCIAR_ORGANIZACAO"
+    );
+
+  if (!podeGerenciar) {
+    return {
+      erro: {
+        status: 403,
+        message: "Sem permissão.",
+      },
+    };
+  }
+
+  const legacyId =
+    contexto.legacyOrganizationId;
+
+  // Compara a organização ativa com a
+  // organização proprietária da metodologia.
+  const pertenceOrganizacao =
+    (
+      contexto.organizationType === "CLUBE" &&
+      metodologia.clubeId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "ESCOLA" &&
+      metodologia.escolinhaId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "MARCA" &&
+      metodologia.marcaId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "FEDERACAO" &&
+      metodologia.federacaoId === legacyId
+    );
+
+  if (!pertenceOrganizacao) {
+    return {
+      erro: {
+        status: 403,
+        message:
+          "Você não tem permissão para gerenciar esta metodologia.",
+      },
+    };
+  }
+
+  return { metodologia };
+}
+
+async function validarMetodologiaAvulsaDoCriador(
+  metodologiaAvulsaId: string,
+  userId: string
+) {
+  const metodologia =
+    await prisma.metodologiaAvulsa.findUnique({
+      where: {
+        id: metodologiaAvulsaId,
+      },
+      select: {
+        id: true,
+        criadorUsuarioId: true,
+        clubeId: true,
+        escolinhaId: true,
+        federacaoId: true,
+        marcaId: true,
+      },
+    });
+
+  if (!metodologia) {
+    return {
+      erro: {
+        status: 404,
+        message: "Metodologia avulsa não encontrada.",
+      },
+    };
+  }
+
+  // Administrador global da FootEra.
+  const isAdmin = await isAdminUser(userId);
+
+  if (isAdmin) {
+    return { metodologia };
+  }
+
+  const contexto = await getActiveContext(userId);
+
+  const pertenceAOrganizacao =
+    Boolean(
+      metodologia.clubeId ||
+      metodologia.escolinhaId ||
+      metodologia.federacaoId ||
+      metodologia.marcaId
+    );
+
+  // Metodologia pessoal:
+  // somente o criador original pode gerenciar.
+  if (!pertenceAOrganizacao) {
+    if (
+      metodologia.criadorUsuarioId === userId &&
+      contexto?.kind === "PERSONAL"
+    ) {
+      return { metodologia };
+    }
+
+    return {
+      erro: {
+        status: 403,
+        message: "Sem permissão.",
+      },
+    };
+  }
+
+  // Metodologia institucional:
+  // exige o contexto da organização proprietária.
+  if (
+    contexto?.kind !== "ORGANIZATION" ||
+    !contexto.organizationId ||
+    !contexto.legacyOrganizationId
+  ) {
+    return {
+      erro: {
+        status: 403,
+        message: "Selecione a organização proprietária.",
+      },
+    };
+  }
+
+  const legacyId = contexto.legacyOrganizationId;
+
+  const mesmaOrganizacao =
+    (
+      contexto.organizationType === "CLUBE" &&
+      metodologia.clubeId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "ESCOLA" &&
+      metodologia.escolinhaId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "MARCA" &&
+      metodologia.marcaId === legacyId
+    ) ||
+    (
+      contexto.organizationType === "FEDERACAO" &&
+      metodologia.federacaoId === legacyId
+    );
+
+  if (!mesmaOrganizacao) {
+    return {
+      erro: {
+        status: 403,
+        message:
+          "Esta metodologia não pertence à organização ativa.",
+      },
+    };
+  }
+
+  const podeGerenciar = await canPermission(
+    userId,
+    "GERENCIAR_ORGANIZACAO"
+  );
+
+  if (!podeGerenciar) {
+    return {
+      erro: {
+        status: 403,
+        message:
+          "Você não possui permissão para gerenciar esta metodologia.",
+      },
+    };
   }
 
   return { metodologia };
@@ -1688,7 +1921,7 @@ export async function createMetodologia(req: Request, res: Response) {
         area: area ?? null,
         geraBadge: !!geraBadge,
         geraCertificado: !!geraCertificado,
-        totalSemanas: totalSemanas ?? null, 
+        totalSemanas: totalSemanas ?? null,
       },
       include: { _count: { select: { assinantes: true, estruturas: true } } },
     });
@@ -1746,8 +1979,12 @@ export async function updateMetodologia(req: Request, res: Response) {
     const current = await prisma.metodologia.findUnique({ where: { id } });
     if (!current) return res.status(404).json({ message: "Metodologia não encontrada." });
 
-    if (current.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Você não tem permissão para editar esta metodologia." });
+    const validacao = await validarMetodologiaDoCriador(id, userId);
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
     let publicoAlvoUpdate: MetodologiaPublicoAlvo | undefined = undefined;
@@ -1806,7 +2043,6 @@ export async function updateMetodologia(req: Request, res: Response) {
           descricao: typeof descricao === "string" ? descricao.trim() : undefined,
           capaUrl: capaUrlUpdate,
           totalSemanas: typeof totalSemanas === "number" ? totalSemanas : undefined,
-          ativo: false,
           nivel: nivel ?? undefined,
           categorias: Array.isArray(categorias) ? categorias : undefined,
           ...(publicoAlvoUpdate !== undefined ? { publicoAlvo: publicoAlvoUpdate } : {}),
@@ -2063,8 +2299,8 @@ export const deleteMetodologia = async (req: Request, res: Response) => {
   try {
     const metodologia = await prisma.metodologia.findUnique({
       where: { id },
-      select: { 
-        capaUrl: true, 
+      select: {
+        capaUrl: true,
         criadorUsuarioId: true,
         estruturas: {
           select: {
@@ -2080,8 +2316,18 @@ export const deleteMetodologia = async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Metodologia não encontrada." });
     }
 
-    if (metodologia.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Sem permissão para deletar." });
+    if (!userId) {
+      return res.status(401).json({
+        message: "Não autenticado.",
+      });
+    }
+
+    const validacao = await validarMetodologiaDoCriador(id, userId);
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
     await prisma.metodologia.delete({
@@ -2488,9 +2734,86 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
 
     const permissaoCriacao = await getPermissaoCriacaoMetodologia(userId);
 
+    const contexto = await getActiveContext(userId);
+
+    let filtroConteudos:
+      | { criadorUsuarioId: string }
+      | { escolinhaId: string }
+      | { clubeId: string }
+      | { marcaId: string }
+      | { federacaoId: string };
+
+    if (contexto?.kind === "PERSONAL") {
+      filtroConteudos = { criadorUsuarioId: userId };
+    } else if (
+      contexto?.kind === "ORGANIZATION" &&
+      contexto.organizationId &&
+      contexto.legacyOrganizationId
+    ) {
+      const membro = await prisma.membroOrganizacao.findUnique({
+        where: {
+          organizacaoId_usuarioId: {
+            organizacaoId: contexto.organizationId,
+            usuarioId: userId,
+          },
+        },
+        select: {
+          ativo: true,
+          funcao: true,
+          organizacao: {
+            select: { ativo: true },
+          },
+        },
+      });
+
+      const podeGerenciar =
+        membro?.ativo === true &&
+        membro.organizacao.ativo === true &&
+        ["PROPRIETARIO", "ADMINISTRADOR"].includes(
+          String(membro.funcao)
+        );
+
+      if (!podeGerenciar) {
+        return res.status(403).json({
+          code: "ORGANIZATION_MANAGEMENT_DENIED",
+          message:
+            "Sem permissão para consultar os conteúdos administrativos desta organização.",
+        });
+      }
+
+      const legacyId = contexto.legacyOrganizationId;
+
+      switch (contexto.organizationType) {
+        case "ESCOLA":
+          filtroConteudos = { escolinhaId: legacyId };
+          break;
+
+        case "CLUBE":
+          filtroConteudos = { clubeId: legacyId };
+          break;
+
+        case "MARCA":
+          filtroConteudos = { marcaId: legacyId };
+          break;
+
+        case "FEDERACAO":
+          filtroConteudos = { federacaoId: legacyId };
+          break;
+
+        default:
+          return res.status(403).json({
+            message: "Tipo de organização inválido.",
+          });
+      }
+    } else {
+      return res.status(403).json({
+        message: "Selecione um perfil ativo.",
+      });
+    }
+
     const [learningItems, avulsasItems] = await Promise.all([
       prisma.metodologia.findMany({
-        where: { criadorUsuarioId: userId },
+        where: filtroConteudos,
         orderBy: { criadoEm: "desc" },
         include: {
           criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
@@ -2499,7 +2822,7 @@ export async function listMinhasMetodologiasCriadas(req: Request, res: Response)
       }),
 
       prisma.metodologiaAvulsa.findMany({
-        where: { criadorUsuarioId: userId },
+        where: filtroConteudos,
         orderBy: { criadoEm: "desc" },
         include: {
           criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
@@ -2971,8 +3294,15 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia não encontrada." });
     }
 
-    if (metodologia.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Você não tem permissão para alterar esta metodologia." });
+    const validacao = await validarMetodologiaDoCriador(
+      metodologiaId,
+      userId
+    );
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
     const body = req.body || {};
@@ -3047,8 +3377,8 @@ export async function createMetodologiaItens(req: Request, res: Response) {
       itensPreparados.push({
         metodologiaId,
         semana,
-        ordem, 
-        tipo: tipo as MetodologiaConteudoTipo, 
+        ordem,
+        tipo: tipo as MetodologiaConteudoTipo,
         titulo:
           typeof raw.titulo === "string" && raw.titulo.trim()
             ? raw.titulo.trim()
@@ -3332,7 +3662,7 @@ export async function getMetodologiaDetalhe(req: Request, res: Response) {
         ? "AVULSA"
         : "LEARNING"
       : null;
-      
+
     const contextoAtivo =
       userId
         ? await getContextoAssinaturaAtivo(
@@ -3800,33 +4130,50 @@ export async function assinarMetodologia(req: Request, res: Response) {
   }
 }
 
-export async function deleteMetodologiaItens(req: Request, res: Response) {
+export async function deleteMetodologiaItens(
+  req: Request,
+  res: Response
+) {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Não autenticado.",
+      });
+    }
 
     const { metodologiaId } = req.params;
 
-    const metodologia = await prisma.metodologia.findUnique({
-      where: { id: metodologiaId },
-      select: { id: true, criadorUsuarioId: true },
-    });
+    const validacao =
+      await validarMetodologiaDoCriador(
+        metodologiaId,
+        userId
+      );
 
-    if (!metodologia) {
-      return res.status(404).json({ message: "Metodologia não encontrada." });
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
-    if (metodologia.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Você não tem permissão para alterar esta metodologia." });
-    }
+    const del =
+      await prisma.metodologiaItem.deleteMany({
+        where: {
+          metodologiaId,
+        },
+      });
 
-    const del = await prisma.metodologiaItem.deleteMany({
-      where: { metodologiaId },
+    return res.json({
+      ok: true,
+      deleted: del.count,
     });
-
-    return res.json({ ok: true, deleted: del.count });
   } catch (e: any) {
-    return sendError(res, e, "Erro ao limpar itens.");
+    return sendError(
+      res,
+      e,
+      "Erro ao limpar itens."
+    );
   }
 }
 
@@ -3838,7 +4185,7 @@ export async function criarAvaliacaoMetodologia(req: Request, res: Response) {
     }
 
     const { metodologiaId, nota, comentario, origem, sentimento } = req.body || {};
-    
+
     const parseSentimento = (valor: any): SentimentoAvaliacao | null => {
       const raw = String(valor || "").trim();
 
@@ -5690,7 +6037,7 @@ export async function createMetodologiaCompleta(req: Request, res: Response) {
           },
         });
 
-        
+
         const itens = Array.isArray(estrutura?.itens) ? estrutura.itens : [];
 
         for (let j = 0; j < itens.length; j++) {
@@ -6242,8 +6589,19 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
 
     const isAdmin = await isAdminUser(userId);
 
-    const isOwner =
-      !!userId && String(item.criadorUsuarioId || "") === String(userId);
+    let isOwner = false;
+
+    if (userId) {
+      const validacao =
+        await validarMetodologiaAvulsaDoCriador(
+          id,
+          userId
+        );
+
+      isOwner =
+        "metodologia" in validacao &&
+        Boolean(validacao.metodologia);
+    }
 
     if (
       !item.ativo &&
@@ -6408,6 +6766,7 @@ export async function getMetodologiaAvulsaById(req: Request, res: Response) {
 
     return res.json({
       id: item.id,
+      ativo: item.ativo,
       isAdmin,
       isOwner,
       criadorUsuarioId: item.criadorUsuarioId,
@@ -6513,9 +6872,31 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
     }
 
-    if (atual.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Você não tem permissão para alterar esta metodologia avulsa." });
+    const validacao =
+      await validarMetodologiaAvulsaDoCriador(
+        id,
+        userId
+      );
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
+
+    const contextoEdicao = await getActiveContext(userId);
+
+    const filtroDonoDuplicata =
+      contextoEdicao?.kind === "ORGANIZATION"
+        ? {
+            clubeId: atual.clubeId,
+            escolinhaId: atual.escolinhaId,
+            marcaId: atual.marcaId,
+            federacaoId: atual.federacaoId,
+          }
+        : {
+            criadorUsuarioId: userId,
+          };
 
     if (titulo && typeof titulo === "string") {
       const tituloTrim = titulo.trim();
@@ -6527,7 +6908,7 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
             equals: tituloTrim,
             mode: "insensitive",
           },
-          criadorUsuarioId: userId,
+          ...filtroDonoDuplicata,
         },
         select: { id: true },
       });
@@ -6563,7 +6944,6 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
           geraCertificado:
             geraCertificado !== undefined ? asBool(geraCertificado, false) : atual.geraCertificado,
           precoAssinaturaMensal: Number(preco),
-          ativo: false,
         },
       });
 
@@ -6801,54 +7181,53 @@ export async function updateMetodologiaAvulsa(req: Request, res: Response) {
   }
 }
 
-export async function deleteMetodologiaAvulsa(req: Request, res: Response) {
+export async function deleteMetodologiaAvulsa(
+  req: Request,
+  res: Response
+) {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: "Não autenticado." });
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Não autenticado.",
+      });
+    }
 
     const { id } = req.params;
 
-    const metodologia = await prisma.metodologiaAvulsa.findUnique({
-      where: { id },
-      include: {
-        estruturas: {
-          include: {
-            itens: true,
-          },
-        },
-      },
-    });
+    const validacao =
+      await validarMetodologiaAvulsaDoCriador(
+        id,
+        userId
+      );
 
-    if (!metodologia) {
-      return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
-    if (metodologia.criadorUsuarioId !== userId) {
-      return res.status(403).json({ message: "Sem permissão para deletar." });
-    }
-
+    // Exclui o registro e suas relações conforme
+    // as regras de integridade do banco.
+    //
+    // Não excluímos arquivos S3 neste endpoint:
+    // eles podem estar referenciados por outros
+    // conteúdos da plataforma.
     await prisma.metodologiaAvulsa.delete({
       where: { id },
     });
 
-    if (metodologia.capaUrl && metodologia.capaUrl.includes("amazonaws.com")) {
-      await deleteFromS3(metodologia.capaUrl);
-    }
-
-    for (const estrutura of metodologia.estruturas) {
-      for (const item of estrutura.itens) {
-        const urls = [item.videoUrl, item.arquivoUrl, item.materialUrl, item.thumbUrl].filter(Boolean);
-        for (const url of urls) {
-          if (String(url).includes("amazonaws.com")) {
-            await deleteFromS3(String(url));
-          }
-        }
-      }
-    }
-
-    return res.json({ ok: true, message: "Metodologia avulsa removida com sucesso." });
+    return res.json({
+      ok: true,
+      message: "Metodologia avulsa removida com sucesso.",
+    });
   } catch (e: any) {
-    return sendError(res, e, "Erro ao deletar metodologia avulsa.");
+    return sendError(
+      res,
+      e,
+      "Erro ao deletar metodologia avulsa."
+    );
   }
 }
 
@@ -6879,9 +7258,14 @@ export async function migrarMetodologiaParaAvulsa(req: Request, res: Response) {
       return res.status(404).json({ message: "Metodologia não encontrada." });
     }
 
-    if (atual.criadorUsuarioId !== userId) {
-      return res.status(403).json({
-        message: "Sem permissão para migrar esta metodologia.",
+    const validacao = await validarMetodologiaDoCriador(
+      id,
+      userId
+    );
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
       });
     }
 
@@ -6991,6 +7375,8 @@ export async function migrarMetodologiaParaAvulsa(req: Request, res: Response) {
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
+          marcaId: atual.marcaId,
+          federacaoId: atual.federacaoId,
           ativo: false,
           estruturas: {
             create: estruturasProcessadas,
@@ -7067,9 +7453,15 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
       return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
     }
 
-    if (atual.criadorUsuarioId !== userId) {
-      return res.status(403).json({
-        message: "Sem permissão para migrar esta metodologia avulsa.",
+    const validacao =
+      await validarMetodologiaAvulsaDoCriador(
+        id,
+        userId
+      );
+
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
       });
     }
 
@@ -7171,6 +7563,8 @@ export async function migrarMetodologiaAvulsaParaLearning(req: Request, res: Res
           professorId: atual.professorId,
           clubeId: atual.clubeId,
           escolinhaId: atual.escolinhaId,
+          marcaId: atual.marcaId,
+          federacaoId: atual.federacaoId,
           ativo: false,
           estruturas: {
             create: estruturasProcessadas,
@@ -8025,10 +8419,16 @@ export async function deleteMetodologiaAvulsaEstruturaItens(req: Request, res: R
       return res.status(404).json({ message: "Metodologia avulsa não encontrada." });
     }
 
-    const isAdmin = await isAdminUser(userId);
+    const validacao =
+      await validarMetodologiaAvulsaDoCriador(
+        metodologiaAvulsaId,
+        userId
+      );
 
-    if (metodologia.criadorUsuarioId !== userId && !isAdmin) {
-      return res.status(403).json({ message: "Sem permissão." });
+    if ("erro" in validacao && validacao.erro) {
+      return res.status(validacao.erro.status).json({
+        message: validacao.erro.message,
+      });
     }
 
     const estrutura = await prisma.metodologiaAvulsaEstrutura.findFirst({

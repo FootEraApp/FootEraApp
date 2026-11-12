@@ -1,0 +1,110 @@
+    await gerarSnapshotRanking();
+  } catch (e) {
+    console.error("❌ Falha snapshot ranking", e);
+  }
+});
+
+process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:", reason));
+process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
+
+setInterval(async () => {
+  try { await limparTreinosSalvosExpirados({} as any, { json(){} } as any); } catch {}
+}, 24 * 60 * 60 * 1000);
+
+
+const BILLING_SCHEDULER_ENABLED =
+  process.env.ENABLE_BILLING_SCHEDULER === "true";
+
+let billingEmExecucao = false;
+
+async function runBillingDailyCheck() {
+  if (!BILLING_SCHEDULER_ENABLED) {
+    return;
+  }
+
+  if (billingEmExecucao) {
+    console.log(
+      "[billing] Verificação anterior ainda está em execução."
+    );
+    return;
+  }
+
+  billingEmExecucao = true;
+
+  try {
+    const result =
+      await processExpiringSubscriptions();
+
+    console.log(
+      "[billing] Rotina executada:",
+      result
+    );
+  } catch (error) {
+    console.error(
+      "[billing] Erro na rotina:",
+      error
+    );
+  } finally {
+    billingEmExecucao = false;
+  }
+}
+
+if (BILLING_SCHEDULER_ENABLED) {
+  console.log(
+    "[billing] Scheduler de assinaturas ativado."
+  );
+
+  void runBillingDailyCheck();
+
+  setInterval(() => {
+    void runBillingDailyCheck();
+  }, 12 * 60 * 60 * 1000);
+} else {
+  console.log(
+    "[billing] Scheduler automático desativado."
+  );
+}
+
+
+// ======================================================
+// CONCILIACAO MERCADO PAGO — SOMENTE LEITURA
+// ======================================================
+
+const MP_CONCILIACAO_SCHEDULER_ENABLED =
+  process.env.ENABLE_MP_CONCILIACAO_SCHEDULER === "true";
+
+let mpConciliacaoEmExecucao = false;
+
+async function revisarPagamentosMercadoPago() {
+  if (
+    !MP_CONCILIACAO_SCHEDULER_ENABLED ||
+    mpConciliacaoEmExecucao
+  ) {
+    return;
+  }
+
+  if (!process.env.MP_ACCESS_TOKEN) {
+    console.warn(
+      "[mp-conciliacao] Token nao configurado."
+    );
+    return;
+  }
+
+  mpConciliacaoEmExecucao = true;
+
+  try {
+    const pagamentos =
+      await prismaBilling.pagamento.findMany({
+        where: {
+          provider: "MERCADOPAGO",
+          status: "PENDENTE",
+        },
+        orderBy: {
+          criadoEm: "asc",
+        },
+        take: 20,
+      });
+
+    for (const pagamento of pagamentos) {
+      const referencia =
+        pagamento.providerRef ?? "";

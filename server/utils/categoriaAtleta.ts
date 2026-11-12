@@ -76,21 +76,38 @@ export function calcularIdadePorNascimento(
   dataNascimento: Date,
   hoje = new Date()
 ): number {
-  let idade =
-    hoje.getFullYear() -
-    dataNascimento.getFullYear();
+  if (
+    !Number.isFinite(dataNascimento.getTime()) ||
+    !Number.isFinite(hoje.getTime())
+  ) {
+    throw new Error("INVALID_BIRTH_DATE");
+  }
 
-  const aindaNaoFezAniversario =
-    hoje.getMonth() <
-      dataNascimento.getMonth() ||
-    (
-      hoje.getMonth() ===
-        dataNascimento.getMonth() &&
-      hoje.getDate() <
-        dataNascimento.getDate()
-    );
+  const partes = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(hoje);
 
-  if (aindaNaoFezAniversario) {
+  const numero = (tipo: string): number =>
+    Number(partes.find((p) => p.type === tipo)?.value);
+
+  const anoAtual = numero("year");
+  const mesAtual = numero("month");
+  const diaAtual = numero("day");
+
+  const anoNascimento = dataNascimento.getUTCFullYear();
+  const mesNascimento = dataNascimento.getUTCMonth() + 1;
+  const diaNascimento = dataNascimento.getUTCDate();
+
+  let idade = anoAtual - anoNascimento;
+
+  if (
+    mesAtual < mesNascimento ||
+    (mesAtual === mesNascimento &&
+      diaAtual < diaNascimento)
+  ) {
     idade--;
   }
 

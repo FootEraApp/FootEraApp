@@ -20,7 +20,9 @@ import {
 import {
   audit,
 } from "../services/audit.js";
-
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
 function calcularIdade(
   dataNascimento:
     | Date
@@ -553,19 +555,23 @@ async function obterVinculoPrivacidadeResponsavel(
           },
         },
       });
+      if (!vinculo) {
+        return null;
+      }
 
-  if (
-    !vinculo ||
-    vinculo.status !==
-      StatusResponsavelAtleta.ATIVO ||
-    vinculo
-      .podeGerenciarPrivacidade !==
-      true
-  ) {
-    return null;
-  }
+      const autorizado =
+        await verificarPermissaoResponsavelAtleta({
+          responsavelUsuarioId,
+          atletaId,
+          permissao: "podeGerenciarPrivacidade",
+        });
 
-  return vinculo;
+      if (!autorizado) {
+        return null;
+      }
+
+      return vinculo;
+
 }
 
 export async function getPrivacidadeAtletaGerenciado(

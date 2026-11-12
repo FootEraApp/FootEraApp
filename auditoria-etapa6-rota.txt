@@ -1,0 +1,38 @@
+
+  server\routes\billing.ts:8:  startCheckout,
+  server\routes\billing.ts:9:  startCheckoutBundle,
+  server\routes\billing.ts:10:  redeemGift,
+  server\routes\billing.ts:11:  cancelSubscription,
+  server\routes\billing.ts:12:  renewSubscription,
+  server\routes\billing.ts:13:  switchPlan,
+  server\routes\billing.ts:14:  providerWebhook,
+  server\routes\billing.ts:15:  mercadoPagoWebhook,
+> server\routes\billing.ts:16:  checkExpiringSubscriptions,
+  server\routes\billing.ts:17:  setPreferredPaymentMethod,
+  server\routes\billing.ts:18:  startTrial,
+  server\routes\billing.ts:19:  getMetodologiasAvulsas,
+  server\routes\billing.ts:20:  resetMetodologiasAvulsasDev,
+  server\routes\billing.ts:21:  getAulasAoVivoPagas,
+  server\routes\billing.ts:22:  getCheckoutOperacao,
+  server\routes\billing.ts:23:} from "../controllers/billingController.js";
+  server\routes\billing.ts:24:import {
+  server\routes\billing.ts:64:router.get(
+  server\routes\billing.ts:65:  "/checkout-operacao/:chaveCliente",
+  server\routes\billing.ts:66:  getCheckoutOperacao
+  server\routes\billing.ts:67:);
+  server\routes\billing.ts:68:
+  server\routes\billing.ts:69:router.get(
+  server\routes\billing.ts:70:  "/check-expiring",
+  server\routes\billing.ts:71:  requireAdmin,
+> server\routes\billing.ts:72:  checkExpiringSubscriptions
+  server\routes\billing.ts:73:);
+  server\routes\billing.ts:74:
+  server\routes\billing.ts:75:router.get(
+  server\routes\billing.ts:76:  "/me",
+  server\routes\billing.ts:77:  getMyBilling
+  server\routes\billing.ts:78:);
+  server\routes\billing.ts:79:
+  server\routes\billing.ts:80:router.post(
+
+
+

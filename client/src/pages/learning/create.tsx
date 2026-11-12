@@ -1289,7 +1289,7 @@ export default function LearningCreatePage() {
             !meusTreinos.some((m: TreinoSelecionavel) => String(m.id) === String(t.id))
         )
         .map((t: TreinoSelecionavel) => ({ ...t, origem: "VINCULADO" as const }));
-        
+
       setTreinosDisponiveis({
         meusTreinos,
         treinosVinculados,
@@ -1437,8 +1437,8 @@ export default function LearningCreatePage() {
         const hoje = startOfToday();
         const minInicio = hoje;
         const maxInicio = addDays(hoje, 42);
-        const minFinal = addDays(hoje, 14); 
-        const maxFinal = addDays(hoje, 56); 
+        const minFinal = addDays(hoje, 14);
+        const maxFinal = addDays(hoje, 56);
 
         const semanas = Number(estrutura.duracaoSemanas || 0);
         const prazoEsperadoMs = semanas * 7 * 24 * 60 * 60 * 1000;
@@ -1569,7 +1569,7 @@ export default function LearningCreatePage() {
             toast.error(`A data final da aula ao vivo "${item.titulo}" precisa ser maior que a data de início.`);
             return false;
           }
-        
+
 
         if (inscricaoInicio && Number.isNaN(inscricaoInicio.getTime())) {
           toast.error(`O início das inscrições da aula ao vivo "${item.titulo}" é inválido.`);
@@ -1771,6 +1771,10 @@ export default function LearningCreatePage() {
         })),
       };
 
+      // Em uma edição, nunca enviar o campo "ativo".
+      // A publicação é controlada pelo backend e pelo administrador.
+      const { ativo: _ativoCriacao, ...payloadEdicao } = payloadBase;
+
       if (!editMetodologiaId) {
         if (destinoMetodologia === "LEARNING") {
           await createMetodologiaCompleta(payloadBase);
@@ -1793,7 +1797,6 @@ export default function LearningCreatePage() {
       if (origemAtual === "avulsa" && destinoMetodologia === "AVULSA") {
         await updateMetodologiaAvulsa(editMetodologiaId, {
           ...payloadBase,
-          ativo: false,
           precoAssinaturaMensal: Number(precoAssinaturaMensal),
         });
 
@@ -1806,7 +1809,6 @@ export default function LearningCreatePage() {
       if (origemAtual !== "avulsa" && destinoMetodologia === "LEARNING") {
         await updateMetodologia(editMetodologiaId, {
           ...payloadBase,
-          ativo: false,
         });
 
         localStorage.removeItem(LEARNING_DRAFT_KEY);
@@ -1882,7 +1884,7 @@ export default function LearningCreatePage() {
         area,
         geraBadge,
         geraCertificado,
-        ativo: false,
+
       });
 
       const metodologiaId = editMetodologiaId || metodologiaResp?.item?.id;
@@ -2751,7 +2753,7 @@ export default function LearningCreatePage() {
 
                                   if (novoTipo === "AULA_AO_VIVO") {
                                     const agora = new Date();
-                                    
+
                                     const umaHoraDepois = new Date(agora);
                                     umaHoraDepois.setHours(umaHoraDepois.getHours() + 1);
 

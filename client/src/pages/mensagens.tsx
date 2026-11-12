@@ -1,13 +1,15 @@
 import { toast } from "@/lib/toast";
-import { useContext, useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef, useMemo } from "react";
 import { useLocation, Link } from "wouter";
-import { Share2, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
+import { Share2, Mic, User, UserPlus, Search, Users, Trash, ArrowLeft, Send } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
 import socket from "../services/socket.js";
 import { ModalGrupos } from "../components/modal/ModalGrupos.js";
 import { ModalDesafiosGrupo } from "../components/modal/ModalDesafiosGrupos.js";
 import { MensagemItemGrupo } from "../components/chat/GroupDesafioCards.js";
+import AudioMensagem from "../components/chat/AudioMensagem.js";
+import GravadorAudio from "../components/chat/GravadorAudio.js";
 import CardAtletaShield from "../components/cards/CardAtletaShield.js";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import { FLAGS } from "../config.js";
@@ -26,49 +28,37 @@ interface Usuario {
 
 interface Mensagem {
   id: string;
-
   deId: string;
   paraId: string;
-
   conteudo: string;
-
   tipo:
     | "NORMAL"
+    | "AUDIO"
     | "POST"
     | "DESAFIO"
     | "USUARIO"
     | "CARD";
-
   criadaEm: string;
-
   clientMsgId?: string;
   pending?: boolean;
-
+  audioDuracaoMs?: number | null;
   contextoRemetente?: {
     key: string;
-
     kind:
       | "PERSONAL"
       | "ORGANIZATION";
-
     tipoUsuario:
       string;
-
     role?:
       string | null;
-
     profileId?:
       string | null;
-
     organizationId?:
       string | null;
-
     organizationType?:
       string | null;
-
     organizationRole?:
       string | null;
-
     legacyOrganizationId?:
       string | null;
   } | null;
@@ -94,6 +84,7 @@ interface MensagemGrupo {
   usuario?: Usuario;
   tipo:
     | "NORMAL"
+    | "AUDIO"
     | "DESAFIO"
     | "POST"
     | "USUARIO"
@@ -104,6 +95,7 @@ interface MensagemGrupo {
   desafioEmGrupoId?: string | null;
   clientMsgId?: string;
   pending?: boolean;
+  audioDuracaoMs?: number | null;
   contextoRemetente?: {
     key:
       string;
@@ -178,6 +170,70 @@ type GrupoDetalhe = {
   membros: GrupoMembro[];
 };
 
+// Datas das conversas: agrupamento por dia no fuso horário do dispositivo.
+// Evita UTC/toISOString(), que poderia deslocar mensagens perto da meia-noite.
+type MensagemComData = { id: string; criadaEm: string };
+
+type GrupoDeDia<T extends MensagemComData> = {
+  chave: string;
+  titulo: string;
+  mensagens: T[];
+};
+
+function dataLocalDaMensagem(valor: string): Date | null {
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime()) ? null : data;
+}
+
+function chaveDoDia(data: Date): string {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function tituloDoDia(data: Date, agora: Date): string {
+  const inicioDia = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+  const inicioHoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  // Diferença entre dias de calendário, sem depender das horas ou do horário de verão.
+  const diaUTC = Date.UTC(inicioDia.getFullYear(), inicioDia.getMonth(), inicioDia.getDate());
+  const hojeUTC = Date.UTC(inicioHoje.getFullYear(), inicioHoje.getMonth(), inicioHoje.getDate());
+  const diasAtras = Math.round((hojeUTC - diaUTC) / 86_400_000);
+
+  if (diasAtras === 0) return "Hoje";
+  if (diasAtras === 1) return "Ontem";
+  if (diasAtras >= 2 && diasAtras <= 6) {
+    const diaSemana = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(data);
+    return diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1);
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+  }).format(data);
+}
+
+function agruparMensagensPorDia<T extends MensagemComData>(
+  mensagens: T[],
+  agora: Date = new Date()
+): GrupoDeDia<T>[] {
+  const grupos: GrupoDeDia<T>[] = [];
+  for (const mensagem of mensagens) {
+    const data = dataLocalDaMensagem(mensagem.criadaEm);
+    const chave = data ? chaveDoDia(data) : "data-invalida";
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo?.chave === chave) {
+      ultimo.mensagens.push(mensagem);
+    } else {
+      grupos.push({
+        chave,
+        titulo: data ? tituloDoDia(data, agora) : "Data indisponível",
+        mensagens: [mensagem],
+      });
+    }
+  }
+  return grupos;
+}
+
 export default function PaginaMensagens() {
   const [, navigate] = useLocation();
 
@@ -233,9 +289,55 @@ export default function PaginaMensagens() {
   const [alvo, setAlvo] = useState<ChatTarget | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [unreadByUser, setUnreadByUser] = useState<Record<string, number>>({});
+  type PrivadaNaoLida = {
+    userId: string;
+    count: number;
+    primeiraId: string | null;
+  };
+
+  const [divisorPrivadas, setDivisorPrivadas] =
+    useState<{
+      otherId: string;
+      primeiraId: string;
+      quantidade: number;
+    } | null>(null);
+
+  const [privadaProntaId, setPrivadaProntaId] =
+    useState<string | null>(null);
+
+  type GrupoNaoLido = {
+    grupoId: string;
+    count: number;
+    primeiraId: string | null;
+  };
+
+  const [unreadByGroup, setUnreadByGroup] =
+    useState<Record<string, GrupoNaoLido>>({});
+
+  const [divisorNaoLidas, setDivisorNaoLidas] =
+    useState<{
+      grupoId: string;
+      primeiraId: string;
+      quantidade: number;
+    } | null>(null);
+
+  const scrollMensagensRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const scrollPendenteRef =
+    useRef<
+      | { tipo: "fim"; conversa: string }
+      | {
+          tipo: "primeira-nao-lida";
+          conversa: string;
+          id: string;
+        }
+      | null
+    >(null);
   const totalUnread = Object.values(unreadByUser).reduce((a, b) => a + b, 0);
   const fetchPrivSeqRef = useRef(0);
   const fetchGrupoSeqRef = useRef(0);
+  const buscandoPrimeiraNaoLidaRef = useRef(false);
   const [grupoDetalhe, setGrupoDetalhe] = useState<GrupoDetalhe | null>(null);
   const [mostrarInfoGrupo, setMostrarInfoGrupo] = useState(false);
   const [carregandoGrupoDetalhe, setCarregandoGrupoDetalhe] = useState(false);
@@ -274,40 +376,201 @@ export default function PaginaMensagens() {
     } catch {}
   };
 
-  const fetchUnreadByUser = async () => {
+  const fetchUnreadByUser = async ():
+    Promise<Record<string, PrivadaNaoLida> | null> => {
+    if (!token) return null;
+
     try {
-      const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-by-user`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!r.ok) return;
-      const arr: { userId: string; count: number }[] = await r.json();
-      const map = Object.fromEntries(arr.map(x => [x.userId, x.count]));
-      setUnreadByUser(map);
-    } catch {}
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/mensagem/unread-by-user`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) {
+        return null;
+      }
+
+      const dados: PrivadaNaoLida[] =
+        await resposta.json();
+
+      const detalhes = Object.fromEntries(
+        dados.map((item) => [
+          item.userId,
+          item,
+        ])
+      ) as Record<string, PrivadaNaoLida>;
+
+      setUnreadByUser(
+        Object.fromEntries(
+          dados.map((item) => [
+            item.userId,
+            item.count,
+          ])
+        )
+      );
+
+      return detalhes;
+    } catch (erro) {
+      console.warn(
+        "[mensagens] Falha ao consultar DMs não lidas:",
+        erro
+      );
+
+      return null;
+    }
   };
 
-  const markReadFromUser = async (otherId: string) => {
+  const fetchUnreadByGroup = async () => {
+    if (!token) return {};
+
     try {
-      await fetch(`${API.BASE_URL}/api/mensagem/mark-read/${otherId}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {}
-    setUnreadByUser(prev => ({ ...prev, [otherId]: 0 }));
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/mensagem/unread-by-group`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) return {};
+
+      const dados: GrupoNaoLido[] =
+        await resposta.json();
+
+      const mapa = Object.fromEntries(
+        dados.map((item) => [
+          item.grupoId,
+          item,
+        ])
+      ) as Record<string, GrupoNaoLido>;
+
+      setUnreadByGroup(mapa);
+
+      return mapa;
+    } catch (erro) {
+      console.warn(
+        "[mensagens] Erro ao buscar não lidas dos grupos:",
+        erro
+      );
+
+      return {};
+    }
+  };
+
+  const markReadFromUser = async (
+    otherId: string
+  ): Promise<boolean> => {
+    if (!token) return false;
+
+    try {
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/mensagem/mark-read/${encodeURIComponent(otherId)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) return false;
+
+      setUnreadByUser(prev => ({
+        ...prev,
+        [otherId]: 0,
+      }));
+
+      window.dispatchEvent(
+        new Event("mensagens:atualizar-badge")
+      );
+
+      return true;
+    } catch (erro) {
+      console.warn(
+        "[mensagens] Falha ao marcar conversa como lida:",
+        erro
+      );
+
+      return false;
+    }
+  };
+
+  const markReadFromGroup = async (
+    grupoId: string
+  ): Promise<boolean> => {
+    if (!token) return false;
+
+    try {
+      const resposta = await fetch(
+        `${API.BASE_URL}/api/mensagem/grupos/${encodeURIComponent(
+          grupoId
+        )}/mark-read`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) {
+        console.warn(
+          "[mensagens] Falha ao marcar grupo:",
+          resposta.status
+        );
+        return false;
+      }
+
+      window.dispatchEvent(
+        new Event("mensagens:atualizar-badge")
+      );
+
+      return true;
+    } catch (erro) {
+      console.warn(
+        "[mensagens] Falha ao marcar grupo como lido:",
+        erro
+      );
+
+      return false;
+    }
   };
 
   const lastGroupRef = useRef<string | null>(null);
 
   useEffect(() => {
+    ++fetchPrivSeqRef.current;
+    ++fetchGrupoSeqRef.current;
+
+    buscandoPrimeiraNaoLidaRef.current = false;
+    setTemMaisNovasPriv(false);
+    setTemMaisNovasGrupo(false);
+    setCarregandoMaisNovas(false);
+
     if (!alvo) return;
 
     if (alvo.tipo === "usuario") {
       setDmPermitida(true);
-      const key = `conversa_${usuarioId}_${alvo.usuario.id}`;
-      setMensagensPrivadas(safeLoad<Mensagem>(key));
+      setPrivadaProntaId(null);
+      setDivisorPrivadas(null);
+
+      const key =
+        `conversa_${usuarioId}_${alvo.usuario.id}`;
+
+      setMensagensPrivadas(
+        safeLoad<Mensagem>(key)
+      );
+
       setTemMaisPriv(true);
-      carregarMensagensPrivadas(alvo.usuario.id, false);
-      markReadFromUser(alvo.usuario.id);
+
+      void abrirPrivadaComNaoLidas(
+        alvo.usuario.id
+      );
     } else {
         if (lastGroupRef.current && lastGroupRef.current !== alvo.grupo.id) {
         socket.emit("leaveGroup", lastGroupRef.current);
@@ -317,14 +580,43 @@ export default function PaginaMensagens() {
       const key = `conversa_grupo_${alvo.grupo.id}`;
       setMensagensGrupo(safeLoad<MensagemGrupo>(key));
       setTemMaisGrupo(true);
-      carregarMensagensDoGrupo(alvo.grupo.id, false);
+      void abrirGrupoComNaoLidas(alvo.grupo.id);
     }
     setNovaMensagem("");
   }, [alvo, usuarioId, token]);
 
   useEffect(() => {
     if (!token) return;
-    fetchUnreadByUser();
+
+    void fetchUnreadByUser();
+    void fetchUnreadByGroup();
+
+    const atualizar = () => {
+      void fetchUnreadByUser();
+      void fetchUnreadByGroup();
+    };
+
+    socket.on("badge:update", atualizar);
+
+    const aoVoltar = () => {
+      if (document.visibilityState === "visible") {
+        atualizar();
+      }
+    };
+
+    document.addEventListener(
+      "visibilitychange",
+      aoVoltar
+    );
+
+    return () => {
+      socket.off("badge:update", atualizar);
+
+      document.removeEventListener(
+        "visibilitychange",
+        aoVoltar
+      );
+    };
   }, [token]);
 
   function selecionarAlvo(novo: ChatTarget) {
@@ -341,7 +633,6 @@ export default function PaginaMensagens() {
 
     if (novo.tipo === "usuario") {
       saveRecentUser(novo.usuario);
-      markReadFromUser(novo.usuario.id);
       setGrupoDetalhe(null);
       setMostrarInfoGrupo(false);
     } else {
@@ -357,6 +648,12 @@ export default function PaginaMensagens() {
   const [carregandoMaisPriv, setCarregandoMaisPriv] = useState(false);
   const [mensagensGrupo, setMensagensGrupo] = useState<MensagemGrupo[]>([]);
   const [temMaisGrupo, setTemMaisGrupo] = useState(true);
+  // Os grupos são recalculados apenas quando a lista muda.
+  const diasPrivados = useMemo(() => agruparMensagensPorDia(mensagensPrivadas), [mensagensPrivadas]);
+  const diasGrupo = useMemo(() => agruparMensagensPorDia(mensagensGrupo), [mensagensGrupo]);
+  const [temMaisNovasPriv, setTemMaisNovasPriv] = useState(false);
+  const [temMaisNovasGrupo, setTemMaisNovasGrupo] = useState(false);
+  const [carregandoMaisNovas, setCarregandoMaisNovas] = useState(false);
   const [carregandoMaisGrupo, setCarregandoMaisGrupo] = useState(false);
   const [novaMensagem, setNovaMensagem] = useState("");
   const [
@@ -384,7 +681,7 @@ export default function PaginaMensagens() {
   const pendingOpenRef = useRef(false);
   const RECENTS_KEY = "mensagens_recent_usuarios";
 
-  
+
   function initials(name?: string) {
     if (!name) return "U";
     const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -426,6 +723,9 @@ export default function PaginaMensagens() {
     const tipo = String(msg.tipo || "").toUpperCase();
     const conteudo = String(msg.conteudo || "");
 
+    if (tipo === "AUDIO") {
+      return "🎤 Mensagem de voz";
+    }
     if (tipo === "CARD") return "📇 Card compartilhado";
     if (tipo === "POST") return "📰 Post compartilhado";
     if (tipo === "DESAFIO") return "🏆 Desafio compartilhado";
@@ -531,7 +831,7 @@ export default function PaginaMensagens() {
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const alvoRef = useRef<ChatTarget | null>(null);
-  
+
   useEffect(() => { alvoRef.current = alvo; }, [alvo]);
 
   useEffect(() => {
@@ -605,7 +905,7 @@ export default function PaginaMensagens() {
     const usuariosFiltrados = [...usuariosFiltradosBase].sort((a, b) => {
       const ta = lastMsgAtByUser[a.id] ?? 0;
       const tb = lastMsgAtByUser[b.id] ?? 0;
-      return tb - ta; 
+      return tb - ta;
     });
 
     return (
@@ -650,8 +950,9 @@ export default function PaginaMensagens() {
             </p>
           )}
           {gruposFiltrados.map((g) => {
-            const selecionado =
-              alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
+            const selecionado = alvo?.tipo === "grupo" && alvo.grupo.id === g.id;
+            const unreadGrupo = unreadByGroup[g.id]?.count ?? 0;
+
             return (
               <div
                 key={g.id}
@@ -664,8 +965,21 @@ export default function PaginaMensagens() {
               >
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm truncate">
-                      {g.nome}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-medium text-sm truncate">
+                        {g.nome}
+                      </span>
+
+                      {unreadGrupo > 0 && (
+                        <span
+                          className="shrink-0 rounded-full bg-green-700 px-2 py-0.5 text-[11px] font-bold text-white"
+                          aria-label={`${unreadGrupo} mensagens não lidas`}
+                        >
+                          {unreadGrupo > 99
+                            ? "99+"
+                            : unreadGrupo}
+                        </span>
+                      )}
                     </div>
 
                     <div className="text-xs text-gray-500 line-clamp-1">
@@ -810,7 +1124,7 @@ export default function PaginaMensagens() {
       );
       return;
     }
-    
+
     try {
       const base = (meuCardDados ?? await getMeuPerfilEBonus());
       if (!base) { toast.error("Não consegui montar seu card agora."); return; }
@@ -820,7 +1134,7 @@ export default function PaginaMensagens() {
         atleta: {
           atletaId: base.atletaId ?? "",
           nome: base.nome,
-          foto: base.foto ?? null,  
+          foto: base.foto ?? null,
           posicao: base.posicao ?? null,
           idade: null
         },
@@ -839,7 +1153,7 @@ export default function PaginaMensagens() {
           pending: true,
           criadaEm: new Date().toISOString(),
           conteudo: encoded,
-          deId: usuarioId!, 
+          deId: usuarioId!,
           paraId: alvo.usuario.id,
           tipo: "CARD",
         }
@@ -856,13 +1170,13 @@ export default function PaginaMensagens() {
         body: JSON.stringify({ paraId: alvo.usuario.id, tipo: "CARD", conteudo: encoded, clientMsgId }),
       });
 
-      let fotoData = base.foto; 
+      let fotoData = base.foto;
       if (fotoData && !fotoData.startsWith("data:")) {
         try {
           const resolvedUrl = publicImgUrl(fotoData) ?? fotoData;
           fotoData = await toDataUrlWithAuth(resolvedUrl);
         } catch {
-          fotoData = null; 
+          fotoData = null;
         }
       }
 
@@ -912,7 +1226,7 @@ export default function PaginaMensagens() {
       });
     };
 
-    tick(); 
+    tick();
     const i = setInterval(tick, 30_000);
     return () => clearInterval(i);
   }, [token, usuariosMutuos]);
@@ -928,6 +1242,138 @@ export default function PaginaMensagens() {
     const key = `conversa_grupo_${alvo.grupo.id}`;
     safeSave(key, mensagensGrupo);
   }, [mensagensGrupo, alvo]);
+
+  useEffect(() => {
+    if (
+      !divisorPrivadas ||
+      temMaisNovasPriv ||
+      alvo?.tipo !== "usuario" ||
+      alvo.usuario.id !== divisorPrivadas.otherId ||
+      privadaProntaId !== divisorPrivadas.otherId
+    ) {
+      return;
+    }
+
+    const primeiraCarregada = mensagensPrivadas.some(
+      (mensagem) =>
+        mensagem.id === divisorPrivadas.primeiraId
+    );
+
+    if (!primeiraCarregada) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const atual = alvoRef.current;
+
+      if (
+        atual?.tipo !== "usuario" ||
+        atual.usuario.id !== divisorPrivadas.otherId ||
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      const caixa = scrollMensagensRef.current;
+
+      const divisor = caixa?.querySelector(
+        `[data-primeira-nao-lida="${divisorPrivadas.primeiraId}"]`
+      ) as HTMLElement | null;
+
+      if (!caixa || !divisor) return;
+
+      const area = caixa.getBoundingClientRect();
+      const posicao = divisor.getBoundingClientRect();
+
+      const divisorVisivel =
+        posicao.bottom > area.top &&
+        posicao.top < area.bottom;
+
+      if (!divisorVisivel) return;
+
+      void (async () => {
+        const sucesso = await markReadFromUser(
+          divisorPrivadas.otherId
+        );
+
+        if (!sucesso) return;
+
+        const conversaAtual = alvoRef.current;
+
+        if (
+          conversaAtual?.tipo !== "usuario" ||
+          conversaAtual.usuario.id !== divisorPrivadas.otherId
+        ) {
+          return;
+        }
+
+        setDivisorPrivadas(null);
+        await fetchUnreadByUser();
+      })();
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    divisorPrivadas,
+    temMaisNovasPriv,
+    mensagensPrivadas,
+    alvo,
+    privadaProntaId,
+  ]);
+
+  useEffect(() => {
+    if (
+      alvo?.tipo !== "usuario" ||
+      privadaProntaId !== alvo.usuario.id ||
+      divisorPrivadas ||
+      !mensagensPrivadas.length ||
+      document.visibilityState !== "visible"
+    ) {
+      return;
+    }
+
+    const ultimaMensagem =
+      mensagensPrivadas[mensagensPrivadas.length - 1];
+
+    if (
+      ultimaMensagem.deId !== alvo.usuario.id ||
+      ultimaMensagem.paraId !== usuarioId
+    ) {
+      return;
+    }
+
+    const caixa = scrollMensagensRef.current;
+    if (!caixa) return;
+
+    const distanciaDoFim =
+      caixa.scrollHeight -
+      caixa.scrollTop -
+      caixa.clientHeight;
+
+    if (distanciaDoFim > 120) return;
+
+    const otherId = alvo.usuario.id;
+
+    const timer = window.setTimeout(() => {
+      if (
+        alvoRef.current?.tipo !== "usuario" ||
+        alvoRef.current.usuario.id !== otherId ||
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      void markReadFromUser(otherId);
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    alvo,
+    mensagensPrivadas,
+    privadaProntaId,
+    divisorPrivadas,
+    usuarioId,
+  ]);
 
   useEffect(() => {
     socket.connect();
@@ -982,10 +1428,6 @@ export default function PaginaMensagens() {
                   ] || 0
                 ) + 1,
             })
-          );
-        } else {
-          markReadFromUser(
-            mensagem.deId
           );
         }
       }
@@ -1083,6 +1525,24 @@ export default function PaginaMensagens() {
           mensagem
         );
 
+      const caixa = scrollMensagensRef.current;
+
+      const estaPertoDoFim =
+        !caixa ||
+        caixa.scrollHeight -
+          caixa.scrollTop -
+          caixa.clientHeight < 120;
+
+      if (
+        mensagem.deId === usuarioId ||
+        estaPertoDoFim
+      ) {
+        scrollPendenteRef.current = {
+          tipo: "fim",
+          conversa: `u:${current.usuario.id}`,
+        };
+      }
+
       if (!replaced) {
         setMensagensPrivadas(
           (prev) => {
@@ -1179,6 +1639,24 @@ export default function PaginaMensagens() {
         reconcileGrupoByClientId(
           mensagem
         );
+
+      const caixa = scrollMensagensRef.current;
+
+      const estaPertoDoFim =
+        !caixa ||
+        caixa.scrollHeight -
+          caixa.scrollTop -
+          caixa.clientHeight < 120;
+
+      if (
+        mensagem.usuarioId === usuarioId ||
+        estaPertoDoFim
+      ) {
+        scrollPendenteRef.current = {
+          tipo: "fim",
+          conversa: `g:${mensagem.grupoId}`,
+        };
+      }
 
       if (!replaced) {
         setMensagensGrupo(
@@ -1961,15 +2439,23 @@ export default function PaginaMensagens() {
     }
   }
 
-  async function carregarMensagensPrivadas(otherId: string, append: boolean) {
+  async function carregarMensagensPrivadas(
+    otherId: string,
+    append: boolean,
+    limiteInicial?: number
+  ) {
     const mySeq = ++fetchPrivSeqRef.current;
     try {
       const base = append ? mensagensPrivadas : [];
       const ultimoId = append && base.length > 0 ? base[0].id : undefined;
 
+      const tamanhoPagina = append
+        ? limite
+        : limiteInicial ?? limite;
+
       const query = new URLSearchParams({
         otherId,
-        limit: String(limite),
+        limit: String(tamanhoPagina),
         ...(ultimoId ? { cursor: ultimoId } : {}),
       });
 
@@ -2002,9 +2488,10 @@ export default function PaginaMensagens() {
       if (!stillSame) return;
 
       setDmPermitida(podeEnviar);
-      if (novas.length < limite) setTemMaisPriv(false);
+      setTemMaisPriv(novas.length >= tamanhoPagina);
 
       const novasOrdenadas = [...novas].reverse();
+
       setMensagensPrivadas(prev => {
         const combined = append ? [...novasOrdenadas, ...prev] : [...novasOrdenadas];
         const next = Array.from(new Map(combined.map(m => [m.id, m])).values())
@@ -2013,6 +2500,359 @@ export default function PaginaMensagens() {
         return next;
       });
     } catch (e) { console.error(e); }
+  }
+
+  async function carregarAtePrimeiraNaoLida(
+    tipo: "usuario" | "grupo",
+    conversaId: string,
+    primeiraId: string
+  ): Promise<boolean> {
+    buscandoPrimeiraNaoLidaRef.current = true;
+
+    const seq =
+      tipo === "usuario"
+        ? ++fetchPrivSeqRef.current
+        : ++fetchGrupoSeqRef.current;
+
+    try {
+      const query = new URLSearchParams({
+        limit: "40",
+        startAt: primeiraId,
+        ...(tipo === "usuario"
+          ? { otherId: conversaId }
+          : {}),
+      });
+
+      const rota =
+        tipo === "usuario"
+          ? `/api/mensagem?${query.toString()}`
+          : `/api/mensagem/grupos/${encodeURIComponent(
+              conversaId
+            )}?${query.toString()}`;
+
+      const resposta = await fetch(
+        `${API.BASE_URL}${rota}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) {
+        throw new Error(
+          `Falha ao localizar primeira não lida: ${resposta.status}`
+        );
+      }
+
+      const json = await resposta.json();
+
+      const mensagens: Array<Mensagem | MensagemGrupo> =
+        Array.isArray(json?.items)
+          ? json.items
+          : [];
+
+      const atual = alvoRef.current;
+
+      const conversaAindaAberta =
+        tipo === "usuario"
+          ? atual?.tipo === "usuario" &&
+            atual.usuario.id === conversaId
+          : atual?.tipo === "grupo" &&
+            atual.grupo.id === conversaId;
+
+      const seqAtual =
+        tipo === "usuario"
+          ? fetchPrivSeqRef.current
+          : fetchGrupoSeqRef.current;
+
+      if (
+        !conversaAindaAberta ||
+        seqAtual !== seq
+      ) {
+        return false;
+      }
+
+      if (
+        !mensagens.some(
+          (mensagem) => mensagem.id === primeiraId
+        )
+      ) {
+        throw new Error(
+          "Primeira mensagem não lida ausente na janela."
+        );
+      }
+
+      const ordenadas = [...mensagens].sort(
+        (a, b) =>
+          new Date(a.criadaEm).getTime() -
+            new Date(b.criadaEm).getTime() ||
+          a.id.localeCompare(b.id)
+      );
+
+      if (tipo === "usuario") {
+        setMensagensPrivadas(
+          ordenadas as Mensagem[]
+        );
+
+        setTemMaisPriv(true);
+        setTemMaisNovasPriv(
+          json?.hasMoreNewer === true
+        );
+
+        setDmPermitida(
+          json?.meta?.permitirMensagens !== false
+        );
+      } else {
+        setMensagensGrupo(
+          ordenadas as MensagemGrupo[]
+        );
+
+        setTemMaisGrupo(true);
+        setTemMaisNovasGrupo(
+          json?.hasMoreNewer === true
+        );
+      }
+
+      return true;
+    } catch (erro) {
+      console.error(
+        "[mensagens] Busca direta da primeira não lida:",
+        erro
+      );
+
+      return false;
+    } finally {
+      const seqAindaAtual =
+        tipo === "usuario"
+          ? fetchPrivSeqRef.current === seq
+          : fetchGrupoSeqRef.current === seq;
+
+      if (seqAindaAtual) {
+        buscandoPrimeiraNaoLidaRef.current = false;
+      }
+    }
+  }
+
+  async function carregarMensagensMaisNovas(
+    tipo: "usuario" | "grupo",
+    conversaId: string
+  ) {
+    if (carregandoMaisNovas) return;
+
+    const atual = alvoRef.current;
+
+    const conversaCorreta =
+      tipo === "usuario"
+        ? atual?.tipo === "usuario" &&
+          atual.usuario.id === conversaId
+        : atual?.tipo === "grupo" &&
+          atual.grupo.id === conversaId;
+
+    if (!conversaCorreta) return;
+
+    const mensagensAtuais =
+      tipo === "usuario"
+        ? mensagensPrivadas
+        : mensagensGrupo;
+
+    const ultima =
+      mensagensAtuais[mensagensAtuais.length - 1];
+
+    if (!ultima) return;
+
+    const seq =
+      tipo === "usuario"
+        ? ++fetchPrivSeqRef.current
+        : ++fetchGrupoSeqRef.current;
+
+    setCarregandoMaisNovas(true);
+
+    try {
+      const query = new URLSearchParams({
+        newerThan: ultima.id,
+        limit: "40",
+        ...(tipo === "usuario"
+          ? { otherId: conversaId }
+          : {}),
+      });
+
+      const rota =
+        tipo === "usuario"
+          ? `/api/mensagem?${query.toString()}`
+          : `/api/mensagem/grupos/${encodeURIComponent(
+              conversaId
+            )}?${query.toString()}`;
+
+      const resposta = await fetch(
+        `${API.BASE_URL}${rota}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!resposta.ok) {
+        throw new Error(
+          `Erro ao carregar mensagens recentes: ${resposta.status}`
+        );
+      }
+
+      const json = await resposta.json();
+
+      const novas: Array<Mensagem | MensagemGrupo> =
+        Array.isArray(json?.items)
+          ? json.items
+          : [];
+
+      const conversa = alvoRef.current;
+
+      const continuaNaConversa =
+        tipo === "usuario"
+          ? conversa?.tipo === "usuario" &&
+            conversa.usuario.id === conversaId
+          : conversa?.tipo === "grupo" &&
+            conversa.grupo.id === conversaId;
+
+      const sequenciaAtual =
+        tipo === "usuario"
+          ? fetchPrivSeqRef.current
+          : fetchGrupoSeqRef.current;
+
+      if (
+        !continuaNaConversa ||
+        sequenciaAtual !== seq
+      ) {
+        return;
+      }
+
+      const temMais = json?.hasMoreNewer === true;
+
+      if (tipo === "usuario") {
+        setMensagensPrivadas((anteriores) => {
+          const mapa = new Map(
+            [...anteriores, ...(novas as Mensagem[])].map(
+              (mensagem) => [mensagem.id, mensagem]
+            )
+          );
+
+          return [...mapa.values()].sort(
+            (a, b) =>
+              new Date(a.criadaEm).getTime() -
+                new Date(b.criadaEm).getTime() ||
+              a.id.localeCompare(b.id)
+          );
+        });
+
+        setTemMaisNovasPriv(temMais);
+      } else {
+        setMensagensGrupo((anteriores) => {
+          const mapa = new Map(
+            [...anteriores, ...(novas as MensagemGrupo[])].map(
+              (mensagem) => [mensagem.id, mensagem]
+            )
+          );
+
+          return [...mapa.values()].sort(
+            (a, b) =>
+              new Date(a.criadaEm).getTime() -
+                new Date(b.criadaEm).getTime() ||
+              a.id.localeCompare(b.id)
+          );
+        });
+
+        setTemMaisNovasGrupo(temMais);
+      }
+    } catch (erro) {
+      console.error(
+        "[mensagens] Erro ao carregar mensagens recentes:",
+        erro
+      );
+
+      toast.error(
+        "Não foi possível carregar mais mensagens."
+      );
+    } finally {
+      setCarregandoMaisNovas(false);
+    }
+  }
+
+  async function abrirPrivadaComNaoLidas(
+    otherId: string
+  ) {
+    const mapa = await fetchUnreadByUser();
+
+    if (
+      alvoRef.current?.tipo !== "usuario" ||
+      alvoRef.current.usuario.id !== otherId
+    ) {
+      return;
+    }
+
+    const resumo = mapa?.[otherId];
+    const quantidade = resumo?.count ?? 0;
+    const primeiraId = resumo?.primeiraId;
+
+    if (mapa && quantidade > 0 && primeiraId) {
+      setDivisorPrivadas({
+        otherId,
+        primeiraId,
+        quantidade,
+      });
+
+      scrollPendenteRef.current = {
+        tipo: "primeira-nao-lida",
+        conversa: `u:${otherId}`,
+        id: primeiraId,
+      };
+    } else {
+      setDivisorPrivadas(null);
+
+      scrollPendenteRef.current = {
+        tipo: "fim",
+        conversa: `u:${otherId}`,
+      };
+    }
+
+    let carregamentoConcluido = true;
+
+    if (mapa && quantidade > 0 && primeiraId) {
+      carregamentoConcluido =
+        await carregarAtePrimeiraNaoLida(
+          "usuario",
+          otherId,
+          primeiraId
+        );
+    } else {
+      await carregarMensagensPrivadas(
+        otherId,
+        false,
+        20
+      );
+    }
+
+    if (!carregamentoConcluido) {
+      toast.error(
+        "Não foi possível localizar todas as mensagens novas. Tente novamente."
+      );
+      return;
+    }
+
+    if (
+      alvoRef.current?.tipo !== "usuario" ||
+      alvoRef.current.usuario.id !== otherId
+    ) {
+      return;
+    }
+
+    setPrivadaProntaId(otherId);
+
+    // Sem mensagens pendentes, atualiza possíveis
+    // avisos antigos dessa conversa.
+    if (mapa && quantidade === 0) {
+      void markReadFromUser(otherId);
+    }
   }
 
   async function carregarDetalheGrupo(grupoId: string) {
@@ -2037,13 +2877,24 @@ export default function PaginaMensagens() {
     }
   }
 
-  async function carregarMensagensDoGrupo(grupoId: string, append: boolean) {
+  async function carregarMensagensDoGrupo(
+    grupoId: string,
+    append: boolean,
+    limiteInicial?: number
+  ) {
     const mySeq = ++fetchGrupoSeqRef.current;
 
     try {
       const base = append ? mensagensGrupo : [];
       const ultimoId = append && base.length > 0 ? base[0].id : undefined;
-      const query = new URLSearchParams({ limit: String(limite), ...(ultimoId ? { cursor: ultimoId } : {}) });
+      const tamanhoPagina = append
+        ? limite
+        : limiteInicial ?? limite;
+
+      const query = new URLSearchParams({
+        limit: String(tamanhoPagina),
+        ...(ultimoId ? { cursor: ultimoId } : {}),
+      });
 
       const res = await fetch(
         `${API.BASE_URL}/api/mensagem/grupos/${grupoId}?${query.toString()}`,
@@ -2081,11 +2932,13 @@ export default function PaginaMensagens() {
         alvoRef.current.grupo.id === grupoId;
       if (!stillSame) return;
 
-      if (novas.length < limite) setTemMaisGrupo(false);
+      setTemMaisGrupo(novas.length >= tamanhoPagina);
 
       const novasOrdenadas = [...novas].reverse();
       setMensagensGrupo((prev) => {
-        const combined = append ? [...novasOrdenadas, ...prev] : [...prev, ...novasOrdenadas];
+        const combined = append
+          ? [...novasOrdenadas, ...prev]
+          : novasOrdenadas;
         const map = new Map<string, MensagemGrupo>();
         combined.forEach((m) => map.set(m.id, m));
         const next = Array.from(map.values()).sort(
@@ -2098,6 +2951,68 @@ export default function PaginaMensagens() {
     } catch (err) {
       console.error("Erro ao carregar mensagens do grupo:", err);
     }
+  }
+
+  async function abrirGrupoComNaoLidas(
+    grupoId: string
+  ) {
+    // Obtém a situação ANTES de marcar como lida.
+    const mapa = await fetchUnreadByGroup();
+
+    if (
+      alvoRef.current?.tipo !== "grupo" ||
+      alvoRef.current.grupo.id !== grupoId
+    ) {
+      return;
+    }
+
+    const resumo = mapa[grupoId];
+    const quantidade = resumo?.count ?? 0;
+    const primeiraId = resumo?.primeiraId;
+
+    if (quantidade > 0 && primeiraId) {
+      setDivisorNaoLidas({
+        grupoId,
+        primeiraId,
+        quantidade,
+      });
+
+      scrollPendenteRef.current = {
+        tipo: "primeira-nao-lida",
+        conversa: `g:${grupoId}`,
+        id: primeiraId,
+      };
+    } else {
+      setDivisorNaoLidas(null);
+
+      scrollPendenteRef.current = {
+        tipo: "fim",
+        conversa: `g:${grupoId}`,
+      };
+    }
+
+    if (quantidade > 0 && primeiraId) {
+      const encontrou =
+        await carregarAtePrimeiraNaoLida(
+          "grupo",
+          grupoId,
+          primeiraId
+        );
+
+      if (!encontrou) {
+        toast.error(
+          "Não foi possível localizar a primeira mensagem não lida deste grupo."
+        );
+      }
+
+      return;
+    }
+
+    await carregarMensagensDoGrupo(
+      grupoId,
+      false,
+      20
+    );
   }
 
   async function getMeuPerfilEBonus(): Promise<{
@@ -2168,19 +3083,287 @@ export default function PaginaMensagens() {
     return replaced;
   }
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const top = e.currentTarget.scrollTop;
-    if (top >= 50 || !alvo) return;
+  const handleScroll = async (
+    e: React.UIEvent<HTMLDivElement>
+  ) => {
+    const caixa = e.currentTarget;
 
-    if (alvo.tipo === "usuario" && temMaisPriv && !carregandoMaisPriv) {
-      setCarregandoMaisPriv(true);
-      carregarMensagensPrivadas(alvo.usuario.id, true).finally(() => setCarregandoMaisPriv(false));
+    if (buscandoPrimeiraNaoLidaRef.current) {
+      return;
     }
-    if (alvo.tipo === "grupo" && temMaisGrupo && !carregandoMaisGrupo) {
+
+    if (caixa.scrollTop >= 50 || !alvo) {
+      return;
+    }
+
+    if (
+      alvo.tipo === "usuario" &&
+      temMaisPriv &&
+      !carregandoMaisPriv
+    ) {
+      const otherId = alvo.usuario.id;
+
+      const alturaAnterior = caixa.scrollHeight;
+      const posicaoAnterior = caixa.scrollTop;
+
+      setCarregandoMaisPriv(true);
+
+      try {
+        await carregarMensagensPrivadas(otherId, true);
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (
+              alvoRef.current?.tipo !== "usuario" ||
+              alvoRef.current.usuario.id !== otherId
+            ) {
+              return;
+            }
+
+            caixa.scrollTop =
+              posicaoAnterior +
+              caixa.scrollHeight -
+              alturaAnterior;
+          });
+        });
+      } finally {
+        setCarregandoMaisPriv(false);
+      }
+
+      return;
+    }
+
+    if (
+      alvo.tipo === "grupo" &&
+      temMaisGrupo &&
+      !carregandoMaisGrupo
+    ) {
+      const grupoId = alvo.grupo.id;
+
+      const alturaAnterior = caixa.scrollHeight;
+      const posicaoAnterior = caixa.scrollTop;
+
       setCarregandoMaisGrupo(true);
-      carregarMensagensDoGrupo(alvo.grupo.id, true).finally(() => setCarregandoMaisGrupo(false));
+
+      try {
+        await carregarMensagensDoGrupo(grupoId, true);
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (
+              alvoRef.current?.tipo !== "grupo" ||
+              alvoRef.current.grupo.id !== grupoId
+            ) {
+              return;
+            }
+
+            caixa.scrollTop =
+              posicaoAnterior +
+              caixa.scrollHeight -
+              alturaAnterior;
+          });
+        });
+      } finally {
+        setCarregandoMaisGrupo(false);
+      }
     }
   };
+
+  useEffect(() => {
+    const contenedor = scrollMensagensRef.current;
+    const pendente = scrollPendenteRef.current;
+
+    if (!contenedor || !pendente || !alvo) return;
+
+    const conversaAtual =
+      alvo.tipo === "grupo"
+        ? `g:${alvo.grupo.id}`
+        : `u:${alvo.usuario.id}`;
+
+    if (pendente.conversa !== conversaAtual) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const caixa = scrollMensagensRef.current;
+      if (!caixa) return;
+
+      if (pendente.tipo === "fim") {
+        caixa.scrollTop = caixa.scrollHeight;
+        scrollPendenteRef.current = null;
+        return;
+      }
+
+      const divisor = caixa.querySelector(
+        `[data-primeira-nao-lida="${pendente.id}"]`
+      ) as HTMLElement | null;
+
+      if (!divisor) {
+        // Ainda pode faltar carregar mensagens antigas.
+        return;
+      }
+
+      const top =
+        divisor.getBoundingClientRect().top -
+        caixa.getBoundingClientRect().top +
+        caixa.scrollTop;
+
+      caixa.scrollTop = Math.max(0, top - 12);
+      scrollPendenteRef.current = null;
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [
+    alvo,
+    mensagensGrupo,
+    mensagensPrivadas,
+    divisorNaoLidas,
+    divisorPrivadas,
+  ]);
+
+  useEffect(() => {
+    if (
+      !divisorNaoLidas ||
+      temMaisNovasGrupo ||
+      alvo?.tipo !== "grupo" ||
+      alvo.grupo.id !== divisorNaoLidas.grupoId
+    ) {
+      return;
+    }
+
+    const primeiraCarregada = mensagensGrupo.some(
+      (mensagem) =>
+        mensagem.id === divisorNaoLidas.primeiraId
+    );
+
+    if (!primeiraCarregada) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const atual = alvoRef.current;
+
+      if (
+        atual?.tipo !== "grupo" ||
+        atual.grupo.id !== divisorNaoLidas.grupoId ||
+        document.visibilityState !== "visible"
+      ) {
+        return;
+      }
+
+      const caixa = scrollMensagensRef.current;
+
+      const divisor = caixa?.querySelector(
+        `[data-primeira-nao-lida="${divisorNaoLidas.primeiraId}"]`
+      ) as HTMLElement | null;
+
+      if (!caixa || !divisor) {
+        return;
+      }
+
+      const area = caixa.getBoundingClientRect();
+      const posicao = divisor.getBoundingClientRect();
+
+      const divisorVisivel =
+        posicao.bottom > area.top &&
+        posicao.top < area.bottom;
+
+      if (!divisorVisivel) {
+        return;
+      }
+
+      void (async () => {
+        const sucesso = await markReadFromGroup(
+          divisorNaoLidas.grupoId
+        );
+
+        if (!sucesso) {
+          return;
+        }
+
+        const conversaAtual = alvoRef.current;
+
+        if (
+          conversaAtual?.tipo !== "grupo" ||
+          conversaAtual.grupo.id !== divisorNaoLidas.grupoId
+        ) {
+          return;
+        }
+
+        setDivisorNaoLidas(null);
+        await fetchUnreadByGroup();
+      })();
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    divisorNaoLidas,
+    temMaisNovasGrupo,
+    mensagensGrupo,
+    alvo,
+  ]);
+
+  useEffect(() => {
+    if (
+      alvo?.tipo !== "grupo" ||
+      divisorNaoLidas ||
+      !mensagensGrupo.length ||
+      document.visibilityState !== "visible"
+    ) {
+      return;
+    }
+
+    const ultimaMensagem =
+      mensagensGrupo[mensagensGrupo.length - 1];
+
+    // Não é necessário marcar como lida uma
+    // mensagem enviada pelo próprio usuário.
+    if (ultimaMensagem.usuarioId === usuarioId) {
+      return;
+    }
+
+    const caixa = scrollMensagensRef.current;
+
+    if (!caixa) return;
+
+    const distanciaDoFim =
+      caixa.scrollHeight -
+      caixa.scrollTop -
+      caixa.clientHeight;
+
+    if (distanciaDoFim > 120) {
+      return;
+    }
+
+    const grupoId = alvo.grupo.id;
+
+    const timer = window.setTimeout(() => {
+      const atual = alvoRef.current;
+
+      if (
+        atual?.tipo === "grupo" &&
+        atual.grupo.id === grupoId &&
+        document.visibilityState === "visible"
+      ) {
+        void markReadFromGroup(grupoId).then(
+          (sucesso) => {
+            if (sucesso) {
+              void fetchUnreadByGroup();
+            }
+          }
+        );
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    alvo,
+    mensagensGrupo,
+    divisorNaoLidas,
+    usuarioId,
+  ]);
 
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() || !alvo) return;
@@ -2208,6 +3391,11 @@ export default function PaginaMensagens() {
         paraId: alvo.usuario.id,
         tipo: "NORMAL",
       };
+      scrollPendenteRef.current = {
+        tipo: "fim",
+        conversa: `u:${alvo.usuario.id}`,
+      };
+
       setMensagensPrivadas(prev => [...prev, otm]);
       setLastMsgByUser(prev => ({
         ...prev,
@@ -2325,6 +3513,10 @@ export default function PaginaMensagens() {
           nome: meuMembroNoGrupo?.nome ?? "Você",
           foto: meuMembroNoGrupo?.foto ?? null,
         },
+      };
+      scrollPendenteRef.current = {
+        tipo: "fim",
+        conversa: `g:${alvo.grupo.id}`,
       };
       setMensagensGrupo(prev => [...prev, otm]);
 
@@ -2505,6 +3697,17 @@ function stripConvocacaoTag(text: string) {
       </div>
     );
 
+    if (msg.tipo === "AUDIO") {
+      return Shell(
+        <AudioMensagem
+          id={msg.id}
+          grupoId={msg.grupoId}
+          token={token}
+          duracaoMs={msg.audioDuracaoMs}
+        />
+      );
+    }
+
     if (
       !FLAGS.DESAFIOS_ENABLED &&
       (
@@ -2632,6 +3835,16 @@ function stripConvocacaoTag(text: string) {
       </div>
     );
 
+    if (msg.tipo === "AUDIO") {
+      return Shell(
+        <AudioMensagem
+          id={msg.id}
+          token={token}
+          duracaoMs={msg.audioDuracaoMs}
+        />
+      );
+    }
+
     if (msg.tipo === "CARD") {
       if (msg.conteudo === "__PENDING_CARD__") {
         return Shell(<div className="w-56 h-72 bg-gray-200 rounded animate-pulse" />);
@@ -2661,7 +3874,7 @@ function stripConvocacaoTag(text: string) {
         const path = isDataUrl ? msg.conteudo : publicImgUrl(msg.conteudo)!;
 
         return Shell(<img src={path} alt="Card do atleta" className="w-56 h-auto rounded" />);
-    } 
+    }
       if (msg.tipo === "POST") {
         const post = postsCache[msg.conteudo];
         if (!post) return Shell(<div className="text-sm">Carregando post...</div>);
@@ -2785,7 +3998,7 @@ function stripConvocacaoTag(text: string) {
     };
 
     return (
-      <div className="h-screen flex flex-col bg-transparent">
+      <div className="h-[100dvh] min-h-0 flex flex-col overflow-hidden bg-transparent">
         <header className="sticky top-0 z-10 bg-green-900 text-white">
           <div className="relative h-14 flex items-center justify-center px-4">
             <Link
@@ -2835,7 +4048,11 @@ function stripConvocacaoTag(text: string) {
           </aside>
         </div>
 
-        <main className="flex-1 flex flex-col min-h-0">
+        <main
+          className={`flex-1 min-h-0 flex flex-col ${
+            temSeletorContexto ? "pb-[108px]" : "pb-[52px]"
+          }`}
+        >
           <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-transparent">
             <div className="text-sm text-green-900 font-medium">
               {alvo ? (alvo.tipo === "usuario" ? "Mensagem direta" : grupoDetalhe?.descricao?.trim() || "Grupo") : "Selecione uma conversa"}
@@ -2982,8 +4199,23 @@ function stripConvocacaoTag(text: string) {
           )}
 
           <div
-            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 pb-24 md:pb-6"
+            className="
+              flex-1
+              min-h-0
+              min-w-0
+              overflow-y-auto
+              overscroll-contain
+              px-3
+              pl-3
+              pr-4
+              sm:pl-4
+              sm:pr-5
+              pt-4
+              pb-6
+              [scrollbar-gutter:stable]
+            "
             onScroll={handleScroll}
+            ref={scrollMensagensRef}
           >
             <div
             key={alvo ? (alvo.tipo === "usuario" ? `u-${alvo.usuario.id}` : `g-${alvo.grupo.id}`) : "none"}
@@ -2992,10 +4224,158 @@ function stripConvocacaoTag(text: string) {
             {alvo ? (
               <>
                 {alvo.tipo === "usuario" &&
-                  mensagensPrivadas.map((m) => <div key={m.id}>{renderizarMensagemPrivadaWhats(m)}</div>)}
+                  diasPrivados.map((dia) => (
+                    <section key={`priv-dia-${dia.chave}`} className="space-y-3">
+                      <div
+                        className="sticky top-2 z-20 my-3 flex justify-center pointer-events-none"
+                        data-dia-chat={dia.chave}
+                      >
+                        <span className="rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 backdrop-blur-sm">
+                          {dia.titulo}
+                        </span>
+                      </div>
+                      {dia.mensagens.map((m) => {
+                        const mostrarDivisor =
+                          divisorPrivadas?.otherId === alvo.usuario.id &&
+                          divisorPrivadas.primeiraId === m.id;
+
+                        return (
+                          <div key={m.id} data-mensagem-id={m.id}>
+                            {mostrarDivisor && (
+                              <div
+                                data-primeira-nao-lida={m.id}
+                                className="my-4 flex justify-center scroll-mt-12"
+                              >
+                                <span className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-green-900 shadow-sm ring-1 ring-green-100">
+                                  {divisorPrivadas.quantidade}{" "}
+                                  {divisorPrivadas.quantidade === 1
+                                    ? "mensagem não lida"
+                                    : "mensagens não lidas"}
+                                </span>
+                              </div>
+                            )}
+                            {renderizarMensagemPrivadaWhats(m)}
+                          </div>
+                        );
+                      })}
+                    </section>
+                  ))}
 
                 {alvo.tipo === "grupo" &&
-                  mensagensGrupo.map((m) => <div key={m.id}>{renderizarMensagemGrupoWhats(m)}</div>)}
+                  diasGrupo.map((dia) => (
+                    <section key={`grupo-dia-${dia.chave}`} className="space-y-3">
+                      <div
+                        className="sticky top-2 z-20 my-3 flex justify-center pointer-events-none"
+                        data-dia-chat={dia.chave}
+                      >
+                        <span className="rounded-full bg-white/95 px-4 py-1.5 text-[11px] font-semibold text-gray-700 shadow-sm ring-1 ring-gray-200 backdrop-blur-sm">
+                          {dia.titulo}
+                        </span>
+                      </div>
+                      {dia.mensagens.map((m) => {
+                        const mostrarDivisor =
+                          divisorNaoLidas?.grupoId === alvo.grupo.id &&
+                          divisorNaoLidas.primeiraId === m.id;
+
+                        return (
+                          <div key={m.id} data-mensagem-id={m.id}>
+                            {mostrarDivisor && (
+                              <div
+                                data-primeira-nao-lida={m.id}
+                                className="my-4 flex justify-center scroll-mt-12"
+                              >
+                                <span className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-green-900 shadow-sm ring-1 ring-green-100">
+                                  {divisorNaoLidas.quantidade}{" "}
+                                  {divisorNaoLidas.quantidade === 1
+                                    ? "mensagem não lida"
+                                    : "mensagens não lidas"}
+                                </span>
+                              </div>
+                            )}
+                            {renderizarMensagemGrupoWhats(m)}
+                          </div>
+                        );
+                      })}
+                    </section>
+                  ))}
+
+                  {alvo?.tipo === "usuario" &&
+                    temMaisNovasPriv && (
+                      <button
+                        type="button"
+                        disabled={carregandoMaisNovas}
+                        onClick={() =>
+                          void carregarMensagensMaisNovas(
+                            "usuario",
+                            alvo.usuario.id
+                          )
+                        }
+                        className="mx-auto block rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-800 disabled:opacity-50"
+                      >
+                        {carregandoMaisNovas
+                          ? "Carregando..."
+                          : "Carregar mensagens mais recentes"}
+                      </button>
+                    )}
+
+                  {alvo?.tipo === "grupo" &&
+                    temMaisNovasGrupo && (
+                      <button
+                        type="button"
+                        disabled={carregandoMaisNovas}
+                        onClick={() =>
+                          void carregarMensagensMaisNovas(
+                            "grupo",
+                            alvo.grupo.id
+                          )
+                        }
+                        className="mx-auto block rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-800 disabled:opacity-50"
+                      >
+                        {carregandoMaisNovas
+                          ? "Carregando..."
+                          : "Carregar mensagens mais recentes"}
+                      </button>
+                    )}
+
+                    {alvo?.tipo === "usuario" &&
+                      divisorPrivadas?.otherId === alvo.usuario.id &&
+                      !temMaisNovasPriv && (
+                        <button
+                          type="button"
+                          className="mx-auto block rounded-lg border px-4 py-2 text-xs text-gray-600"
+                          onClick={async () => {
+                            const otherId = alvo.usuario.id;
+                            const ok = await markReadFromUser(otherId);
+
+                            if (ok) {
+                              setDivisorPrivadas(null);
+                              await fetchUnreadByUser();
+                            }
+                          }}
+                        >
+                          Marcar conversa como lida
+                        </button>
+                      )}
+
+                    {alvo?.tipo === "grupo" &&
+                      divisorNaoLidas?.grupoId === alvo.grupo.id &&
+                      !temMaisNovasGrupo && (
+                        <button
+                          type="button"
+                          className="mx-auto block rounded-lg border px-4 py-2 text-xs text-gray-600"
+                          onClick={async () => {
+                            const grupoId = alvo.grupo.id;
+                            const ok = await markReadFromGroup(grupoId);
+
+                            if (ok) {
+                              setDivisorNaoLidas(null);
+                              await fetchUnreadByGroup();
+                            }
+                          }}
+                        >
+                          Marcar grupo como lido
+                        </button>
+                      )}
 
                 {(carregandoMaisPriv || carregandoMaisGrupo) && (
                   <p className="text-center text-sm text-gray-400">Carregando mais...</p>
@@ -3008,18 +4388,14 @@ function stripConvocacaoTag(text: string) {
           </div>
 
           <div
-            className={`
-              sticky
-              ${
-                temSeletorContexto
-                  ? "bottom-[94px]"
-                  : "bottom-[47px]"
-              }
-              z-40
+            className="
+              relative
+              z-10
+              shrink-0
               bg-white
               border-t
               border-green-100
-            `}
+            "
           >
             <div className="mx-auto w-full sm:max-w-3xl px-3 sm:px-4 py-3 flex items-center gap-2">
               <input
@@ -3043,6 +4419,126 @@ function stripConvocacaoTag(text: string) {
                     ? "Este usuário desativou mensagens diretas."
                     : "Digite sua mensagem..."
                 }
+              />
+              <GravadorAudio
+                key={
+                  alvo?.tipo === "usuario"
+                    ? `u:${alvo.usuario.id}`
+                    : alvo?.tipo === "grupo"
+                      ? `g:${alvo.grupo.id}`
+                      : "sem-alvo"
+                }
+                disabled={
+                  !alvo ||
+                  (alvo.tipo === "usuario" && !dmPermitida)
+                }
+                onGravado={async (blob, duracaoMs) => {
+                  const destino = alvoRef.current;
+
+                  if (!destino || !usuarioId || !token) {
+                    throw new Error(
+                      "Sessão ou conversa indisponível."
+                    );
+                  }
+
+                  if (
+                    destino.tipo === "usuario" &&
+                    !dmPermitida
+                  ) {
+                    throw new Error(
+                      "Mensagens diretas desativadas."
+                    );
+                  }
+
+                  const arquivo = new FormData();
+
+                  const mime = blob.type.toLowerCase();
+
+                  const extensao = mime.includes("mp4")
+                    ? "m4a"
+                    : mime.includes("ogg")
+                      ? "ogg"
+                      : "webm";
+
+                  arquivo.append(
+                    "audio",
+                    blob,
+                    `voz.${extensao}`
+                  );
+
+                  arquivo.append(
+                    "audioDuracaoMs",
+                    String(duracaoMs)
+                  );
+
+                  if (destino.tipo === "usuario") {
+                    arquivo.append(
+                      "paraId",
+                      destino.usuario.id
+                    );
+                  }
+
+                  const url =
+                    destino.tipo === "usuario"
+                      ? `${API.BASE_URL}/api/mensagem/audio`
+                      : `${API.BASE_URL}/api/mensagem/grupos/${encodeURIComponent(
+                          destino.grupo.id
+                        )}/audio`;
+
+                  const resposta = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: arquivo,
+                  });
+
+                  if (!resposta.ok) {
+                    const dados = await resposta
+                      .json()
+                      .catch(() => null);
+
+                    throw new Error(
+                      dados?.error ||
+                      dados?.code ||
+                      `Falha no áudio (${resposta.status}).`
+                    );
+                  }
+
+                  if (destino.tipo === "usuario") {
+                    setLastMsgByUser((prev) => ({
+                      ...prev,
+                      [destino.usuario.id]:
+                        "🎤 Mensagem de voz",
+                    }));
+
+                    scrollPendenteRef.current = {
+                      tipo: "fim",
+                      conversa: `u:${destino.usuario.id}`,
+                    };
+
+                    await carregarMensagensPrivadas(
+                      destino.usuario.id,
+                      false
+                    );
+                  } else {
+                    setLastMsgByGroup((prev) => ({
+                      ...prev,
+                      [destino.grupo.id]:
+                        "🎤 Mensagem de voz",
+                    }));
+
+                    scrollPendenteRef.current = {
+                      tipo: "fim",
+                      conversa: `g:${destino.grupo.id}`,
+                    };
+
+                    await carregarMensagensDoGrupo(
+                      destino.grupo.id,
+                      false
+                    );
+                  }
+                }}
               />
               <button
                 onClick={enviarMensagem}

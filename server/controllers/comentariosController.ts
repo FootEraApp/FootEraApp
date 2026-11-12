@@ -97,8 +97,8 @@ export async function criarComentario(req: AuthenticatedRequest, res: Response) 
     });
 
     if (
-      String(post.usuarioId) !==
-      String(userId)
+      post.usuarioId &&
+      post.usuarioId !== userId
     ) {
       try {
         const nomeOrganizacao =

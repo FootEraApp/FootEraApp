@@ -4,11 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "rootDir": ".",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["client/src/*"],
-      "server/*": ["server/*"],
-      "@shared/*": ["shared/*"]
+      "@/*": ["./client/src/*"],
+      "server/*": ["./server/*"],
+      "@shared/*": ["./shared/*"]
     },
     "allowJs": true,
     "strict": true,

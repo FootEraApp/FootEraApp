@@ -7,6 +7,12 @@ import {
 import {
   getRoles,
 } from "../services/roles.js";
+import {
+  obterSupervisaoMenor,
+} from "../services/supervisaoMenor.js";
+import {
+  StatusResponsavelAtleta,
+} from "@prisma/client";
 
 export type VisibilidadePerfil =
   | "PUBLICO"
@@ -487,14 +493,15 @@ export async function podeVerPresenca(
   if (!target) {
     return false;
   }
+  const acesso = await avaliarPrivacidadePerfil(
+    viewerUsuarioId,
+    targetUsuarioId
+  );
 
-  const priv =
-    readPrivacyConfig(
-      target
-        .configuracoesPrivacidade
-    );
-
-  if (!priv.mostrarOnline) {
+  if (
+    !acesso.podeVerPerfil ||
+    !acesso.mostrarOnline
+  ) {
     return false;
   }
 
@@ -587,6 +594,58 @@ export async function avaliarPrivacidadePerfil(
       target
         .configuracoesPrivacidade
     );
+    const supervisao = await obterSupervisaoMenor(
+      targetUsuarioId
+    );
+
+  if (
+    supervisao.atletaId &&
+    supervisao.idade !== null &&
+    supervisao.idade < 12
+  ) {
+    const responsavel = await prisma.responsavelAtleta.findFirst({
+      where: {
+        atletaId: supervisao.atletaId,
+        status: StatusResponsavelAtleta.ATIVO,
+        principal: true,
+      },
+      select: {
+        permitirPerfilPublico: true,
+        permitirMensagensDiretas: true,
+        permitirMostrarEmail: true,
+      },
+    });
+    const configuracaoRaw = target.configuracoesPrivacidade;
+
+    const visibilidadeExplicita =
+      configuracaoRaw &&
+      typeof configuracaoRaw === "object" &&
+      !Array.isArray(configuracaoRaw)
+        ? normalizarVisibilidadePerfil(
+            (configuracaoRaw as Record<string, unknown>)
+              .visibilidadePerfil
+          )
+        : null;
+
+    if (
+      responsavel?.permitirPerfilPublico !== true ||
+      !visibilidadeExplicita
+    ) {
+      priv.visibilidadePerfil = "PRIVADO";
+      priv.perfilVisivel = false;
+    }
+
+    if (responsavel?.permitirMensagensDiretas !== true) {
+      priv.permitirMensagens = false;
+    }
+
+    if (responsavel?.permitirMostrarEmail !== true) {
+      priv.mostrarEmail = false;
+    }
+
+    // Não expor presença por padrão para menores.
+    priv.mostrarOnline = false;
+  }
 
   const isVisitor =
     !viewerUsuarioId;

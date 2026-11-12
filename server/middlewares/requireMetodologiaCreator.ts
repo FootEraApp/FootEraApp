@@ -2,6 +2,7 @@ import { prisma } from "../prisma.js";
 import {
   canPermission,
 } from "../services/permissions.js";
+import { getActiveContext } from "../services/activeContext.js";
 
 export async function requireMetodologiaCreateAccess(
   req: any,
@@ -64,13 +65,14 @@ export async function requireMetodologiaOwnership(
 
   const metodologia =
     await prisma.metodologia.findUnique({
-      where: {
-        id: metodologiaId,
-      },
-
+      where: { id: metodologiaId },
       select: {
         id: true,
         criadorUsuarioId: true,
+        clubeId: true,
+        escolinhaId: true,
+        marcaId: true,
+        federacaoId: true,
       },
     });
 
@@ -81,15 +83,99 @@ export async function requireMetodologiaOwnership(
     });
   }
 
+  const contexto = await getActiveContext(String(userId));
+
+  const ehInstitucional = Boolean(
+    metodologia.clubeId ||
+    metodologia.escolinhaId ||
+    metodologia.marcaId ||
+    metodologia.federacaoId
+  );
+
+  // Metodologia pessoal: respeitar autoria e contexto.
+  if (!ehInstitucional) {
+    const autorizado =
+      contexto?.kind === "PERSONAL" &&
+      metodologia.criadorUsuarioId === String(userId);
+
+    if (!autorizado) {
+      return res.status(403).json({
+        code: "METODOLOGIA_PERSONAL_ACCESS_DENIED",
+        message:
+          "Você não pode administrar esta metodologia pessoal.",
+      });
+    }
+
+    return next();
+  }
+
+  // Metodologia institucional: a autoria antiga não
+  // concede acesso após transferência da organização.
   if (
-    String(
-      metodologia.criadorUsuarioId
-    ) !==
-    String(userId)
+    contexto?.kind !== "ORGANIZATION" ||
+    !contexto.organizationId ||
+    !contexto.legacyOrganizationId
   ) {
     return res.status(403).json({
+      code: "ORGANIZATION_CONTEXT_REQUIRED",
       message:
-        "Apenas o criador da metodologia pode editar ou apagar este conteúdo.",
+        "Selecione a organização proprietária da metodologia.",
+    });
+  }
+
+  const legacyId = contexto.legacyOrganizationId;
+
+  const mesmaOrganizacao =
+    (contexto.organizationType === "ESCOLA" &&
+      metodologia.escolinhaId === legacyId) ||
+    (contexto.organizationType === "CLUBE" &&
+      metodologia.clubeId === legacyId) ||
+    (contexto.organizationType === "MARCA" &&
+      metodologia.marcaId === legacyId) ||
+    (contexto.organizationType === "FEDERACAO" &&
+      metodologia.federacaoId === legacyId);
+
+  if (!mesmaOrganizacao) {
+    return res.status(403).json({
+      code: "METODOLOGIA_ORGANIZATION_MISMATCH",
+      message:
+        "Esta metodologia não pertence à organização selecionada.",
+    });
+  }
+
+  // Validar a identidade da organização e a função
+  // no banco, sem confiar apenas no contexto salvo.
+  const membro = await prisma.membroOrganizacao.findUnique({
+    where: {
+      organizacaoId_usuarioId: {
+        organizacaoId: contexto.organizationId,
+        usuarioId: String(userId),
+      },
+    },
+    select: {
+      ativo: true,
+      funcao: true,
+      organizacao: {
+        select: {
+          ativo: true,
+        },
+      },
+    },
+  });
+
+  const gestorAtivo =
+    membro?.ativo === true &&
+    membro.organizacao.ativo === true &&
+    (
+      membro.funcao === "PROPRIETARIO" ||
+      membro.funcao === "ADMINISTRADOR"
+    );
+
+  if (!gestorAtivo) {
+    return res.status(403).json({
+      code: "METODOLOGIA_MANAGEMENT_DENIED",
+      message:
+        "Você não possui vínculo de gestão ativo com esta organização.",
     });
   }
 

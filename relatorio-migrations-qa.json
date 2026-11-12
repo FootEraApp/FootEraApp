@@ -1,0 +1,947 @@
+{
+  "banco": "footera_billing_qa",
+  "totalArquivos": 103,
+  "totalHistorico": 5,
+  "arquivosSemRegistro": 98,
+  "divergenciasChecksum": [
+    {
+      "nome": "20261022193000_responsavel_principal_unico",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": false,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    }
+  ],
+  "historicoSemArquivo": [],
+  "migrations": [
+    {
+      "nome": "20250828212550_init",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250828232318_add_favoritos",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250829193936_submissao_desafio_video_url_nullable_remove_unique",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20250829200400_adicao_unique",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250829203652_comentario_e_curtida_em_submissao",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250903194824_add_atleta_observado",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250903200042_atletaobservado_constraints",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20250903200159_atletaobservado_constraints",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250904204615_merge",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250910202955_add_usuario_olheiro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250911200832_add_campos_resultado_submissao",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250916172248_add_eventos",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250917171954_atleta_add_pontos_total",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250918183925_add_indicacao",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250918201010_add_exercicio_temporario",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250919190339_fix_treino_programado_duplicates",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20250919213545_add_olheiroid_to_atletaobservado",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20250923212507_resolucao_de_erros",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20250926184721_merge_25_de_setembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20250930172631_merge_30_de_setembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251008224426_ajustes_schema",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251010211043_add_professor_org_fields",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251022184951_add_email_verification",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251027192230_add_assinatura",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251028210539_merge_28_10",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251030182942_add_emailverification_relation",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251030203651_merge_30_de_outubro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251103175622_delete_account_cascade",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251103211354_add_treinos_salvos",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251105171642_merge_5_nov",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251107175119_merge_7_nov",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251110191113_merge_10_nov",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251112175922_jogos_elenco",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251117191426_merge_17_nov",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251118003847_elenco_formacao_json",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251124192105_add_data_nascimento_atleta",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251126171345_merge_26_de_nov",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251204190922_add_inscricoes_evento",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251204200419_update_evento_tipo",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251205222050_eventos_escolinha_inscricoes",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251209170248_merge_9_de_dezembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251211202607_add_feed_back",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251212201039_merge_12_12_25",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251214175117_atletaobservado_professor_cascade",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251216231030_fix_observados_add_olheiro_owner",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251219172516_merge_19_de_dezembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251219202752_update_avaliacao_treino",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20251223185418_merge_23_de_dezembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20251230174710_merge_30_de_dezembro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260108204208_merge_8_de_janeiro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260114173117_merge_14_de_janeiro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260122173135_add_parceiro_usuario",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260127203207_correcao_27_de_janeiro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260129024949_merge_28_de_janeiro",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260129200644_add_parceiro_to_treino_programado",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260203200414_metodologia",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260203211609_merge_03_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260206195715_merge_06_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260211192209_merge_11_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260218180738_merge_18_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260220170803_merge_20_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260223181951_merge_23_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260225173534_merge_25_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260227033640_merge_27_fevereiro_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260303184505_add_organizacao_gestor",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260306195049_merge_6_de_marco_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260311201404_merge_11_de_marco_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260316195135_merge_16_de_marco_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260325183054_merge_25_de_marco_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260331202303_merge_31_de_marco_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260410173250_merge_10_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260422182833_merge_22_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260424163116_merge_24_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260428171656_merge_28_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260429191655_merge_29_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20260430190341_merge_30_de_abril_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260504211739_add_aulas_ao_vivo",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260506182022_merge_6_de_maio_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260506194122_add_ivs_fields_aula_ao_vivo",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260511185047_add_ivs_recording_fields_aula_ao_vivo",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260512185445_merge_12_de_maio_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260518194131_merge_18_de_maio_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260520173802_merge_20_de_maio_26",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260728174602_add_maintenance_scheduled_at",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260904181859_merge_04_de_setembro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260904194149_adicionar_usuario_papeis",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260910150000_add_local_login_enabled",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": true,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260917205712_merge_17_de_setembro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260923143505_etapa15_organizacoes",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260923160000_etapa16_relacionamentos_organizacao",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260924113000_etapa17_active_context",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260928172811_merge_28_de_setembro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20260930154500_add_aula_ao_vivo_active_context",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": true,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261001124700_add_pagamento_active_context",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": true,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261001174804_inicio_01_de_outubro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261001174845_inicio_01_de_outubro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261005174433_merge_05_de_outubro_2026",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    },
+    {
+      "nome": "20261014180000_add_billing_comunicacao",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261019190000_add_transferencia_propriedade",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": true,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261020_creator_institucional",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261022193000_responsavel_principal_unico",
+      "possuiSql": true,
+      "registrado": true,
+      "aplicado": true,
+      "checksumConfere": false,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261026180000_add_cupom_reserva",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": true,
+      "possuiSqlManual": false
+    },
+    {
+      "nome": "20261026190000_pagamento_beneficio_contexto",
+      "possuiSql": true,
+      "registrado": false,
+      "aplicado": false,
+      "checksumConfere": null,
+      "possuiAlteracaoDados": false,
+      "possuiSqlManual": true
+    }
+  ]
+}

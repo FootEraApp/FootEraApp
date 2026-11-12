@@ -1,0 +1,230 @@
+﻿
+  server\controllers\billingController.ts:1417:
+  server\controllers\billingController.ts:1418:  if (assinatura.contextoKind === "ORGANIZATION") {
+  server\controllers\billingController.ts:1419:    return `organização (${tipo})`;
+  server\controllers\billingController.ts:1420:  }
+  server\controllers\billingController.ts:1421:
+  server\controllers\billingController.ts:1422:  if (assinatura.contextoKind === "PERSONAL") {
+  server\controllers\billingController.ts:1423:    return `perfil ${tipo}`;
+  server\controllers\billingController.ts:1424:  }
+  server\controllers\billingController.ts:1425:
+  server\controllers\billingController.ts:1426:  return `perfil ${tipo}`;
+  server\controllers\billingController.ts:1427:}
+  server\controllers\billingController.ts:1428:
+> server\controllers\billingController.ts:1429:async function criarNotificacaoBilling(args: {
+  server\controllers\billingController.ts:1430:  usuarioId: string;
+  server\controllers\billingController.ts:1431:  tipo: NotificacaoTipo;
+  server\controllers\billingController.ts:1432:  titulo: string;
+  server\controllers\billingController.ts:1433:  mensagem: string;
+  server\controllers\billingController.ts:1434:  link?: string | null;
+  server\controllers\billingController.ts:1435:}) {
+  server\controllers\billingController.ts:1436:  const existente = await prisma.notificacao.findFirst({
+  server\controllers\billingController.ts:1437:    where: {
+  server\controllers\billingController.ts:1438:      usuarioId: args.usuarioId,
+  server\controllers\billingController.ts:1439:      tipo: args.tipo,
+  server\controllers\billingController.ts:1440:      titulo: args.titulo,
+  server\controllers\billingController.ts:1441:      mensagem: args.mensagem,
+  server\controllers\billingController.ts:1442:    },
+  server\controllers\billingController.ts:1443:    orderBy: {
+  server\controllers\billingController.ts:1444:      createdAt: "desc",
+  server\controllers\billingController.ts:1445:    },
+  server\controllers\billingController.ts:1446:  });
+  server\controllers\billingController.ts:1447:
+  server\controllers\billingController.ts:1448:  if (existente) return existente;
+  server\controllers\billingController.ts:1449:
+  server\controllers\billingController.ts:1450:  const notif = await prisma.notificacao.create({
+  server\controllers\billingController.ts:1451:    data: {
+  server\controllers\billingController.ts:1452:      usuarioId: args.usuarioId,
+  server\controllers\billingController.ts:1453:      tipo: args.tipo,
+  server\controllers\billingController.ts:1454:      titulo: args.titulo,
+  server\controllers\billingController.ts:1455:      mensagem: args.mensagem,
+  server\controllers\billingController.ts:1456:      link: args.link ?? "/pagamentos",
+  server\controllers\billingController.ts:1457:      lida: false,
+  server\controllers\billingController.ts:1458:    } as any,
+  server\controllers\billingController.ts:1459:  });
+  server\controllers\billingController.ts:1460:
+  server\controllers\billingController.ts:1461:  try {
+  server\controllers\billingController.ts:1462:    getIO()
+  server\controllers\billingController.ts:1463:      ?.to(
+  server\controllers\billingController.ts:1464:        `u:${args.usuarioId}`
+  server\controllers\billingController.ts:1465:      )
+  server\controllers\billingController.ts:1466:      .emit(
+  server\controllers\billingController.ts:1467:        "notification:new",
+  server\controllers\billingController.ts:1468:        notif
+  server\controllers\billingController.ts:1469:      );
+  server\controllers\billingController.ts:1470:  } catch {}
+  server\controllers\billingController.ts:1471:
+  server\controllers\billingController.ts:1472:  try {
+  server\controllers\billingController.ts:1473:    await recomputeAndEmitBadge(args.usuarioId);
+  server\controllers\billingController.ts:1474:  } catch {}
+  server\controllers\billingController.ts:1475:
+  server\controllers\billingController.ts:1476:  return notif;
+  server\controllers\billingController.ts:1477:}
+  server\controllers\billingController.ts:1478:
+  server\controllers\billingController.ts:1479:
+  server\controllers\billingController.ts:1480:type TipoEventoBilling =
+  server\controllers\billingController.ts:1481:  | "VENCIMENTO_7_DIAS"
+  server\controllers\billingController.ts:1482:  | "BLOQUEIO"
+  server\controllers\billingController.ts:1483:  | "TRIAL_ENCERRADO";
+  server\controllers\billingController.ts:1484:
+  server\controllers\billingController.ts:1485:type ComunicacaoBillingArgs = {
+  server\controllers\billingController.ts:1486:  assinaturaId: string;
+  server\controllers\billingController.ts:1487:  usuarioId: string;
+  server\controllers\billingController.ts:1488:  cicloKey: string;
+  server\controllers\billingController.ts:1489:  evento: TipoEventoBilling;
+  server\controllers\billingController.ts:1490:  canal: BillingComunicacaoCanal;
+  server\controllers\billingController.ts:1491:  plano: string;
+  server\controllers\billingController.ts:1492:  contexto: string;
+  server\controllers\billingController.ts:1493:  dataVencimento: Date;
+  server\controllers\billingController.ts:1494:  diasRestantes?: number;
+  server\controllers\billingController.ts:1495:};
+  server\controllers\billingController.ts:1496:
+  server\controllers\billingController.ts:1497:const BILLING_MAX_TENTATIVAS = 5;
+  server\controllers\billingController.ts:1498:const BILLING_LEASE_MS = 30 * 60 * 1000;
+  server\controllers\billingController.ts:1499:const BILLING_RETRY_MS = 60 * 60 * 1000;
+  server\controllers\billingController.ts:1500:
+  server\controllers\billingController.ts:1501:async function processarComunicacaoBilling(
+  server\controllers\billingController.ts:1502:  args: ComunicacaoBillingArgs
+  server\controllers\billingController.ts:1503:): Promise<boolean> {
+  server\controllers\billingController.ts:1504:  const chave = {
+  server\controllers\billingController.ts:1505:    assinaturaId: args.assinaturaId,
+  server\controllers\billingController.ts:1506:    cicloKey: args.cicloKey,
+  server\controllers\billingController.ts:1507:    evento: args.evento,
+  server\controllers\billingController.ts:1508:    canal: args.canal,
+  server\controllers\billingController.ts:1509:  };
+  server\controllers\billingController.ts:1510:
+  server\controllers\billingController.ts:1511:  // Garante a existência da comunicação.
+  server\controllers\billingController.ts:1512:  // Se outra instância criar o mesmo registro,
+  server\controllers\billingController.ts:1513:  // o PostgreSQL ignora a inserção duplicada.
+  server\controllers\billingController.ts:1514:  await prisma.billingComunicacao.createMany({
+  server\controllers\billingController.ts:1515:    data: [
+  server\controllers\billingController.ts:1516:      {
+  server\controllers\billingController.ts:1517:        ...chave,
+  server\controllers\billingController.ts:1518:        status: BillingComunicacaoStatus.PENDENTE,
+  server\controllers\billingController.ts:1519:      },
+  server\controllers\billingController.ts:1520:    ],
+  server\controllers\billingController.ts:1521:    skipDuplicates: true,
+  server\controllers\billingController.ts:1522:  });
+  server\controllers\billingController.ts:1523:
+  server\controllers\billingController.ts:1524:  // Recupera o registro único, independentemente
+  server\controllers\billingController.ts:1525:  // de qual instância tenha realizado a inserção.
+  server\controllers\billingController.ts:1526:  const registro =
+  server\controllers\billingController.ts:1527:    await prisma.billingComunicacao.findUnique({
+  server\controllers\billingController.ts:1528:      where: {
+  server\controllers\billingController.ts:1529:        assinaturaId_cicloKey_evento_canal: chave,
+  server\controllers\billingController.ts:1714:      );
+  server\controllers\billingController.ts:1715:
+  server\controllers\billingController.ts:1716:    const mensagem =
+  server\controllers\billingController.ts:1717:      args.evento === "VENCIMENTO_7_DIAS"
+  server\controllers\billingController.ts:1718:        ? `A assinatura ${args.plano}, vinculada ao ${args.contexto}, vence em ${vencimentoFormatado}. Renove para continuar com seus benefícios.`
+  server\controllers\billingController.ts:1719:        : args.evento === "TRIAL_ENCERRADO"
+  server\controllers\billingController.ts:1720:          ? `O período grátis da assinatura ${args.plano}, vinculada ao ${args.contexto}, terminou em ${vencimentoFormatado}.`
+  server\controllers\billingController.ts:1721:          : `A assinatura ${args.plano}, vinculada ao ${args.contexto}, venceu em ${vencimentoFormatado} e foi bloqueada.`;
+  server\controllers\billingController.ts:1722:
+  server\controllers\billingController.ts:1723:    if (
+  server\controllers\billingController.ts:1724:      args.canal === BillingComunicacaoCanal.APP
+  server\controllers\billingController.ts:1725:    ) {
+> server\controllers\billingController.ts:1726:      await criarNotificacaoBilling({
+  server\controllers\billingController.ts:1727:        usuarioId: args.usuarioId,
+  server\controllers\billingController.ts:1728:        tipo:
+  server\controllers\billingController.ts:1729:          args.evento === "VENCIMENTO_7_DIAS"
+  server\controllers\billingController.ts:1730:            ? NotificacaoTipo.BILLING_WARNING
+  server\controllers\billingController.ts:1731:            : NotificacaoTipo.BILLING_BLOCKED,
+  server\controllers\billingController.ts:1732:        titulo,
+  server\controllers\billingController.ts:1733:        mensagem,
+  server\controllers\billingController.ts:1734:        link: "/pagamentos",
+  server\controllers\billingController.ts:1735:      });
+  server\controllers\billingController.ts:1736:    } else {
+  server\controllers\billingController.ts:1737:      if (!usuario.email?.trim()) {
+  server\controllers\billingController.ts:1738:        throw new Error(
+  server\controllers\billingController.ts:1739:          "Usuário sem e-mail cadastrado."
+  server\controllers\billingController.ts:1740:        );
+  server\controllers\billingController.ts:1741:      }
+  server\controllers\billingController.ts:1742:
+  server\controllers\billingController.ts:1743:      await sendBillingEmail({
+  server\controllers\billingController.ts:1744:        to: usuario.email,
+  server\controllers\billingController.ts:1745:        nome: usuario.nome,
+  server\controllers\billingController.ts:1746:        plano: args.plano,
+  server\controllers\billingController.ts:1747:        contexto: args.contexto,
+  server\controllers\billingController.ts:1748:        tipo:
+  server\controllers\billingController.ts:1749:          args.evento === "VENCIMENTO_7_DIAS"
+  server\controllers\billingController.ts:1750:            ? "VENCIMENTO"
+  server\controllers\billingController.ts:1751:            : args.evento === "TRIAL_ENCERRADO"
+  server\controllers\billingController.ts:1752:              ? "TRIAL_ENCERRADO"
+  server\controllers\billingController.ts:1753:              : "BLOQUEIO",
+  server\controllers\billingController.ts:1754:        diasRestantes: args.diasRestantes,
+  server\controllers\billingController.ts:1755:        dataVencimento: args.dataVencimento,
+  server\controllers\billingController.ts:1756:      });
+  server\controllers\billingController.ts:1757:    }
+  server\controllers\billingController.ts:1758:
+  server\controllers\billingController.ts:1759:    const finalizacao =
+  server\controllers\billingController.ts:1760:      await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1761:        where: {
+  server\controllers\billingController.ts:1762:          id: registro.id,
+  server\controllers\billingController.ts:1763:          status: BillingComunicacaoStatus.PROCESSANDO,
+  server\controllers\billingController.ts:1764:          tentativas: tentativaAtual,
+  server\controllers\billingController.ts:1765:        },
+  server\controllers\billingController.ts:1766:        data: {
+  server\controllers\billingController.ts:1767:          status: BillingComunicacaoStatus.ENVIADO,
+  server\controllers\billingController.ts:1768:          enviadoEm: new Date(),
+  server\controllers\billingController.ts:1769:          ultimoErro: null,
+  server\controllers\billingController.ts:1770:          proximaTentativaEm: null,
+  server\controllers\billingController.ts:1771:        },
+  server\controllers\billingController.ts:1772:      });
+  server\controllers\billingController.ts:1773:
+  server\controllers\billingController.ts:1774:    if (finalizacao.count === 0) {
+  server\controllers\billingController.ts:1775:      console.warn(
+  server\controllers\billingController.ts:1776:        "[billing] Tentativa perdeu a posse da comunicação:",
+  server\controllers\billingController.ts:1777:        {
+  server\controllers\billingController.ts:1778:          comunicacaoId: registro.id,
+  server\controllers\billingController.ts:1779:          tentativa: tentativaAtual,
+  server\controllers\billingController.ts:1780:        }
+  server\controllers\billingController.ts:1781:      );
+  server\controllers\billingController.ts:1782:
+  server\controllers\billingController.ts:1783:      return false;
+  server\controllers\billingController.ts:1784:    }
+  server\controllers\billingController.ts:1785:
+  server\controllers\billingController.ts:1786:    return true;
+  server\controllers\billingController.ts:1787:  } catch (error) {
+  server\controllers\billingController.ts:1788:    const erro =
+  server\controllers\billingController.ts:1789:      error instanceof Error
+  server\controllers\billingController.ts:1790:        ? error.message
+  server\controllers\billingController.ts:1791:        : String(error);
+  server\controllers\billingController.ts:1792:
+  server\controllers\billingController.ts:1793:    const proximaTentativaEm = new Date(
+  server\controllers\billingController.ts:1794:      Date.now() + BILLING_RETRY_MS
+  server\controllers\billingController.ts:1795:    );
+  server\controllers\billingController.ts:1796:
+  server\controllers\billingController.ts:1797:    await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1798:      where: {
+  server\controllers\billingController.ts:1799:        id: registro.id,
+  server\controllers\billingController.ts:1800:        status: BillingComunicacaoStatus.PROCESSANDO,
+  server\controllers\billingController.ts:1801:        tentativas: tentativaAtual,
+  server\controllers\billingController.ts:1802:      },
+  server\controllers\billingController.ts:1803:      data: {
+  server\controllers\billingController.ts:1804:        status: BillingComunicacaoStatus.FALHOU,
+  server\controllers\billingController.ts:1805:        ultimoErro: erro.slice(0, 1000),
+  server\controllers\billingController.ts:1806:        proximaTentativaEm,
+  server\controllers\billingController.ts:1807:      },
+  server\controllers\billingController.ts:1808:    });
+  server\controllers\billingController.ts:1809:
+  server\controllers\billingController.ts:1810:    console.error(
+  server\controllers\billingController.ts:1811:      "[billing] Falha na comunicação:",
+  server\controllers\billingController.ts:1812:      {
+  server\controllers\billingController.ts:1813:        assinaturaId: args.assinaturaId,
+  server\controllers\billingController.ts:1814:        evento: args.evento,
+  server\controllers\billingController.ts:1815:        canal: args.canal,
+  server\controllers\billingController.ts:1816:        erro,
+  server\controllers\billingController.ts:1817:      }
+  server\controllers\billingController.ts:1818:    );
+  server\controllers\billingController.ts:1819:
+  server\controllers\billingController.ts:1820:    return false;
+  server\controllers\billingController.ts:1821:  }
+  server\controllers\billingController.ts:1822:}
+  server\controllers\billingController.ts:1823:
+  server\controllers\billingController.ts:1824:async function enviarComunicacoesBilling(
+  server\controllers\billingController.ts:1825:  args: Omit<
+  server\controllers\billingController.ts:1826:    ComunicacaoBillingArgs,
+
+
+

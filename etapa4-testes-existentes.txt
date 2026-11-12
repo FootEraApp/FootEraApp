@@ -1,0 +1,42 @@
+﻿
+Path                                                                                LineNumber Line                                                           
+----                                                                                ---------- ----                                                           
+C:\dev\FootEraApp-app\testar-estorno-transporte-integrado-qa.ts                             32     executarFluxoEstornoIntegradoQa,                           
+C:\dev\FootEraApp-app\testar-estorno-transporte-integrado-qa.ts                            166       await executarFluxoEstornoIntegradoQa(                   
+C:\dev\FootEraApp-app\testar-estorno-transporte-integrado-qa.ts                            187       await executarFluxoEstornoIntegradoQa(                   
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                        53     finalizarCompensacaoEventoTransacionalQa,                  
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                       213       finalizarCompensacaoEventoTransacionalQa(                
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                       278     finalizarCompensacaoEventoTransacionalQa(pagamentoId),     
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                       279     finalizarCompensacaoEventoTransacionalQa(pagamentoId),     
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                       364     await finalizarCompensacaoEventoTransacionalQa(            
+C:\dev\FootEraApp-app\testar-finalizacao-transacional-integral-qa.ts                       430       await finalizarCompensacaoEventoTransacionalQa(          
+C:\dev\FootEraApp-app\testar-persistencia-estorno-concorrencia-qa.ts                        58     adquirirExecucaoEnvioEstornoQa,                            
+C:\dev\FootEraApp-app\testar-persistencia-estorno-concorrencia-qa.ts                       194       adquirirExecucaoEnvioEstornoQa(pagamentoId),             
+C:\dev\FootEraApp-app\testar-persistencia-estorno-concorrencia-qa.ts                       195       adquirirExecucaoEnvioEstornoQa(pagamentoId),             
+C:\dev\FootEraApp-app\testar-persistencia-estorno-concorrencia-qa.ts                       225       await adquirirExecucaoEnvioEstornoQa(                    
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                               32     adquirirExecucaoEnvioEstornoQa,                            
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                               33     registrarResultadoEnvioEstornoQa,                          
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                               34     executarFluxoEstornoIntegradoQa,                           
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                              147       registrarResultadoEnvioEstornoQa(                        
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                              161       registrarResultadoEnvioEstornoQa(                        
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                              223     await executarFluxoEstornoIntegradoQa(                     
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                              246     await executarFluxoEstornoIntegradoQa(                     
+C:\dev\FootEraApp-app\testar-registro-evidencia-estorno-qa.ts                              271       await registrarResultadoEnvioEstornoQa(                  
+C:\dev\FootEraApp-app\testar-transporte-estorno-http-qa.ts                                   6     testarTransporteEstornoMercadoPagoQa,                      
+C:\dev\FootEraApp-app\testar-transporte-estorno-http-qa.ts                                  27     testarTransporteEstornoMercadoPagoQa({                     
+C:\dev\FootEraApp-app\testar-webhook-compensacao-concorrencia-qa.ts                         43     finalizarCompensacaoEventoTransacionalQa,                  
+C:\dev\FootEraApp-app\testar-webhook-compensacao-concorrencia-qa.ts                        166       finalizarCompensacaoEventoTransacionalQa(                
+C:\dev\FootEraApp-app\testar-webhook-compensacao-concorrencia-qa.ts                        243         await finalizarCompensacaoEventoTransacionalQa(        
+C:\dev\FootEraApp-app\testar-webhook-compensacao-concorrencia-qa.ts                        311       await finalizarCompensacaoEventoTransacionalQa(          
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts                9   testarTransporteEstornoMercadoPagoQa,                        
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts              716 export async function adquirirExecucaoEnvioEstornoQa(          
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts              999 export async function registrarResultadoEnvioEstornoQa(        
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts             1247 export async function executarFluxoEstornoIntegradoQa(         
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts             1264     await adquirirExecucaoEnvioEstornoQa(pagamentoId);         
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts             1279     await testarTransporteEstornoMercadoPagoQa({               
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoEnvioService.ts             1332     await registrarResultadoEnvioEstornoQa(                    
+C:\dev\FootEraApp-app\server\services\billingCompensacaoEventoFinalizacaoService.ts        548 export async function finalizarCompensacaoEventoTransacionalQa(
+C:\dev\FootEraApp-app\server\services\billingEstornoMercadoPagoGateway.ts                  148 export async function testarTransporteEstornoMercadoPagoQa(    
+
+
+

@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { addDays } from "date-fns";
-import { sendEmailVerification } from "../utils/mailer.js";
+import { sendBillingEmail } from "../utils/mailer.js";
 
 const prisma = new PrismaClient();
 
@@ -24,15 +24,15 @@ export async function processarRenovacoesDiarias() {
 
   for (const ass of quaseVencendo) {
     try {
-      await sendEmailVerification({
+      await sendBillingEmail({
         to: ass.usuario.email,
-        subject: "Sua assinatura FootEra está perto de renovar",
-        text: `Olá, ${ass.usuario.nome || ass.usuario.nomeDeUsuario},
-Sua assinatura do plano ${ass.plano} renova em ${ass.renovaEm.toLocaleDateString(
-          "pt-BR"
-        )}.
-Acesse o app para revisar seu plano ou cancelar se desejar.`,
-      } as any); 
+        nome: ass.usuario.nome,
+        plano: ass.plano,
+        contexto: "seu perfil",
+        tipo: "VENCIMENTO",
+        diasRestantes: DIAS_AVISO,
+        dataVencimento: ass.renovaEm,
+      });
 
       await prisma.assinatura.update({
         where: { id: ass.id },
@@ -52,24 +52,37 @@ Acesse o app para revisar seu plano ou cancelar se desejar.`,
   });
 
   for (const ass of vencidas) {
-    await prisma.assinatura.update({
-      where: { id: ass.id },
+    const agora = new Date();
+
+    const resultado = await prisma.assinatura.updateMany({
+      where: {
+        id: ass.id,
+        ativo: true,
+        renovaEm: {
+          lt: agora,
+        },
+      },
       data: {
         ativo: false,
-        canceledAt: new Date(),
+        canceledAt: agora,
+        status: "BLOQUEADA",
+        bloqueadoEm: agora,
       },
     });
 
+    if (resultado.count === 0) {
+      continue;
+    }
+
     try {
-      await sendEmailVerification({
+      await sendBillingEmail({
         to: ass.usuario.email,
-        subject: "Sua assinatura FootEra expirou",
-        text: `Olá, ${ass.usuario.nome || ass.usuario.nomeDeUsuario},
-Sua assinatura do plano ${ass.plano} expirou em ${ass.renovaEm.toLocaleDateString(
-          "pt-BR"
-        )}.
-Você pode reativá-la a qualquer momento na área de pagamentos da plataforma.`,
-      } as any);
+        nome: ass.usuario.nome,
+        plano: ass.plano,
+        contexto: "seu perfil",
+        tipo: "BLOQUEIO",
+        dataVencimento: ass.renovaEm,
+      });
     } catch (e) {
       console.error("Falha ao informar expiração:", e);
     }

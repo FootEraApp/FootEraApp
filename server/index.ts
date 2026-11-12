@@ -35,8 +35,10 @@ if (ffprobeStatic?.path) {
 console.log("[ffmpeg] path:", ffmpegStatic);
 console.log("[ffprobe] path:", ffprobeStatic?.path);
 
+import {
+  iniciarWorkerDocumentosNascimento,
+} from "./services/documentosNascimentoWorkerService.js";
 import { requireAdmin } from "./middlewares/guards.js";
-import { processarRenovacoesDiarias } from "./services/billingscheduler.js";
 import { runColdStorageJob } from "./jobs/coldStorageJob.js";
 import { UPLOADS_ROOT, ensureUploadDirs } from "./utils/uploads.js";
 import { gerarSnapshotRanking } from "./jobs/rankingSnapshot.js";
@@ -48,8 +50,11 @@ import { purgeDeletedAccounts } from "./jobs/purgeDeletedAccounts.js";
 import { startNotificationScheduler } from "./services/notificationScheduler.js";
 import { startReplayScheduler } from "./services/replayScheduler.js";
 import { startMaintenanceScheduler } from "./services/maintenanceScheduler.js";
-
+import {
+  iniciarWorkerChatAudio,
+} from "./services/chatAudioWorkerService.js";
 import adminUsuariosRoutes from "./routes/adminUsuarios.js";
+import adminCorrecaoNascimentoRoutes from "./routes/adminCorrecaoNascimento.js";
 import adminRoutes from "./routes/admin.js";
 import adminModeracaoRoutes from "./routes/adminModeracao.js";
 import atletaRoutes from "./routes/atleta.js";
@@ -74,6 +79,7 @@ import mensagemRoutes from "./routes/mensagem.js";
 import midiaRoutes from "./routes/midia.js";
 import notificacoesRoutes from "./routes/notificacoes.js";
 import perfilRoutes from "./routes/perfil.js";
+import correcaoNascimentoRoutes from "./routes/correcaoNascimento.js";
 import pontuacaoRoutes from "./routes/pontuacao.js";
 import postRoutes from "./routes/post.js";
 import professorRoutes from "./routes/professores.js";
@@ -138,6 +144,11 @@ import permissoesRoutes from "./routes/permissoesRoutes.js";
 import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
 import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
 import { processExpiringSubscriptions } from "./controllers/billingController.js";
+import { prisma as prismaBilling } from "./prisma.js";
+import {
+  consultarPagamentoMercadoPago,
+  classificarConciliacaoMercadoPago,
+} from "./services/billingConciliacaoMercadoPagoService.js";
 import googleAuthRoutes from "./routes/googleAuth.js";
 import creatorRoutes from "./routes/creator.js";
 import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
@@ -157,10 +168,20 @@ const server = http.createServer(app);
 
 setupSocket(server);
 ensureUploadDirs();
-startExpiredTrainingsJob();
-startNotificationScheduler();
-startMaintenanceScheduler();
-startReplayScheduler();
+
+if (process.env.NODE_ENV !== "test") {
+  startExpiredTrainingsJob();
+  startNotificationScheduler();
+  startMaintenanceScheduler();
+  startReplayScheduler();
+
+  iniciarWorkerChatAudio();
+  iniciarWorkerDocumentosNascimento();
+} else {
+  console.log(
+    "[QA] Schedulers gerais desativados no ambiente de teste."
+  );
+}
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 const PORT = Number(process.env.PORT) || 3001;
@@ -297,11 +318,15 @@ app.use("/api/auth/google", googleAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cadastro", cadastroRoutes);
 app.use("/api/termos", termoRoutes);
-app.use("/api/ranking", rankingRoutes);    
-app.use("/api/explorar", explorarRoutes);  
+app.use("/api/ranking", rankingRoutes);
+app.use("/api/explorar", explorarRoutes);
 app.use("/api/legal", legalRoutes);
 app.use("/api/catalogo", catalogoRoutes);
 app.use("/api/admin/usuarios", adminUsuariosRoutes);
+app.use(
+  "/api/admin/correcoes-nascimento",
+  adminCorrecaoNascimentoRoutes
+);
 app.use("/api/admin/assinantes", adminAssinantesRoutes);
 app.use("/api/admin/moderacao", authenticateToken, requireAdmin, adminModeracaoRoutes);
 app.use("/api/admin/metodologias", adminMetodologiasRoutes);
@@ -318,7 +343,7 @@ app.use("/api/amigos", authenticateToken, amigosRoutes);
 app.use("/api/categorias", authenticateToken, categoriasRoutes);
 app.use("/api/clubes", authenticateToken, clubeRoutes);
 app.use("/api/configuracoes-perfil", configuracoesPerfilRoutes);
-app.use("/api/configuracoes", configuracoesRoutes); 
+app.use("/api/configuracoes", configuracoesRoutes);
 app.use("/api/conquistas", authenticateToken, conquistasRoutes);
 app.use("/api/desafios", desafiosRoutes);
 app.use("/api/desafios/em-grupo", authenticateToken, desafiosEmGrupoRoutes);
@@ -335,6 +360,10 @@ app.use("/api/notificacoes", authenticateToken, notificacoesRoutes);
 app.use("/api/pontuacao", authenticateToken, pontuacaoRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/perfil", perfilRoutes);
+app.use(
+  "/api/correcao-nascimento",
+  correcaoNascimentoRoutes
+);
 app.use("/api/post", postRoutes);
 app.use("/api/presenca", authenticateToken, presencaRoutes);
 app.use("/api/professores", authenticateToken, professorRoutes);
@@ -410,25 +439,46 @@ server.listen({ port: PORT, host: "0.0.0.0" }, () => {
   }
 });
 
-cron.schedule("0 4 * * *", async () => {
+if (process.env.NODE_ENV !== "test") {
+  cron.schedule("0 4 * * *", async () => {
   const now = new Date();
   await prisma.atletaHistoricoVinculo.deleteMany({
     where: { expiraEm: { lt: now } },
   });
-});
+})};
 
+if (process.env.NODE_ENV !== "test") {
 cron.schedule("30 3 * * *", async () => {
+  if (
+    process.env.ENABLE_ACCOUNT_PURGE !== "true"
+  ) {
+    console.log(
+      "[purgeDeletedAccounts] Desativado até a validação da exclusão definitiva."
+    );
+    return;
+  }
+
   try {
     const n = await purgeDeletedAccounts();
-    console.log(`[purgeDeletedAccounts] removidos: ${n}`);
-  } catch (e) {
-    console.error("[purgeDeletedAccounts] erro", e);
+
+    console.log(
+      `[purgeDeletedAccounts] removidos: ${n}`
+    );
+  } catch (error) {
+    console.error(
+      "[purgeDeletedAccounts] erro:",
+      error
+    );
   }
 });
 
-cron.schedule("0 3 * * *", async () => {
-  await processarRenovacoesDiarias();
-  runColdStorageJob().catch((e) => console.error("Cold storage job failed", e));
+cron.schedule("0 3 * * *", () => {
+  runColdStorageJob().catch((error) => {
+    console.error(
+      "[coldStorage] Erro na rotina diária:",
+      error
+    );
+  });
 });
 
 cron.schedule("0 2 * * *", async () => {
@@ -438,25 +488,184 @@ cron.schedule("0 2 * * *", async () => {
     console.error("❌ Falha snapshot ranking", e);
   }
 });
+}
 
 process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:", reason));
 process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
 
-setInterval(async () => {
-  try { await limparTreinosSalvosExpirados({} as any, { json(){} } as any); } catch {}
-}, 24 * 60 * 60 * 1000);
+if (process.env.NODE_ENV !== "test") {
+  setInterval(async () => {
+    try {
+      await limparTreinosSalvosExpirados(
+        {} as any,
+        { json() {} } as any
+      );
+    } catch (error) {
+      console.error(
+        "[limparTreinosSalvosExpirados] Falha:",
+        error
+      );
+    }
+  }, 24 * 60 * 60 * 1000);
+}
+
+const BILLING_SCHEDULER_ENABLED =
+  process.env.NODE_ENV === "production" &&
+  process.env.ENABLE_BILLING_SCHEDULER === "true";
+
+let billingEmExecucao = false;
 
 async function runBillingDailyCheck() {
+  if (!BILLING_SCHEDULER_ENABLED) {
+    return;
+  }
+
+  if (billingEmExecucao) {
+    console.log(
+      "[billing] Verificação anterior ainda está em execução."
+    );
+    return;
+  }
+
+  billingEmExecucao = true;
+
   try {
-    const result = await processExpiringSubscriptions();
-    console.log("[billing] rotina diária executada:", result);
-  } catch (err) {
-    console.error("[billing] erro na rotina diária:", err);
+    const result =
+      await processExpiringSubscriptions();
+
+    console.log(
+      "[billing] Rotina executada:",
+      result
+    );
+  } catch (error) {
+    console.error(
+      "[billing] Erro na rotina:",
+      error
+    );
+  } finally {
+    billingEmExecucao = false;
   }
 }
 
-runBillingDailyCheck();
+if (BILLING_SCHEDULER_ENABLED) {
+  console.log(
+    "[billing] Scheduler de assinaturas ativado."
+  );
 
-setInterval(() => {
-  runBillingDailyCheck();
-}, 12 * 60 * 60 * 1000);
+  void runBillingDailyCheck();
+
+  setInterval(() => {
+    void runBillingDailyCheck();
+  }, 12 * 60 * 60 * 1000);
+} else {
+  console.log(
+    "[billing] Scheduler automático desativado."
+  );
+}
+
+const MP_CONCILIACAO_SCHEDULER_ENABLED =
+  process.env.NODE_ENV === "production" &&
+  process.env.ENABLE_MP_CONCILIACAO_SCHEDULER === "true";
+
+let mpConciliacaoEmExecucao = false;
+
+async function revisarPagamentosMercadoPago() {
+  if (
+    !MP_CONCILIACAO_SCHEDULER_ENABLED ||
+    mpConciliacaoEmExecucao
+  ) {
+    return;
+  }
+
+  if (!process.env.MP_ACCESS_TOKEN) {
+    console.warn(
+      "[mp-conciliacao] Token nao configurado."
+    );
+    return;
+  }
+
+  mpConciliacaoEmExecucao = true;
+
+  try {
+    const pagamentos =
+      await prismaBilling.pagamento.findMany({
+        where: {
+          provider: "MERCADOPAGO",
+          status: "PENDENTE",
+        },
+        orderBy: {
+          criadoEm: "asc",
+        },
+        take: 20,
+      });
+
+    for (const pagamento of pagamentos) {
+      const referencia =
+        pagamento.providerRef ?? "";
+
+      // Preferencias nao sao IDs de pagamento.
+      if (!/^\d+$/.test(referencia)) {
+        continue;
+      }
+
+      try {
+        const retorno =
+          await consultarPagamentoMercadoPago(
+            referencia
+          );
+
+        const resultado =
+          classificarConciliacaoMercadoPago(
+            {
+              id: pagamento.id,
+              provider: pagamento.provider ?? "",
+              providerRef: pagamento.providerRef,
+              valor: pagamento.valor,
+              moeda: pagamento.moeda,
+              status: pagamento.status,
+            },
+            retorno
+          );
+
+        console.log(
+          "[mp-conciliacao]",
+          {
+            pagamentoId: pagamento.id,
+            decisao: resultado.acao,
+            motivo: resultado.motivo,
+          }
+        );
+
+        // SOMENTE DIAGNOSTICO.
+        // Nao aprova nem cancela neste scheduler.
+      } catch (error) {
+        console.error(
+          "[mp-conciliacao] Falha na consulta:",
+          pagamento.id,
+          error
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      "[mp-conciliacao] Erro geral:",
+      error
+    );
+  } finally {
+    mpConciliacaoEmExecucao = false;
+  }
+}
+
+if (MP_CONCILIACAO_SCHEDULER_ENABLED) {
+  console.log(
+    "[mp-conciliacao] Scheduler de leitura ativado."
+  );
+
+  cron.schedule("*/15 * * * *", () => {
+    void revisarPagamentosMercadoPago();
+  });
+} else {
+  console.log(
+    "[mp-conciliacao] Scheduler desativado."
+  );
+}

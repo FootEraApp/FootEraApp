@@ -9,16 +9,26 @@ import {
   listarHistoricoAtletasEscolinha,
   desvincularAtletaDaEscolinha
 } from "../controllers/escolinhasController.js";
+import { autorizarOrganizacaoLegada } from "../middlewares/autorizarOrganizacaoLegada.js";
+import { requireAdmin } from "../middlewares/guards.js";
 
 const router = express.Router();
 
-router.post("/:escolinhaId/desvincular-atleta", desvincularAtletaDaEscolinha);
 router.get("/:escolinhaId/historico-atletas", listarHistoricoAtletasEscolinha);
 router.get("/relatorios/retencao", relatorioRetencaoEscolinha);
 router.get("/:id", getEscolinhaById);
 router.get("/", getEscolinhas);
-router.post("/", createEscolinha);
-router.put("/:id", updateEscolinha);
-router.delete("/:id", deleteEscolinha);
+router.post(
+  "/:escolinhaId/desvincular-atleta",
+  autorizarOrganizacaoLegada("ESCOLINHA"),
+  desvincularAtletaDaEscolinha,
+);
+router.post("/", requireAdmin, createEscolinha);
+router.put(
+  "/:id",
+  autorizarOrganizacaoLegada("ESCOLINHA"),
+  updateEscolinha,
+);
+router.delete("/:id", requireAdmin, deleteEscolinha);
 
 export default router;

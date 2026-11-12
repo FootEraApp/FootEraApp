@@ -9,6 +9,7 @@ import { toast } from "@/lib/toast";
 import {
   UserContext,
 } from "@/context/UserContext.js";
+import socket from "../services/socket.js";
 
 type StatusSolicitacao = "pendente" | "ativa";
 
@@ -440,34 +441,88 @@ export default function PaginaNotificacoes() {
 
   useEffect(() => {
     const token = Storage.token;
+
     if (!token) {
+      setNotificacoes([]);
       setLoadingNotificacoes(false);
       return;
     }
 
-    (async () => {
-      try {
-        const r = await fetch(NOTIFS_BASE, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    let ativo = true;
 
-        if (!r.ok) {
-          console.warn("GET /notificacoes/me falhou:", r.status, await r.text());
+    const carregarNotificacoes = async () => {
+      try {
+        const resposta = await fetch(
+          NOTIFS_BASE,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!resposta.ok) {
+          console.warn(
+            "[notificacoes] Falha ao atualizar:",
+            resposta.status
+          );
           return;
         }
 
-        const json = await r.json();
-        const items: NotificacaoItem[] = Array.isArray(json?.items)
-          ? json.items
-          : [];
+        const json = await resposta.json();
 
-        setNotificacoes(items);
-      } catch (e) {
-        console.error("Erro ao buscar notificações", e);
+        const items: NotificacaoItem[] =
+          Array.isArray(json?.items)
+            ? json.items
+            : [];
+
+        if (ativo) {
+          setNotificacoes(items);
+        }
+      } catch (erro) {
+        console.warn(
+          "[notificacoes] Erro ao carregar:",
+          erro
+        );
       } finally {
-        setLoadingNotificacoes(false);
+        if (ativo) {
+          setLoadingNotificacoes(false);
+        }
       }
-    })();
+    };
+
+    const atualizarAoVoltar = () => {
+      if (document.visibilityState === "visible") {
+        void carregarNotificacoes();
+      }
+    };
+
+    const atualizarViaSocket = () => {
+      void carregarNotificacoes();
+    };
+
+    void carregarNotificacoes();
+
+    socket.on("badge:update", atualizarViaSocket);
+
+    document.addEventListener(
+      "visibilitychange",
+      atualizarAoVoltar
+    );
+
+    return () => {
+      ativo = false;
+
+      socket.off(
+        "badge:update",
+        atualizarViaSocket
+      );
+
+      document.removeEventListener(
+        "visibilitychange",
+        atualizarAoVoltar
+      );
+    };
   }, [activeContext?.key]);
 
   useEffect(() => {

@@ -9,22 +9,25 @@ datasource db {
 }
 
 model Usuario {
-  id            String      @id @default(uuid())
-  nomeDeUsuario String      @unique
-  senhaHash     String
-  nome          String
-  email         String      @unique
-  foto          String?
-  tipo          TipoUsuario
+  id                           String      @id @default(uuid())
+  nomeDeUsuario                String      @unique
+  senhaHash                    String
+  nome                         String
+  email                        String      @unique
+  foto                         String?
+  tipo                         TipoUsuario
+  aniversarioElegivelApartirDe DateTime?
 
+  solicitacoesCorrecaoNascimento  SolicitacaoCorrecaoNascimento[]
+  cuponsAniversario               CupomAniversarioUso[]
   papeis                          UsuarioPapel[]
-  atletasSobResponsabilidade      ResponsavelAtleta[]           @relation("ResponsavelAtletaResponsavel")
+  atletasSobResponsabilidade      ResponsavelAtleta[]             @relation("ResponsavelAtletaResponsavel")
   membrosOrganizacao              MembroOrganizacao[]
   contextoOrganizacaoId           String?
-  contextoOrganizacao             Organizacao?                  @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
+  contextoOrganizacao             Organizacao?                    @relation("ContextoOrganizacaoAtivo", fields: [contextoOrganizacaoId], references: [id], onDelete: SetNull)
   organizacoesSeguidas            OrganizacaoSeguidor[]
-  convitesCriados                 Convite[]                     @relation("ConviteCriador")
-  convitesRecebidos               Convite[]                     @relation("ConviteDestinatario")
+  convitesCriados                 Convite[]                       @relation("ConviteCriador")
+  convitesRecebidos               Convite[]                       @relation("ConviteDestinatario")
   convitesUsados                  ConviteUso[]
   cidade                          String?
   estado                          String?
@@ -35,14 +38,14 @@ model Usuario {
   responsavelEmail                String?
   responsavelTelefone             String?
   configuracoesPrivacidade        Json?
-  dataCriacao                     DateTime                      @default(now())
+  dataCriacao                     DateTime                        @default(now())
   codigo                          String?
-  verified                        Boolean                       @default(false)
-  destaque                        Boolean                       @default(false)
+  verified                        Boolean                         @default(false)
+  destaque                        Boolean                         @default(false)
   configuracoesNotificacoes       Json?
   senhaAtualizadaEm               DateTime?
-  tokenVersion                    Int                           @default(0)
-  parceiro                        Boolean                       @default(false)
+  tokenVersion                    Int                             @default(0)
+  parceiro                        Boolean                         @default(false)
   lastLoginAt                     DateTime?
   lastLogoutAt                    DateTime?
   lastSeenAt                      DateTime?
@@ -51,28 +54,29 @@ model Usuario {
   blockedAt                       DateTime?
   blockedReason                   String?
   reactivatedAt                   DateTime?
-  status                          AccountStatus                 @default(ATIVO)
+  status                          AccountStatus                   @default(ATIVO)
   cep                             String?
-  authProvider                    AuthProvider                  @default(LOCAL)
-  localLoginEnabled               Boolean                       @default(true)
+  authProvider                    AuthProvider                    @default(LOCAL)
+  localLoginEnabled               Boolean                         @default(true)
   googleEmail                     String?
   googleLinkedAt                  DateTime?
   googlePicture                   String?
-  googleSub                       String?                       @unique
+  googleSub                       String?                         @unique
   logradouro                      String?
   administrador                   Administrador?
-  amigosDe                        Amigo[]                       @relation("AmigoUsuario")
-  amigos                          Amigo[]                       @relation("UsuarioAmigo")
+  amigosDe                        Amigo[]                         @relation("AmigoUsuario")
+  amigos                          Amigo[]                         @relation("UsuarioAmigo")
   assinatura                      Assinatura[]
+  pagamentoBeneficios             PagamentoBeneficio[]
   atividadesRecentes              AtividadeRecente[]
   atleta                          Atleta?
-  aulasAoVivoComoConvidado        AulaAoVivo[]                  @relation("AulaAoVivoConvidado")
-  aulasAoVivoCriadas              AulaAoVivo[]                  @relation("AulaAoVivoCriador")
+  aulasAoVivoComoConvidado        AulaAoVivo[]                    @relation("AulaAoVivoConvidado")
+  aulasAoVivoCriadas              AulaAoVivo[]                    @relation("AulaAoVivoCriador")
   aulasAoVivoAcessos              AulaAoVivoAcesso[]
-  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]         @relation("AulaAoVivoConvidadoUsuario")
-  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemDeletadaPor")
-  aulasAoVivoMensagens            AulaAoVivoMensagem[]          @relation("AulaAoVivoMensagemUsuario")
-  aulasAoVivoPresencas            AulaAoVivoPresenca[]          @relation("AulaAoVivoPresencaUsuario")
+  aulasAoVivoComoConvidadoEmLista AulaAoVivoConvidado[]           @relation("AulaAoVivoConvidadoUsuario")
+  aulasAoVivoMensagensDeletadas   AulaAoVivoMensagem[]            @relation("AulaAoVivoMensagemDeletadaPor")
+  aulasAoVivoMensagens            AulaAoVivoMensagem[]            @relation("AulaAoVivoMensagemUsuario")
+  aulasAoVivoPresencas            AulaAoVivoPresenca[]            @relation("AulaAoVivoPresencaUsuario")
   AvaliacaoMetodologia            AvaliacaoMetodologia[]
   AvaliacaoTreino                 AvaliacaoTreino[]
   certificadosMetodologia         CertificadoMetodologia[]
@@ -80,20 +84,21 @@ model Usuario {
   comentarios                     Comentario[]
   Consentimento                   Consentimento[]
   creator                         Creator?
-  comprasCreator                  CreatorVenda[]                @relation("CreatorVendaComprador")
+  comprasCreator                  CreatorVenda[]                  @relation("CreatorVendaComprador")
   Cupom                           Cupom[]
   CupomResgate                    CupomResgate[]
+  reservasCupom                   CupomReserva[]
   curtidas                        Curtida[]
-  desafiosCriados                 DesafioEmGrupo[]              @relation("CriadorDesafioEmGrupo")
+  desafiosCriados                 DesafioEmGrupo[]                @relation("CriadorDesafioEmGrupo")
   EmailVerification               EmailVerification?
   escolinha                       Escolinha?
   ExercicioPersonalizado          ExercicioPersonalizado[]
-  favoritadoPor                   FavoritoUsuario[]             @relation("UsuarioFavorito")
-  favoritos                       FavoritoUsuario[]             @relation("UsuarioFavoritador")
+  favoritadoPor                   FavoritoUsuario[]               @relation("UsuarioFavorito")
+  favoritos                       FavoritoUsuario[]               @relation("UsuarioFavoritador")
   federacao                       Federacao?
   feedbacks                       Feedback[]
-  gruposDono                      Grupo[]                       @relation("GruposQuePossuo")
-  convitesEvento                  InscricaoEvento[]             @relation("ConvitesEvento")
+  gruposDono                      Grupo[]                         @relation("GruposQuePossuo")
+  convitesEvento                  InscricaoEvento[]               @relation("ConvitesEvento")
   inscricoesEvento                InscricaoEvento[]
   learningFavoritos               LearningFavorito[]
   learningProfile                 LearningProfile?
@@ -103,16 +108,16 @@ model Usuario {
   LoginEvent                      LoginEvent[]
   marca                           Marca?
   MembroGrupo                     MembroGrupo[]
-  mensagensEnviadas               Mensagem[]                    @relation("MensagensEnviadas")
-  mensagensRecebidas              Mensagem[]                    @relation("MensagensRecebidas")
-  mensagensReferenciando          Mensagem[]                    @relation("UsuarioMensagemReferencia")
+  mensagensEnviadas               Mensagem[]                      @relation("MensagensEnviadas")
+  mensagensRecebidas              Mensagem[]                      @relation("MensagensRecebidas")
+  mensagensReferenciando          Mensagem[]                      @relation("UsuarioMensagemReferencia")
   MensagemGrupo                   MensagemGrupo[]
-  metodologiasCriadas             Metodologia[]                 @relation("MetodologiaCriador")
+  metodologiasCriadas             Metodologia[]                   @relation("MetodologiaCriador")
   metodologiasAssinadas           MetodologiaAssinante[]
-  metodologiasAvulsasCriadas      MetodologiaAvulsa[]           @relation("MetodologiaAvulsaCriador")
+  metodologiasAvulsasCriadas      MetodologiaAvulsa[]             @relation("MetodologiaAvulsaCriador")
   MetodologiaItemSubmissao        MetodologiaItemSubmissao[]
-  notificacoesGeradas             Notificacao[]                 @relation("NotificacaoActor")
-  notificacoes                    Notificacao[]                 @relation("NotificacaoUsuario")
+  notificacoesGeradas             Notificacao[]                   @relation("NotificacaoActor")
+  notificacoes                    Notificacao[]                   @relation("NotificacaoUsuario")
   olheiro                         Olheiro?
   Pagamento                       Pagamento[]
   parceiroInfo                    Parceiro?
@@ -121,25 +126,25 @@ model Usuario {
   professor                       Professor?
   pushDeviceTokens                PushDeviceToken[]
   pushSubscriptions               PushSubscription[]
-  seguidores                      Seguidor[]                    @relation("Seguido")
-  seguindo                        Seguidor[]                    @relation("Seguidor")
+  seguidores                      Seguidor[]                      @relation("Seguido")
+  seguindo                        Seguidor[]                      @relation("Seguidor")
   SessaoTreinoTurma               SessaoTreinoTurma[]
-  solicitacoesRecebidas           SolicitacaoTreino[]           @relation("SolicitacoesRecebidas")
-  solicitacoesEnviadas            SolicitacaoTreino[]           @relation("SolicitacoesEnviadas")
+  solicitacoesRecebidas           SolicitacaoTreino[]             @relation("SolicitacoesRecebidas")
+  solicitacoesEnviadas            SolicitacaoTreino[]             @relation("SolicitacoesEnviadas")
   submissaoDesafios               SubmissaoDesafio[]
   submissaoEmGrupo                SubmissaoDesafioEmGrupo[]
   submissaoTreinos                SubmissaoTreino[]
   SubmissionChecklist             SubmissionChecklist[]
   treinosFavoritos                TreinoFavorito[]
-  treinosCriadosComoAdmin         TreinoProgramado[]            @relation("TreinoProgramadoCriadorUsuario")
+  treinosCriadosComoAdmin         TreinoProgramado[]              @relation("TreinoProgramadoCriadorUsuario")
   treinoRealizado                 TreinoRealizado[]
   TreinoRotina                    TreinoRotina[]
   TreinoSalvo                     TreinoSalvo[]
   TreinoUsuario                   TreinoUsuario[]
   Turmas                          TurmaUsuario[]
-  desafiosEmGrupo                 DesafioEmGrupo[]              @relation("MembrosDesafioEmGrupo")
-  visualizacoesPontuacaoFeitas    PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoViewer")
-  visualizacoesPontuacaoRecebidas PerfilPontuacaoVisualizacao[] @relation("PerfilPontuacaoAlvo")
+  desafiosEmGrupo                 DesafioEmGrupo[]                @relation("MembrosDesafioEmGrupo")
+  visualizacoesPontuacaoFeitas    PerfilPontuacaoVisualizacao[]   @relation("PerfilPontuacaoViewer")
+  visualizacoesPontuacaoRecebidas PerfilPontuacaoVisualizacao[]   @relation("PerfilPontuacaoAlvo")
 
   @@index([deletedAt])
   @@index([deleteScheduledAt])
@@ -410,13 +415,13 @@ model Organizacao {
   updatedAt DateTime @updatedAt
 
   membros                  MembroOrganizacao[]
-  usuariosComContextoAtivo Usuario[]           @relation("ContextoOrganizacaoAtivo")
-
-  seguidores          OrganizacaoSeguidor[]
-  postagens           Postagem[]
-  eventos             Evento[]
-  turmas              Turma[]
-  relacoesTreinamento RelacaoTreinamento[]
+  usuariosComContextoAtivo Usuario[]             @relation("ContextoOrganizacaoAtivo")
+  creatorInstitucional     Creator?              @relation("CreatorDaOrganizacao")
+  seguidores               OrganizacaoSeguidor[]
+  postagens                Postagem[]
+  eventos                  Evento[]
+  turmas                   Turma[]
+  relacoesTreinamento      RelacaoTreinamento[]
 
   clube     Clube?
   escolinha Escolinha?
@@ -444,6 +449,28 @@ model MembroOrganizacao {
   @@unique([organizacaoId, usuarioId])
   @@index([usuarioId, ativo])
   @@index([organizacaoId, funcao, ativo])
+}
+
+model TransferenciaPropriedade {
+  id String @id @default(uuid())
+
+  organizacaoId       String
+  proprietarioAtualId String
+  destinatarioId      String
+
+  status String @default("PENDENTE")
+
+  mensagem String?
+
+  criadoEm DateTime @default(now())
+  expiraEm DateTime
+
+  respondidoEm DateTime?
+  concluidoEm  DateTime?
+
+  @@index([organizacaoId, status])
+  @@index([destinatarioId, status])
+  @@index([proprietarioAtualId, status])
 }
 
 model OrganizacaoSeguidor {
@@ -560,23 +587,28 @@ model Olheiro {
 }
 
 model Mensagem {
-  id        String          @id @default(uuid())
-  deId      String
-  paraId    String
-  conteudo  String
-  criadaEm  DateTime        @default(now())
-  lida      Boolean         @default(false)
-  atletaId  String?
-  desafioId String?
-  postId    String?
-  tipo      TipoMensagem    @default(NORMAL)
-  usuarioId String?
-  atleta    Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id], onDelete: SetNull)
-  de        Usuario         @relation("MensagensEnviadas", fields: [deId], references: [id], onDelete: Cascade)
-  desafio   DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
-  para      Usuario         @relation("MensagensRecebidas", fields: [paraId], references: [id], onDelete: Cascade)
-  post      Postagem?       @relation("PostMensagemReferencia", fields: [postId], references: [id])
-  usuario   Usuario?        @relation("UsuarioMensagemReferencia", fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                String       @id @default(uuid())
+  deId              String
+  paraId            String
+  conteudo          String
+  criadaEm          DateTime     @default(now())
+  lida              Boolean      @default(false)
+  atletaId          String?
+  desafioId         String?
+  postId            String?
+  tipo              TipoMensagem @default(NORMAL)
+  usuarioId         String?
+  audioKey          String?      @unique
+  audioMime         String?
+  audioDuracaoMs    Int?
+  audioTamanhoBytes Int?
+
+  atleta  Atleta?         @relation("AtletaMensagens", fields: [atletaId], references: [id], onDelete: SetNull)
+  de      Usuario         @relation("MensagensEnviadas", fields: [deId], references: [id], onDelete: Cascade)
+  desafio DesafioOficial? @relation("DesafioMensagemReferencia", fields: [desafioId], references: [id])
+  para    Usuario         @relation("MensagensRecebidas", fields: [paraId], references: [id], onDelete: Cascade)
+  post    Postagem?       @relation("PostMensagemReferencia", fields: [postId], references: [id])
+  usuario Usuario?        @relation("UsuarioMensagemReferencia", fields: [usuarioId], references: [id], onDelete: Cascade)
 }
 
 model Atleta {
@@ -637,6 +669,7 @@ model Atleta {
   TransferenciaFormador         TransferenciaFormador[]
   treinosAgendados              TreinoAgendado[]
   treinosLivres                 TreinoLivre[]
+  realizacoesDiarias            TreinoRealizacaoDiaria[]
   treinosRecebidos              TreinoProgramadoRecebido[]
   TreinoRotinaAtribuicao        TreinoRotinaAtribuicao[]
   Video                         Video[]
@@ -849,7 +882,7 @@ model Metodologia {
   nivel                    Nivel?
   categorias               Categoria[]                @default([])
   ativo                    Boolean                    @default(false)
-  criadorUsuarioId         String
+  criadorUsuarioId         String?
   professorId              String?
   clubeId                  String?
   escolinhaId              String?
@@ -872,7 +905,7 @@ model Metodologia {
   certificados             CertificadoMetodologia[]
   vendasCreator            CreatorVenda[]
   clube                    Clube?                     @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  criadorUsuario           Usuario                    @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  criadorUsuario           Usuario?                   @relation("MetodologiaCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
   escolinha                Escolinha?                 @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   Federacao                Federacao?                 @relation(fields: [federacaoId], references: [id])
   Marca                    Marca?                     @relation(fields: [marcaId], references: [id])
@@ -1070,7 +1103,7 @@ model MetodologiaAvulsa {
   descricao                String?
   capaUrl                  String?
   ativo                    Boolean                      @default(false)
-  criadorUsuarioId         String
+  criadorUsuarioId         String?
   professorId              String?
   clubeId                  String?
   escolinhaId              String?
@@ -1093,7 +1126,7 @@ model MetodologiaAvulsa {
   vendasCreator            CreatorVenda[]
   assinantes               MetodologiaAssinante[]
   clube                    Clube?                       @relation(fields: [clubeId], references: [id], onDelete: SetNull)
-  criadorUsuario           Usuario                      @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: Cascade)
+  criadorUsuario           Usuario?                     @relation("MetodologiaAvulsaCriador", fields: [criadorUsuarioId], references: [id], onDelete: SetNull)
   escolinha                Escolinha?                   @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   Federacao                Federacao?                   @relation(fields: [federacaoId], references: [id])
   Marca                    Marca?                       @relation(fields: [marcaId], references: [id])
@@ -1400,7 +1433,7 @@ model Postagem {
   tipoMidia         TipoMidia?
   dataCriacao       DateTime             @default(now())
   visibilidade      VisibilidadePostagem @default(LOGADO)
-  usuarioId         String
+  usuarioId         String?
   autorContextoKey  String?
   atletaId          String?
   clubeId           String?
@@ -1421,7 +1454,7 @@ model Postagem {
   escolinha         Escolinha?           @relation(fields: [escolinhaId], references: [id], onDelete: SetNull)
   repostOf          Postagem?            @relation("Reposts", fields: [repostOfId], references: [id])
   repostedBy        Postagem[]           @relation("Reposts")
-  usuario           Usuario              @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario           Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@unique([usuarioId, conteudo, repostOfId])
   @@index([organizacaoId])
@@ -1490,7 +1523,7 @@ model Escolinha {
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   observacoes            AtletaObservado[]        @relation("ObservacaoEscolinha")
   conquistas             ConquistaVinculo[]       @relation("ConquistaEscolinha")
-  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   eventos                Evento[]
   indicacoes             Indicacao[]
   Metodologia            Metodologia[]
@@ -1526,7 +1559,7 @@ model Comentario {
 
 model Clube {
   id            String       @id @default(uuid())
-  usuarioId     String       @unique
+  usuarioId     String?      @unique
   nome          String       @unique
   cnpj          String?      @unique
   telefone1     String?
@@ -1554,7 +1587,7 @@ model Clube {
   atletas                Atleta[]
   AtletaHistoricoVinculo AtletaHistoricoVinculo[]
   observacoes            AtletaObservado[]        @relation("ObservacaoClube")
-  usuario                Usuario                  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario                Usuario?                 @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   conquistas             ConquistaVinculo[]       @relation("ConquistaClube")
   Evento                 Evento[]
   Indicacao              Indicacao[]
@@ -1642,29 +1675,30 @@ model SubmissaoDesafio {
 }
 
 model SubmissaoTreino {
-  id                   String            @id @default(uuid())
-  atletaId             String
-  treinoAgendadoId     String
-  aprovado             Boolean?
-  observacao           String?
-  criadoEm             DateTime          @default(now())
-  atualizadoEm         DateTime          @updatedAt
-  usuarioId            String?
-  duracaoMinutos       Int?
-  pontosCreditados     Int?
-  pontuacaoSnapshot    Int?
-  tipoTreinoSnapshot   TipoTreino?
-  treinoTituloSnapshot String?
-  midiaUrl             String?
-  midiaTipo            TipoMidia?
-  duracaoSegundos      Int?
-  repeticoes           Int?
-  avaliacaoTreino      AvaliacaoTreino[]
-  curtidas             Curtida[]         @relation("Curtidas_SubmissaoTreino")
-  midias               Midia[]           @relation("Midias_SubmissaoTreino")
-  atleta               Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
-  treinoAgendado       TreinoAgendado    @relation(fields: [treinoAgendadoId], references: [id])
-  Usuario              Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  id                        String            @id @default(uuid())
+  atletaId                  String
+  treinoAgendadoId          String
+  aprovado                  Boolean?
+  observacao                String?
+  criadoEm                  DateTime          @default(now())
+  atualizadoEm              DateTime          @updatedAt
+  usuarioId                 String?
+  duracaoMinutos            Int?
+  pontosCreditados          Int?
+  pontuacaoSnapshot         Int?
+  tipoTreinoSnapshot        TipoTreino?
+  treinoTituloSnapshot      String?
+  midiaUrl                  String?
+  midiaTipo                 TipoMidia?
+  duracaoSegundos           Int?
+  repeticoes                Int?
+  estatisticasProcessadasEm DateTime?
+  avaliacaoTreino           AvaliacaoTreino[]
+  curtidas                  Curtida[]         @relation("Curtidas_SubmissaoTreino")
+  midias                    Midia[]           @relation("Midias_SubmissaoTreino")
+  atleta                    Atleta            @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+  treinoAgendado            TreinoAgendado    @relation(fields: [treinoAgendadoId], references: [id])
+  Usuario                   Usuario?          @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@unique([atletaId, treinoAgendadoId])
 }
@@ -1754,14 +1788,15 @@ model Grupo {
 }
 
 model MembroGrupo {
-  id        String     @id @default(uuid())
-  grupoId   String
-  criadoEm  DateTime   @default(now())
-  tipo      TipoMembro @default(MEMBRO)
-  updatedAt DateTime   @updatedAt
-  usuarioId String
-  grupo     Grupo      @relation(fields: [grupoId], references: [id], onDelete: Cascade)
-  usuario   Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id              String     @id @default(uuid())
+  grupoId         String
+  criadoEm        DateTime   @default(now())
+  ultimaLeituraEm DateTime   @default(now())
+  tipo            TipoMembro @default(MEMBRO)
+  updatedAt       DateTime   @updatedAt
+  usuarioId       String
+  grupo           Grupo      @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  usuario         Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@unique([grupoId, usuarioId])
   @@index([usuarioId])
@@ -1769,20 +1804,25 @@ model MembroGrupo {
 }
 
 model MensagemGrupo {
-  id               String          @id @default(uuid())
-  grupoId          String
-  usuarioId        String
-  conteudo         String
-  tipo             TipoMensagem    @default(NORMAL)
-  criadaEm         DateTime        @default(now())
-  excluida         Boolean         @default(false)
-  excluidaEm       DateTime?
-  excluidaPor      String?
-  conteudoJson     Json?
-  desafioEmGrupoId String?
-  desafioEmGrupo   DesafioEmGrupo? @relation(fields: [desafioEmGrupoId], references: [id])
-  grupo            Grupo           @relation(fields: [grupoId], references: [id])
-  usuario          Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  id                String       @id @default(uuid())
+  grupoId           String
+  usuarioId         String
+  conteudo          String
+  tipo              TipoMensagem @default(NORMAL)
+  criadaEm          DateTime     @default(now())
+  excluida          Boolean      @default(false)
+  excluidaEm        DateTime?
+  excluidaPor       String?
+  conteudoJson      Json?
+  desafioEmGrupoId  String?
+  audioKey          String?      @unique
+  audioMime         String?
+  audioDuracaoMs    Int?
+  audioTamanhoBytes Int?
+
+  desafioEmGrupo DesafioEmGrupo? @relation(fields: [desafioEmGrupoId], references: [id])
+  grupo          Grupo           @relation(fields: [grupoId], references: [id])
+  usuario        Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([grupoId])
   @@index([usuarioId])
@@ -1908,6 +1948,22 @@ model TreinoLivre {
   createdAt      DateTime         @default(now())
   RegistroTreino RegistroTreino[]
   atleta         Atleta           @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+}
+
+model TreinoRealizacaoDiaria {
+  id            String   @id @default(uuid())
+  atletaId      String
+  origem        String
+  origemId      String
+  diaReferencia String
+  realizadoEm   DateTime
+  registradoEm  DateTime @default(now())
+
+  atleta Atleta @relation(fields: [atletaId], references: [id], onDelete: Cascade)
+
+  @@unique([atletaId, origem, origemId])
+  @@index([atletaId, diaReferencia])
+  @@index([realizadoEm])
 }
 
 model RegistroTreino {
@@ -2576,8 +2632,44 @@ model TreinoRotinaAtribuicao {
   @@index([atletaObservadoId])
 }
 
+enum PagamentoBeneficioTipo {
+  ASSINATURA
+  METODOLOGIA
+  METODOLOGIA_AVULSA
+  AULA_AO_VIVO
+  EVENTO
+}
+
+model PagamentoBeneficio {
+  id String @id @default(uuid())
+
+  pagamentoId String
+  usuarioId   String
+  itemKey     String
+
+  tipo      PagamentoBeneficioTipo
+  recursoId String
+
+  contextoKind          String?
+  contextoTipo          String?
+  contextoPerfilId      String?
+  contextoOrganizacaoId String?
+
+  concedidoEm     DateTime  @default(now())
+  revogadoEm      DateTime?
+  motivoRevogacao String?
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@unique([pagamentoId, itemKey])
+  @@index([usuarioId, tipo, recursoId])
+  @@index([pagamentoId])
+  @@index([revogadoEm])
+}
+
 model Pagamento {
-  id                           String          @id @default(uuid())
+  id                           String                     @id @default(uuid())
   usuarioId                    String
   contextoKind                 String?
   contextoTipo                 String?
@@ -2587,17 +2679,17 @@ model Pagamento {
   plano                        String
   periodicidade                Periodicidade
   metodo                       MetodoPagamento
-  status                       PagamentoStatus @default(PENDENTE)
-  valor                        Decimal         @db.Decimal(10, 2)
-  moeda                        String          @default("BRL")
+  status                       PagamentoStatus            @default(PENDENTE)
+  valor                        Decimal                    @db.Decimal(10, 2)
+  moeda                        String                     @default("BRL")
   cupomId                      String?
   provider                     String?
   providerRef                  String?
-  criadoEm                     DateTime        @default(now())
+  criadoEm                     DateTime                   @default(now())
   pagoEm                       DateTime?
   canceladoEm                  DateTime?
   reembolsadoEm                DateTime?
-  updatedAt                    DateTime        @updatedAt
+  updatedAt                    DateTime                   @updatedAt
   pagadorNome                  String?
   pagadorEmail                 String?
   pagadorCpf                   String?
@@ -2610,8 +2702,15 @@ model Pagamento {
   boletoLinhaDigitavel         String?
   meta                         Json?
   CupomResgate                 CupomResgate[]
-  cupom                        Cupom?          @relation(fields: [cupomId], references: [id], onDelete: SetNull)
-  usuario                      Usuario         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  cupom                        Cupom?                     @relation(fields: [cupomId], references: [id], onDelete: SetNull)
+  usuario                      Usuario                    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  beneficios                   PagamentoBeneficio[]
+  creatorVendas                CreatorVenda[]
+  reservasCupom                CupomReserva[]
+  pendenciaEvento              BillingPendenciaEvento?
+  compensacaoEvento            BillingCompensacaoEvento?
+  autorizacaoEstorno           BillingAutorizacaoEstorno?
+  operacaoCheckout             BillingCheckoutOperacao?
 
   @@unique([provider, providerRef])
   @@index([usuarioId, criadoEm])
@@ -2622,6 +2721,243 @@ model Pagamento {
   @@index([contextoPerfilId])
   @@index([contextoOrganizacaoId])
   @@index([contextoLegacyOrganizationId])
+}
+
+enum BillingAutorizacaoEstornoStatus {
+  PENDENTE
+  APROVADA
+  CONSUMIDA
+  REVOGADA
+  EXPIRADA
+}
+
+model BillingAutorizacaoEstorno {
+  id String @id @default(uuid())
+
+  pagamentoId String @unique
+
+  solicitanteId String
+  aprovadorId   String?
+
+  motivo String
+
+  valor       Decimal @db.Decimal(10, 2)
+  moeda       String  @default("BRL")
+  providerRef String
+
+  status BillingAutorizacaoEstornoStatus @default(PENDENTE)
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  aprovadoEm   DateTime?
+  expiraEm     DateTime?
+  consumidoEm  DateTime?
+  revogadoEm   DateTime?
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  @@index([status, criadoEm])
+  @@index([solicitanteId])
+  @@index([aprovadorId])
+}
+
+enum BillingCheckoutOperacaoStatus {
+  PREPARADA
+  ENVIO_POSSIVEL
+  CONFIRMADA
+  INCONCLUSIVA
+  FALHA_COMPROVADA
+}
+
+model BillingCheckoutOperacao {
+  id            String                        @id @default(uuid())
+  pagamentoId   String                        @unique
+  usuarioId     String
+  chaveCliente  String
+  chaveOperacao String                        @unique
+  modalidade    String
+  status        BillingCheckoutOperacaoStatus @default(PREPARADA)
+
+  fingerprintRequisicao String
+  providerRef           String?
+  ultimoErro            String?
+
+  envioPossivelEm DateTime?
+  confirmadoEm    DateTime?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  @@unique([usuarioId, chaveCliente])
+  @@index([status, criadoEm])
+  @@index([usuarioId, criadoEm])
+}
+
+enum BillingPendenciaEventoStatus {
+  PENDENTE_ANALISE
+  EM_ANALISE
+  AGUARDANDO_ESTORNO
+  ESTORNO_CONFIRMADO
+  RESOLVIDA_MANUALMENTE
+}
+
+model BillingPendenciaEvento {
+  id          String @id @default(uuid())
+  pagamentoId String @unique
+  eventoId    String
+
+  motivo String
+  status BillingPendenciaEventoStatus @default(PENDENTE_ANALISE)
+
+  providerRef String
+  valor       Decimal @db.Decimal(10, 2)
+  moeda       String  @default("BRL")
+
+  observacao   String?
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  resolvidoEm  DateTime?
+
+  pagamento   Pagamento                 @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  compensacao BillingCompensacaoEvento?
+
+  @@index([status, criadoEm])
+  @@index([eventoId])
+}
+
+enum BillingCompensacaoEventoStatus {
+  PREPARADA
+  EM_PROCESSAMENTO
+  AGUARDANDO_CONFIRMACAO
+  CONFIRMADA
+  FALHA_REVISAR
+  CANCELADA
+}
+
+model BillingCompensacaoEvento {
+  id String @id @default(uuid())
+
+  pagamentoId String @unique
+  pendenciaId String @unique
+
+  chaveIdempotencia String @unique
+
+  status BillingCompensacaoEventoStatus @default(PREPARADA)
+
+  valor       Decimal @db.Decimal(10, 2)
+  moeda       String  @default("BRL")
+  providerRef String
+
+  tentativas Int @default(0)
+
+  ultimoErro   String?
+  confirmadoEm DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+
+  pendencia            BillingPendenciaEvento                  @relation(fields: [pendenciaId], references: [id], onDelete: Restrict)
+  historicoTentativas  BillingCompensacaoTentativa[]
+  consultasRecuperacao BillingCompensacaoConsultaRecuperacao[]
+
+  @@index([status, criadoEm])
+}
+
+enum BillingCompensacaoTentativaStatus {
+  EM_PROCESSAMENTO
+  SIMULACAO_ENCERRADA
+  RESULTADO_DESCONHECIDO
+  CONFIRMACAO_EXTERNA_PENDENTE
+}
+
+model BillingCompensacaoTentativa {
+  id            String @id @default(uuid())
+  compensacaoId String
+
+  numero Int
+  status BillingCompensacaoTentativaStatus @default(EM_PROCESSAMENTO)
+
+  ambiente                 String  @default("QA")
+  operacaoExternaExecutada Boolean @default(false)
+
+  estornoProviderRef         String?   @unique
+  chaveIdempotenciaOperacao  String?   @unique
+  requisicaoEnviadaEm        DateTime?
+  postAutorizacaoConsumidaEm DateTime?
+
+  iniciadoEm  DateTime  @default(now())
+  encerradoEm DateTime?
+  observacao  String?
+
+  compensacao          BillingCompensacaoEvento                @relation(fields: [compensacaoId], references: [id], onDelete: Restrict)
+  consultasRecuperacao BillingCompensacaoConsultaRecuperacao[]
+
+  @@unique([compensacaoId, numero])
+  @@unique([id, compensacaoId])
+  @@index([status, iniciadoEm])
+}
+
+model BillingCompensacaoConsultaRecuperacao {
+  id            String @id @default(uuid())
+  compensacaoId String
+  tentativaId   String
+
+  ambiente String  @default("QA")
+  simulada Boolean @default(true)
+
+  tipoEvidencia        String
+  decisao              String
+  motivo               String
+  identidadeConfirmada Boolean @default(false)
+
+  providerRef   String
+  estornoId     String?
+  statusEstorno String?
+  valorEstorno  Decimal? @db.Decimal(10, 2)
+  moedaEstorno  String?
+
+  consultadoEm DateTime @default(now())
+
+  compensacao BillingCompensacaoEvento    @relation(fields: [compensacaoId], references: [id], onDelete: Restrict)
+  tentativa   BillingCompensacaoTentativa @relation(fields: [tentativaId, compensacaoId], references: [id, compensacaoId], onDelete: Restrict)
+
+  @@index([compensacaoId, consultadoEm])
+  @@index([tentativaId])
+}
+
+enum CupomReservaStatus {
+  RESERVADA
+  CONSUMIDA
+  LIBERADA
+  CONCILIACAO_PENDENTE
+}
+
+model CupomReserva {
+  id String @id @default(uuid())
+
+  cupomId     String
+  usuarioId   String
+  pagamentoId String @unique
+
+  status CupomReservaStatus @default(RESERVADA)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+  expiraEm     DateTime
+
+  consumidaEm DateTime?
+  liberadaEm  DateTime?
+
+  cupom     Cupom     @relation(fields: [cupomId], references: [id], onDelete: Restrict)
+  pagamento Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([cupomId, status])
+  @@index([usuarioId, status])
+  @@index([expiraEm])
 }
 
 model Cupom {
@@ -2642,6 +2978,7 @@ model Cupom {
   criadoPorUsuarioId     String?
   criadoPor              Usuario?       @relation(fields: [criadoPorUsuarioId], references: [id], onDelete: SetNull)
   resgates               CupomResgate[]
+  reservas               CupomReserva[]
   Pagamento              Pagamento[]
 
   @@index([ativo])
@@ -2660,6 +2997,92 @@ model CupomResgate {
 
   @@unique([cupomId, usuarioId])
   @@index([usuarioId])
+}
+
+enum StatusCorrecaoNascimento {
+  PENDENTE_VERIFICACAO
+  EM_ANALISE
+  APROVADA
+  REJEITADA
+}
+
+model SolicitacaoCorrecaoNascimento {
+  id             String                   @id @default(uuid())
+  usuarioId      String
+  dataSolicitada DateTime
+  motivo         String
+  status         StatusCorrecaoNascimento @default(PENDENTE_VERIFICACAO)
+  verificacaoRef String?
+  verificadoEm   DateTime?
+  revisadoPorId  String?
+  revisadoEm     DateTime?
+  criadoEm       DateTime                 @default(now())
+
+  usuario   Usuario                      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  documento DocumentoCorrecaoNascimento?
+
+  @@index([usuarioId, status])
+  @@index([status, criadoEm])
+}
+
+enum StatusSegurancaDocumentoNascimento {
+  PENDENTE
+  EM_ANALISE
+  SEGURO
+  AMEACA_DETECTADA
+  FALHA_ANALISE
+}
+
+model DocumentoCorrecaoNascimento {
+  id            String   @id @default(uuid())
+  solicitacaoId String   @unique
+  s3Key         String   @unique
+  mimeType      String
+  tamanhoBytes  Int
+  sha256        String
+  criadoEm      DateTime @default(now())
+
+  statusSeguranca StatusSegurancaDocumentoNascimento @default(PENDENTE)
+  analisadoEm     DateTime?
+  scannerRef      String?
+
+  scannerReservadoPor String?
+  scannerReservadoAte DateTime?
+
+  expiraEm DateTime?
+
+  solicitacao SolicitacaoCorrecaoNascimento @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+
+  @@index([statusSeguranca, scannerReservadoAte])
+  @@index([statusSeguranca, criadoEm])
+  @@index([expiraEm])
+}
+
+enum CupomAniversarioStatus {
+  RESERVADO
+  CONSUMIDO
+  LIBERADO
+  CONCILIACAO_PENDENTE
+}
+
+model CupomAniversarioUso {
+  id        String @id @default(uuid())
+  usuarioId String
+  ano       Int
+  codigo    String @default("20PARABENS")
+
+  pagamentoId String? @unique
+
+  status CupomAniversarioStatus @default(RESERVADO)
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  consumidoEm  DateTime?
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, ano])
+  @@index([status, criadoEm])
 }
 
 model EventoElenco {
@@ -2717,10 +3140,27 @@ model UsageCounter {
 }
 
 model EventoPagamento {
-  id              String   @id @default(cuid())
-  providerEventId String   @unique
+  id              String @id @default(cuid())
+  providerEventId String @unique
   tipo            String
-  recebidoEm      DateTime @default(now())
+
+  status        EventoPagamentoStatus @default(RECEBIDO)
+  tentativas    Int                   @default(0)
+  ultimoErro    String?
+  processandoEm DateTime?
+  concluidoEm   DateTime?
+
+  recebidoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([status, processandoEm])
+}
+
+enum EventoPagamentoStatus {
+  RECEBIDO
+  PROCESSANDO
+  CONCLUIDO
+  FALHOU
 }
 
 model AuditLog {
@@ -2854,17 +3294,18 @@ model EventoConvocado {
 }
 
 model Notificacao {
-  id        String          @id @default(uuid())
-  usuarioId String
-  titulo    String
-  mensagem  String
-  link      String?
-  lida      Boolean         @default(false)
-  createdAt DateTime        @default(now())
-  actorId   String?
-  tipo      NotificacaoTipo @default(GENERICA)
-  actor     Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
-  usuario   Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid())
+  usuarioId      String
+  titulo         String
+  mensagem       String
+  link           String?
+  lida           Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  actorId        String?
+  tipo           NotificacaoTipo @default(GENERICA)
+  agrupamentoKey String?         @unique
+  actor          Usuario?        @relation("NotificacaoActor", fields: [actorId], references: [id], onDelete: SetNull)
+  usuario        Usuario         @relation("NotificacaoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId, createdAt])
   @@index([actorId])
@@ -2938,8 +3379,12 @@ model LoginEvent {
 }
 
 model Creator {
-  id                 String         @id @default(uuid())
-  usuarioId          String         @unique
+  id            String  @id @default(uuid())
+  usuarioId     String? @unique
+  organizacaoId String? @unique
+
+  organizacao Organizacao? @relation("CreatorDaOrganizacao", fields: [organizacaoId], references: [id], onDelete: Restrict)
+
   nomePublico        String?
   headline           String?
   bio                String?
@@ -2957,7 +3402,7 @@ model Creator {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   views              Int            @default(0)
-  usuario            Usuario        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario            Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   vendas             CreatorVenda[]
 
   @@index([usuarioId])
@@ -2971,6 +3416,8 @@ model CreatorVenda {
   compradorId         String?
   metodologiaId       String?
   metodologiaAvulsaId String?
+  pagamentoId         String?
+  pagamento           Pagamento?         @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
   valorBruto          Decimal            @db.Decimal(10, 2)
   percentualFootera   Decimal            @default(0.15) @db.Decimal(5, 4)
   valorFootera        Decimal            @db.Decimal(10, 2)
@@ -2993,6 +3440,7 @@ model CreatorVenda {
   @@index([metodologiaId])
   @@index([metodologiaAvulsaId])
   @@index([status])
+  @@index([pagamentoId])
 }
 
 model CreatorUsoLearning {
@@ -3020,7 +3468,7 @@ model LearningProfile {
 
 model Federacao {
   id            String       @id @default(uuid())
-  usuarioId     String       @unique
+  usuarioId     String?      @unique
   organizacaoId String?      @unique
   organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
@@ -3041,14 +3489,14 @@ model Federacao {
   updatedAt         DateTime            @updatedAt
   conquistas        ConquistaVinculo[]
   eventos           Evento[]
-  usuario           Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario           Usuario?            @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   Metodologia       Metodologia[]
   MetodologiaAvulsa MetodologiaAvulsa[]
 }
 
 model Marca {
   id            String       @id @default(uuid())
-  usuarioId     String       @unique
+  usuarioId     String?      @unique
   organizacaoId String?      @unique
   organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
 
@@ -3069,7 +3517,7 @@ model Marca {
   sede              String?
   conquistas        ConquistaVinculo[]
   eventos           Evento[]
-  usuario           Usuario             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario           Usuario?            @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
   Metodologia       Metodologia[]
   MetodologiaAvulsa MetodologiaAvulsa[]
 }
@@ -3142,6 +3590,39 @@ model PushDeviceToken {
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId])
+}
+
+model ExclusaoDocumentoNascimentoPendente {
+  id                 String   @id @default(uuid())
+  s3Key              String   @unique
+  motivo             String
+  tentativas         Int      @default(0)
+  ultimoErro         String?
+  proximaTentativaEm DateTime @default(now())
+
+  // Reserva exclusiva do worker
+  reservadoPor String?
+  reservadoAte DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([proximaTentativaEm])
+  @@index([reservadoAte])
+}
+
+model ExclusaoAudioMensagemPendente {
+  id                 String    @id @default(uuid())
+  audioKey           String    @unique
+  criadoEm           DateTime  @default(now())
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime  @default(now())
+  ultimoErro         String?
+  reservadoPor       String?
+  reservadoAte       DateTime?
+
+  @@index([proximaTentativaEm])
+  @@index([reservadoAte])
 }
 
 enum StatusResponsavelAtleta {
@@ -3373,6 +3854,7 @@ enum TipoTreino {
 
 enum TipoMensagem {
   NORMAL
+  AUDIO
   DESAFIO
   POST
   USUARIO
@@ -3632,4 +4114,37 @@ enum TipoMensagemLive {
   TEXTO
   SISTEMA
   ALERTA
+}
+
+enum BillingComunicacaoCanal {
+  APP
+  EMAIL
+}
+
+enum BillingComunicacaoStatus {
+  PENDENTE
+  PROCESSANDO
+  ENVIADO
+  FALHOU
+}
+
+model BillingComunicacao {
+  id           String                   @id @default(uuid())
+  assinaturaId String
+  cicloKey     String
+  evento       String
+  canal        BillingComunicacaoCanal
+  status       BillingComunicacaoStatus @default(PENDENTE)
+
+  tentativas         Int       @default(0)
+  enviadoEm          DateTime?
+  proximaTentativaEm DateTime?
+  ultimoErro         String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([assinaturaId, cicloKey, evento, canal])
+  @@index([status, proximaTentativaEm])
+  @@index([assinaturaId])
 }

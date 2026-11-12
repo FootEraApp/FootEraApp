@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "../prisma.js";
 import type { Request } from 'express';
-
-const prisma = new PrismaClient();
 
 export async function audit(req: Request, p: {
   acao: string;
@@ -33,4 +31,46 @@ export async function audit(req: Request, p: {
   } catch (e) {
     console.warn('audit error', e);
   }
+}
+
+export async function auditFinanceiroObrigatorio(
+  req: Request,
+  dados: {
+    acao: string;
+    entidadeId: string;
+    descricao: string;
+    meta?: Record<string, string | number | boolean | null>;
+  }
+): Promise<void> {
+  const usuarioId =
+    (req as Request & {
+      user?: { id?: string };
+      userId?: string;
+    }).user?.id ??
+    (req as Request & { userId?: string }).userId;
+
+  if (!usuarioId) {
+    throw new Error("BILLING_AUDITORIA_OPERADOR_AUSENTE");
+  }
+
+  const ip =
+    req.ip ?? "";
+
+  const userAgent =
+    String(req.headers["user-agent"] ?? "");
+
+  // Não capturar erros: a operação chamadora deve
+  // falhar se a auditoria não puder ser persistida.
+  await prisma.logAuditoria.create({
+    data: {
+      usuarioId,
+      acao: dados.acao,
+      entidade: "Pagamento",
+      entidadeId: dados.entidadeId,
+      descricao: dados.descricao,
+      ip,
+      userAgent,
+      meta: dados.meta ?? undefined,
+    },
+  });
 }

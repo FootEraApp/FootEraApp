@@ -1,0 +1,89 @@
+
+  server\controllers\billingController.ts:1525:    agora.getTime() - BILLING_LEASE_MS
+  server\controllers\billingController.ts:1526:  );
+  server\controllers\billingController.ts:1527:
+  server\controllers\billingController.ts:1528:  const adquirido =
+> server\controllers\billingController.ts:1529:    await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1530:      where: {
+  server\controllers\billingController.ts:1531:        id: registro.id,
+  server\controllers\billingController.ts:1532:        tentativas: {
+  server\controllers\billingController.ts:1533:          lt: BILLING_MAX_TENTATIVAS,
+  server\controllers\billingController.ts:1534:        },
+  server\controllers\billingController.ts:1535:        OR: [
+  server\controllers\billingController.ts:1536:          {
+  server\controllers\billingController.ts:1537:            status: BillingComunicacaoStatus.PENDENTE,
+  server\controllers\billingController.ts:1538:          },
+  server\controllers\billingController.ts:1539:          {
+  server\controllers\billingController.ts:1540:            status: BillingComunicacaoStatus.FALHOU,
+  server\controllers\billingController.ts:1541:            OR: [
+  server\controllers\billingController.ts:1640:        trialEncerradoValido
+  server\controllers\billingController.ts:1641:      );
+  server\controllers\billingController.ts:1642:
+  server\controllers\billingController.ts:1643:    if (!comunicacaoValida) {
+> server\controllers\billingController.ts:1644:      await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1645:        where: {
+  server\controllers\billingController.ts:1646:          id: registro.id,
+  server\controllers\billingController.ts:1647:          status: BillingComunicacaoStatus.PROCESSANDO,
+  server\controllers\billingController.ts:1648:          tentativas: tentativaAtual,
+  server\controllers\billingController.ts:1649:        },
+  server\controllers\billingController.ts:1650:        data: {
+  server\controllers\billingController.ts:1651:          status: BillingComunicacaoStatus.FALHOU,
+  server\controllers\billingController.ts:1652:          tentativas: BILLING_MAX_TENTATIVAS,
+  server\controllers\billingController.ts:1653:          ultimoErro:
+  server\controllers\billingController.ts:1654:            "Comunicação descartada: assinatura renovada, ciclo alterado ou status incompatível.",
+  server\controllers\billingController.ts:1655:          proximaTentativaEm: null,
+  server\controllers\billingController.ts:1656:        },
+  server\controllers\billingController.ts:1740:      });
+  server\controllers\billingController.ts:1741:    }
+  server\controllers\billingController.ts:1742:
+  server\controllers\billingController.ts:1743:    const finalizacao =
+> server\controllers\billingController.ts:1744:      await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1745:        where: {
+  server\controllers\billingController.ts:1746:          id: registro.id,
+  server\controllers\billingController.ts:1747:          status: BillingComunicacaoStatus.PROCESSANDO,
+  server\controllers\billingController.ts:1748:          tentativas: tentativaAtual,
+  server\controllers\billingController.ts:1749:        },
+  server\controllers\billingController.ts:1750:        data: {
+  server\controllers\billingController.ts:1751:          status: BillingComunicacaoStatus.ENVIADO,
+  server\controllers\billingController.ts:1752:          enviadoEm: new Date(),
+  server\controllers\billingController.ts:1753:          ultimoErro: null,
+  server\controllers\billingController.ts:1754:          proximaTentativaEm: null,
+  server\controllers\billingController.ts:1755:        },
+  server\controllers\billingController.ts:1756:      });
+  server\controllers\billingController.ts:1777:    const proximaTentativaEm = new Date(
+  server\controllers\billingController.ts:1778:      Date.now() + BILLING_RETRY_MS
+  server\controllers\billingController.ts:1779:    );
+  server\controllers\billingController.ts:1780:
+> server\controllers\billingController.ts:1781:    await prisma.billingComunicacao.updateMany({
+  server\controllers\billingController.ts:1782:      where: {
+  server\controllers\billingController.ts:1783:        id: registro.id,
+  server\controllers\billingController.ts:1784:        status: BillingComunicacaoStatus.PROCESSANDO,
+  server\controllers\billingController.ts:1785:        tentativas: tentativaAtual,
+  server\controllers\billingController.ts:1786:      },
+  server\controllers\billingController.ts:1787:      data: {
+  server\controllers\billingController.ts:1788:        status: BillingComunicacaoStatus.FALHOU,
+  server\controllers\billingController.ts:1789:        ultimoErro: erro.slice(0, 1000),
+  server\controllers\billingController.ts:1790:        proximaTentativaEm,
+  server\controllers\billingController.ts:1791:      },
+  server\controllers\billingController.ts:1792:    });
+  server\controllers\billingController.ts:1793:
+  server\controllers\billingController.ts:1804:    return false;
+  server\controllers\billingController.ts:1805:  }
+  server\controllers\billingController.ts:1806:}
+  server\controllers\billingController.ts:1807:
+> server\controllers\billingController.ts:1808:async function enviarComunicacoesBilling(
+  server\controllers\billingController.ts:1809:  args: Omit<
+  server\controllers\billingController.ts:1810:    ComunicacaoBillingArgs,
+  server\controllers\billingController.ts:1811:    "canal"
+  server\controllers\billingController.ts:1812:  >
+  server\controllers\billingController.ts:1813:) {
+  server\controllers\billingController.ts:1814:  const canais = [
+  server\controllers\billingController.ts:1815:    BillingComunicacaoCanal.APP,
+  server\controllers\billingController.ts:1816:    BillingComunicacaoCanal.EMAIL,
+  server\controllers\billingController.ts:1817:  ];
+  server\controllers\billingController.ts:1818:
+  server\controllers\billingController.ts:1819:  const resultados = await Promise.allSettled(
+  server\controllers\billingController.ts:1820:    canais.map((canal) =>
+
+
+

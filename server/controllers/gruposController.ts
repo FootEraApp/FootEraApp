@@ -3,7 +3,10 @@ import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { TipoMembro, NotificacaoTipo } from "@prisma/client";
 import { getIO } from "../socket.js";
-import { criarNotificacaoEEnviarPush } from "./notificacoesController.js";
+import {
+  criarNotificacaoEEnviarPush,
+  recomputeAndEmitBadge,
+} from "./notificacoesController.js";
 
 async function buscarNomeUsuario(usuarioId: string) {
   const usuario = await prisma.usuario.findUnique({
@@ -620,7 +623,7 @@ export async function removerMembroGrupo(req: AuthenticatedRequest, res: Respons
     const io = getIO();
 
     if (io) {
-      io.to(`u:${userId}`).emit("grupoRemovido", {
+      io.to(`u:${membroId}`).emit("grupoRemovido", {
         grupoId,
         motivo: "SAIU",
       });
@@ -695,6 +698,11 @@ export async function sairDoGrupo(req: AuthenticatedRequest, res: Response) {
         }),
       ]);
 
+      getIO()?.to(`u:${userId}`).emit("grupoRemovido", {
+        grupoId,
+        motivo: "SAIU",
+      });
+
       return res.status(200).json({ ok: true, transferiuOwnerPara: novoOwnerId });
     }
 
@@ -705,6 +713,11 @@ export async function sairDoGrupo(req: AuthenticatedRequest, res: Response) {
           usuarioId: userId,
         },
       },
+    });
+
+    getIO()?.to(`u:${userId}`).emit("grupoRemovido", {
+      grupoId,
+      motivo: "SAIU",
     });
 
     return res.status(200).json({ ok: true });
@@ -773,8 +786,52 @@ export async function deletarGrupo(
         },
       });
 
-      const desafiosIds = desafios.map((desafio) => desafio.id);
+      const desafiosIds = desafios.map(
+        (desafio) => desafio.id
+      );
 
+      // Identifica os áudios vinculados ao grupo
+      // antes de apagar suas mensagens.
+      const mensagensComAudio =
+        await tx.mensagemGrupo.findMany({
+          where: {
+            grupoId,
+            audioKey: {
+              not: null,
+            },
+          },
+          select: {
+            audioKey: true,
+          },
+        });
+
+      const chavesAudio = [
+        ...new Set(
+          mensagensComAudio
+            .map((mensagem) => mensagem.audioKey)
+            .filter(
+              (key): key is string =>
+                typeof key === "string" &&
+                key.length > 0
+            )
+        ),
+      ];
+
+      // Registra as pendências DURANTE a mesma transação.
+      // Se a transação falhar, nada é confirmado.
+      for (const audioKey of chavesAudio) {
+        await tx.exclusaoAudioMensagemPendente.upsert({
+          where: {
+            audioKey,
+          },
+          create: {
+            audioKey,
+          },
+          update: {},
+        });
+      }
+
+      // Agora pode apagar as mensagens do grupo.
       await tx.mensagemGrupo.deleteMany({
         where: {
           grupoId,
@@ -799,6 +856,23 @@ export async function deletarGrupo(
         });
       }
 
+      const chavesNotificacoes = participantesIds.map(
+        (participanteId) =>
+          `grupo:${participanteId}:${grupoId}`
+      );
+
+      await tx.notificacao.updateMany({
+        where: {
+          agrupamentoKey: {
+            in: chavesNotificacoes,
+          },
+          lida: false,
+        },
+        data: {
+          lida: true,
+        },
+      });
+
       await tx.membroGrupo.deleteMany({
         where: {
           grupoId,
@@ -811,6 +885,18 @@ export async function deletarGrupo(
         },
       });
     });
+
+    for (const participanteId of participantesIds) {
+      try {
+        await recomputeAndEmitBadge(participanteId);
+      } catch (erro) {
+        console.warn(
+          "[deletarGrupo] Falha ao atualizar badge:",
+          participanteId,
+          erro
+        );
+      }
+    }
 
     const io = getIO();
 

@@ -4,7 +4,6 @@ import {
   Categoria,
   PosicaoCampo,
   MetodologiaAssinaturaStatus,
-  PagamentoStatus,
   StatusUsuarioPapel,
   TipoUsuario,
   TipoOrganizacao,
@@ -39,6 +38,9 @@ import {
   getProfileIdForRole,
   hasRole,
 } from "../services/roles.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
 
 type AtividadeUI = {
   id: string;
@@ -216,37 +218,99 @@ function calcularIdadePorDataNascimento(dataNascimento: Date) {
   return idade;
 }
 
+function validarNascimentoMesmoUsuario(
+  nascimentoInformado: Date,
+  nascimentoCadastrado: Date | null
+): void {
+  if (!nascimentoCadastrado) return;
+
+  const informado = nascimentoInformado
+    .toISOString()
+    .slice(0, 10);
+
+  const cadastrado = nascimentoCadastrado
+    .toISOString()
+    .slice(0, 10);
+
+  if (informado !== cadastrado) {
+    const erro = new Error(
+      "A data de nascimento deve ser igual à cadastrada na conta."
+    ) as Error & {
+      statusCode?: number;
+      code?: string;
+    };
+
+    erro.statusCode = 409;
+    erro.code = "BIRTH_DATE_MISMATCH";
+    throw erro;
+  }
+}
+
 function parseDataNascimentoObrigatoria(raw: any) {
-  const valor = String(raw || "").trim();
+  const valor = String(raw ?? "").trim();
 
-  if (!valor) {
-    const err: any = new Error("Data de nascimento é obrigatória.");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const data = new Date(`${valor}T00:00:00`);
-
-  if (Number.isNaN(data.getTime())) {
-    const err: any = new Error("Data de nascimento inválida.");
-    err.statusCode = 400;
-    throw err;
-  }
-
-  const min = new Date("1900-01-01T00:00:00");
-  const hoje = inicioDoDia(new Date());
-
-  if (data < min || data > hoje) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
     const err: any = new Error(
-      "A data de nascimento deve estar entre 1900 e a data de hoje.",
+      "Informe a data de nascimento no formato AAAA-MM-DD."
     );
     err.statusCode = 400;
     throw err;
   }
 
+  const data = new Date(`${valor}T00:00:00.000Z`);
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(valor) ||
+    Number.isNaN(data.getTime()) ||
+    data.toISOString().slice(0, 10) !== valor
+  ) {
+    const err: any = new Error(
+      "Data de nascimento inválida."
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const hojeBrasil = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const parte = (tipo: string) =>
+    hojeBrasil.find((p) => p.type === tipo)?.value ?? "";
+
+  const hojeISO =
+    `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+  if (valor < "1900-01-01" || valor > hojeISO) {
+    const err: any = new Error(
+      "A data de nascimento deve estar entre 1900 e a data de hoje."
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const nascimentoAno = data.getUTCFullYear();
+  const nascimentoMes = data.getUTCMonth() + 1;
+  const nascimentoDia = data.getUTCDate();
+
+  const [anoHoje, mesHoje, diaHoje] =
+    hojeISO.split("-").map(Number);
+
+  let idade = anoHoje - nascimentoAno;
+
+  if (
+    mesHoje < nascimentoMes ||
+    (mesHoje === nascimentoMes && diaHoje < nascimentoDia)
+  ) {
+    idade--;
+  }
+
   return {
     dataNascimento: data,
-    idade: calcularIdadePorDataNascimento(data),
+    idade,
   };
 }
 
@@ -1116,7 +1180,7 @@ export const getAtividadesRecentes = async (
     const itensGrupo = parts.map(mapGrupoToAtividade);
 
     type AtividadeComTs = AtividadeUI & { ts: number };
-    
+
     const idsAgendamentosLegados = [
       ...new Set(
         atividadesDbSemTreinosOrfaos
@@ -1164,7 +1228,13 @@ export const getAtividadesRecentes = async (
         (a): AtividadeComTs => ({
           id: `ar-${a.id}`,
           tipo: a.tipo ?? "Atividade",
-          titulo: a.titulo ?? "Atividade",
+          titulo:
+            String(a.titulo ?? "").trim() &&
+            String(a.titulo ?? "").trim().toLowerCase() !== "atividade"
+              ? String(a.titulo).trim()
+              : String(a.tipo ?? "").toUpperCase() === "TREINO_TURMA"
+                ? "Treino em turma"
+                : "Atividade",
           createdAt: a.createdAt.toISOString(),
           imagemUrl: a.imagemUrl ?? null,
           link: (() => {
@@ -1969,35 +2039,19 @@ export const atualizarPosicaoAtletaGerenciado =
         });
     }
 
-    const vinculo =
-      await prisma.responsavelAtleta.findUnique({
-        where: {
-          responsavelUsuarioId_atletaId:
-            {
-              responsavelUsuarioId,
-
-              atletaId,
-            },
-        },
+    const autorizado =
+      await verificarPermissaoResponsavelAtleta({
+        responsavelUsuarioId,
+        atletaId,
+        permissao: "podeEditarPerfil",
       });
 
-    if (
-      !vinculo ||
-      vinculo.status !==
-        "ATIVO" ||
-      vinculo
-        .podeEditarPerfil !==
-        true
-    ) {
-      return res
-        .status(403)
-        .json({
-          code:
-            "ATLETA_ACCESS_DENIED",
-
-          error:
-            "Você não possui permissão para editar este atleta.",
-        });
+    if (!autorizado) {
+      return res.status(403).json({
+        code: "PROFILE_EDIT_NOT_ALLOWED",
+        error:
+          "Você não possui permissão para editar este atleta.",
+      });
     }
 
     const posicao =
@@ -2834,34 +2888,39 @@ export const atualizarPerfil = async (
             "Selecione seu perfil de Responsável para editar este atleta.",
         });
     }
+    const atletaAlvo = await prisma.atleta.findUnique({
+      where: {
+        usuarioId: id,
+      },
+      select: {
+        id: true,
+      },
+    });
 
-    vinculoGerenciado =
-      await prisma
-        .responsavelAtleta
-        .findFirst({
-          where: {
-            responsavelUsuarioId:
-              userIdFromToken,
-
-            status:
-              StatusResponsavelAtleta.ATIVO,
-
-            podeEditarPerfil:
-              true,
-
-            atleta: {
-              usuarioId:
-                id,
-            },
-          },
-
-          select: {
-            id: true,
-
-            atletaId:
-              true,
-          },
+    if (atletaAlvo) {
+      const autorizado =
+        await verificarPermissaoResponsavelAtleta({
+          responsavelUsuarioId: userIdFromToken,
+          atletaId: atletaAlvo.id,
+          permissao: "podeEditarPerfil",
         });
+
+      if (autorizado) {
+        vinculoGerenciado =
+          await prisma.responsavelAtleta.findUnique({
+            where: {
+              responsavelUsuarioId_atletaId: {
+                responsavelUsuarioId: userIdFromToken,
+                atletaId: atletaAlvo.id,
+              },
+            },
+            select: {
+              id: true,
+              atletaId: true,
+            },
+          });
+      }
+    }
 
     if (!vinculoGerenciado) {
       return res
@@ -3115,8 +3174,11 @@ export const atualizarPerfil = async (
 
     let dataNascimentoFinal = usuarioAtual.dataNascimento;
 
-    if (usuario?.dataNascimento !== undefined) {
-      const valor = String(usuario.dataNascimento || "").trim();
+    if (
+      usuario?.dataNascimento !== undefined &&
+      usuario?.dataNascimento !== null
+    ) {
+      const valor = String(usuario.dataNascimento).trim();
 
       if (!valor) {
         return res.status(400).json({
@@ -3125,6 +3187,24 @@ export const atualizarPerfil = async (
       }
 
       const parsed = parseDataNascimentoObrigatoria(valor);
+
+      if (usuarioAtual.dataNascimento) {
+        const dataOriginal = usuarioAtual.dataNascimento
+          .toISOString()
+          .slice(0, 10);
+
+        const dataSolicitada = parsed.dataNascimento
+          .toISOString()
+          .slice(0, 10);
+
+        if (dataSolicitada !== dataOriginal) {
+          return res.status(403).json({
+            code: "BIRTH_DATE_CHANGE_REQUIRES_VERIFICATION",
+            error:
+              "A data de nascimento já cadastrada só pode ser corrigida mediante verificação da identidade.",
+          });
+        }
+      }
 
       dataNascimentoFinal = parsed.dataNascimento;
     }
@@ -3158,6 +3238,7 @@ export const atualizarPerfil = async (
       federacao: "Federacao",
       marca: "Marca",
       creator: "Creator",
+      responsavel: "Responsavel",
     };
 
     const papelSolicitado = papelPorTipo[tipoNorm];
@@ -3213,6 +3294,42 @@ export const atualizarPerfil = async (
       }
     }
 
+    // Primeira definição do nascimento:
+    // permitida apenas se o cadastro ainda não possui data.
+    //
+    // O updateMany condicional evita sobrescrever uma data
+    // que tenha sido definida por outra requisição concorrente.
+
+    if (
+      usuarioAtual.dataNascimento === null &&
+      dataNascimentoFinal !== null
+    ) {
+      const resultadoNascimento =
+        await prisma.usuario.updateMany({
+          where: {
+            id,
+            dataNascimento: null,
+          },
+          data: {
+            dataNascimento: dataNascimentoFinal,
+
+            // A primeira definição não libera o cupom
+            // imediatamente. Aplica 30 dias de carência.
+            aniversarioElegivelApartirDe: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ),
+          },
+        });
+
+      if (resultadoNascimento.count !== 1) {
+        return res.status(409).json({
+          code: "BIRTH_DATE_CONCURRENT_UPDATE",
+          error:
+            "Os dados de nascimento foram atualizados por outra operação. Recarregue o perfil.",
+        });
+      }
+    }
+
     await prisma.usuario.update({
       where: { id },
       data: {
@@ -3226,7 +3343,6 @@ export const atualizarPerfil = async (
         pais: usuario.pais ?? null,
         logradouro: usuario.logradouro ?? null,
         cpf: usuario.cpf ?? null,
-        dataNascimento: dataNascimentoFinal,
       },
     });
 
@@ -3792,6 +3908,10 @@ export const atualizarPerfil = async (
         break;
       }
 
+      case "responsavel": {
+        break;
+      }
+
       default:
         return res.status(400).json({ error: "Tipo de usuário inválido." });
     }
@@ -4241,6 +4361,7 @@ export async function getPerfilClube(
       select: {
         id: true,
         usuarioId: true,
+        organizacaoId: true,
         usuario: {
           select: {
             id: true,
@@ -4276,7 +4397,7 @@ export async function getPerfilClube(
     });
 
     if (!clube) return res.status(404).json({ error: "Clube não encontrado" });
-  
+
     const acesso = await avaliarPrivacidadePerfil(
       (req as any).userId,
       clube.usuarioId
@@ -4333,6 +4454,7 @@ export async function getPerfilClube(
       clube: {
         id: clube.id,
         usuarioId: clube.usuarioId,
+        organizacaoId: clube.organizacaoId,
         nome: clube.nome,
         cnpj: clube.cnpj,
         telefone1: clube.telefone1,
@@ -4409,6 +4531,7 @@ export async function getPerfilEscola(req: AuthenticatedRequest, res: Response) 
       select: {
         id: true,
         usuarioId: true,
+        organizacaoId: true,
         usuario: {
           select: {
             id: true,
@@ -4466,6 +4589,7 @@ export async function getPerfilEscola(req: AuthenticatedRequest, res: Response) 
       escolinha: {
         id: escola.id,
         usuarioId: escola.usuarioId,
+        organizacaoId: escola.organizacaoId,
         nome: escola.nome,
         cnpj: escola.cnpj,
         telefone1: escola.telefone1,
@@ -5209,12 +5333,12 @@ export const upgradeLearningProfile = async (
       where: {
         id: usuarioId,
       },
-
       select: {
         id: true,
         nome: true,
         email: true,
         nomeDeUsuario: true,
+        dataNascimento: true,
       },
     });
 
@@ -5319,6 +5443,11 @@ export const upgradeLearningProfile = async (
         req.body?.dataNascimento,
       );
 
+      validarNascimentoMesmoUsuario(
+        nascimento.dataNascimento,
+        usuario.dataNascimento
+      );
+
       if (nascimento.idade < 17) {
         return res.status(400).json({
           message:
@@ -5411,6 +5540,64 @@ export const upgradeLearningProfile = async (
       const agora =
         new Date();
 
+
+      // PERFIS PESSOAIS:
+      // não permitir que um novo papel utilize uma
+      // data de nascimento diferente da conta principal.
+
+      if (
+        tipoValidado === "ATLETA" ||
+        tipoValidado === "PROFESSOR" ||
+        tipoValidado === "OLHEIRO"
+      ) {
+        const nascimento =
+          parseDataNascimentoObrigatoria(
+            req.body?.dataNascimento
+          );
+
+        // Bloqueia a linha da conta para serializar
+        // duas operações de cadastro simultâneas.
+        await tx.$queryRaw`
+          SELECT "id"
+          FROM "Usuario"
+          WHERE "id" = ${usuarioId}
+          FOR UPDATE
+        `;
+
+        const contaAtual =
+          await tx.usuario.findUniqueOrThrow({
+            where: {
+              id: usuarioId,
+            },
+            select: {
+              dataNascimento: true,
+            },
+          });
+
+        validarNascimentoMesmoUsuario(
+          nascimento.dataNascimento,
+          contaAtual.dataNascimento
+        );
+
+        if (!contaAtual.dataNascimento) {
+          await tx.usuario.update({
+            where: {
+              id: usuarioId,
+            },
+            data: {
+              dataNascimento:
+                nascimento.dataNascimento,
+
+              aniversarioElegivelApartirDe:
+                new Date(
+                  agora.getTime() +
+                  30 * 24 * 60 * 60 * 1000
+                ),
+            },
+          });
+        }
+      }
+
       const ativarPapelPessoal =
         async (
           papel: TipoUsuario
@@ -5471,6 +5658,11 @@ export const upgradeLearningProfile = async (
             req.body.dataNascimento,
           );
 
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
+          );
+
           const categoriaCalculada = categoriaAtletaPorIdade(nascimento.idade);
 
           const atleta = await tx.atleta.create({
@@ -5505,6 +5697,11 @@ export const upgradeLearningProfile = async (
         case "PROFESSOR": {
           const nascimento = parseDataNascimentoObrigatoria(
             req.body.dataNascimento,
+          );
+
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
           );
 
           const professor =
@@ -5556,6 +5753,11 @@ export const upgradeLearningProfile = async (
         case "OLHEIRO": {
           const nascimento = parseDataNascimentoObrigatoria(
             req.body.dataNascimento,
+          );
+
+          validarNascimentoMesmoUsuario(
+            nascimento.dataNascimento,
+            usuario.dataNascimento
           );
 
           const olheiro = await tx.olheiro.create({

@@ -1,0 +1,140 @@
+}
+
+const WEBHOOK_LEASE_MS = 5 * 60 * 1000;
+
+async function cancelarPagamentoPendenteComReserva(
+  pagamentoId: string,
+  provider: string
+) {
+  return prisma.$transaction(
+    async (tx) => {
+      const pagamento = await tx.pagamento.findUnique({
+        where: {
+          id: pagamentoId,
+        },
+      });
+
+      if (!pagamento) {
+        throw new Error("BILLING_PAYMENT_NOT_FOUND");
+      }
+
+      if (pagamento.provider !== provider) {
+        throw new Error(
+          "BILLING_PAYMENT_PROVIDER_MISMATCH"
+        );
+      }
+
+      // Cancelamento repetido é idempotente.
+      if (pagamento.status === PagamentoStatus.CANCELADO) {
+        return {
+          pagamentoId,
+          idempotent: true,
+        };
+      }
+
+      // Não cancelar pagamentos aprovados ou reembolsados
+      // por meio do fluxo de cancelamento de pendentes.
+      if (pagamento.status !== PagamentoStatus.PENDENTE) {
+        throw new Error(
+          "BILLING_CANCELLATION_REQUIRES_RECONCILIATION"
+        );
+      }
+
+      const agora = new Date();
+
+      // Disputa atomicamente o pagamento com a aprovação.
+      const alteracao = await tx.pagamento.updateMany({
+        where: {
+          id: pagamentoId,
+          provider,
+          status: PagamentoStatus.PENDENTE,
+        },
+        data: {
+          status: PagamentoStatus.CANCELADO,
+          canceladoEm: agora,
+        },
+      });
+
+      if (alteracao.count !== 1) {
+        throw new Error(
+          "BILLING_CANCELLATION_CONFLICT"
+        );
+      }
+
+      const reserva = await tx.cupomReserva.findUnique({
+        where: {
+          pagamentoId,
+        },
+      });
+
+      if (reserva) {
+        if (
+          reserva.usuarioId !== pagamento.usuarioId ||
+          reserva.cupomId !== pagamento.cupomId ||
+          ![
+            "RESERVADA",
+            "CONCILIACAO_PENDENTE",
+          ].includes(reserva.status)
+        ) {
+          throw new Error(
+            "BILLING_COUPON_RESERVATION_MISMATCH"
+          );
+        }
+
+        const liberacao = await tx.cupomReserva.updateMany({
+          where: {
+            id: reserva.id,
+            status: {
+              in: [
+                "RESERVADA",
+                "CONCILIACAO_PENDENTE",
+              ],
+            },
+          },
+          data: {
+            status: "LIBERADA",
+            liberadaEm: agora,
+          },
+        });
+
+        if (liberacao.count !== 1) {
+          throw new Error(
+            "BILLING_COUPON_RELEASE_CONFLICT"
+          );
+        }
+      }
+
+      return {
+        pagamentoId,
+        idempotent: false,
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 15000,
+    }
+  );
+}
+
+async function executarEventoPagamento<T>(
+  providerEventId: string,
+  tipo: string,
+  processar: () => Promise<T>
+): Promise<{
+  resultado?: T;
+  repetido: boolean;
+}> {
+  const chave = providerEventId.trim();
+
+  if (!chave) {
+    throw new Error("BILLING_EVENT_ID_REQUIRED");
+  }
+
+  // Reserva a identidade do evento.
+  // Em entregas simultâneas, outra requisição pode
+  // ter criado o registro primeiro.
+  let evento = await prisma.eventoPagamento.findUnique({
+    where: {
+      providerEventId: chave,
+    },
+  });

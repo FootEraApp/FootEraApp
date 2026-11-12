@@ -1,0 +1,260 @@
+﻿import type { Request, Response } from "express";
+import {Prisma, TipoUsuario, Nivel, StatusUsuarioPapel } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { prisma } from "../prisma.js";
+import {
+  listarActiveContexts,
+} from "../services/activeContext.js";
+
+export async function getMe(
+  req: Request,
+  res: Response
+) {
+  const usuarioId =
+    String(
+      (req as any).userId ??
+        (req as any).user?.id ??
+        (req as any).authUser?.id ??
+        ""
+    ).trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      error:
+        "NÃ£o autenticado",
+    });
+  }
+
+  const me =
+    await prisma.usuario.findUnique({
+      where: {
+        id:
+          usuarioId,
+      },
+
+      include: {
+        administrador:
+          true,
+      },
+    });
+
+  if (
+    !me ||
+    !me.administrador
+  ) {
+    return res.status(403).json({
+      error:
+        "Acesso restrito a administradores.",
+    });
+  }
+
+  const adminNivel =
+    me.administrador
+      .nivel ??
+    null;
+
+  const adminCargo =
+    me.administrador
+      .cargo ??
+    null;
+
+  const cargo =
+    String(
+      adminCargo ?? ""
+    )
+      .trim()
+      .toLowerCase()
+      .replace(
+        /\s+/g,
+        " "
+      );
+
+  const nivel =
+    String(
+      adminNivel ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const isByCargo =
+    cargo === "owner" ||
+    cargo === "superadmin" ||
+    cargo === "super admin";
+
+  const isByNivel =
+    nivel ===
+    "performance";
+
+  const isByEnv =
+    Boolean(
+      process.env
+        .SUPERADMIN_EMAIL
+    ) &&
+    me.email
+      ?.toLowerCase() ===
+      process.env
+        .SUPERADMIN_EMAIL!
+        .toLowerCase();
+
+  const canManageAdmins =
+    isByCargo ||
+    isByNivel ||
+    isByEnv;
+
+  return res.json({
+    id:
+      me.id,
+
+    nome:
+      me.nome,
+
+    email:
+      me.email,
+
+    tipo:
+      "Admin",
+
+    adminNivel,
+    adminCargo,
+
+    canManageAdmins,
+  });
+}
+
+export async function createAdmin(req: Request, res: Response) {
+  const {
+    email,
+    senha,
+    nome,
+    nomeDeUsuario,
+  } = req.body ?? {};
+  if (!email || !senha) {
+    return res.status(400).json({ error: "Informe email e senha." });
+  }
+
+  const emailNormalizado = String(email ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailNormalizado)) {
+    return res.status(400).json({
+      code: "INVALID_EMAIL",
+      error: "E-mail invÃ¡lido.",
+    });
+  }
+
+  if (
+    typeof senha !== "string" ||
+    !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(senha)
+  ) {
+    return res.status(400).json({
+      code: "WEAK_PASSWORD",
+      error: "A senha deve ter pelo menos 8 caracteres, com letras e nÃºmeros.",
+    });
+  }
+
+  const exists = await prisma.usuario.findUnique({
+    where: { email: emailNormalizado },
+  });
+  if (exists) return res.status(409).json({ error: "JÃ¡ existe usuÃ¡rio com este email." });
+
+  const hash = await bcrypt.hash(String(senha), 10);
+
+  const username = String(nomeDeUsuario ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!/^(?=.{3,20}$)[a-z0-9._]+$/.test(username)) {
+    return res.status(400).json({
+      code: "INVALID_USERNAME",
+      error: "Nome de usuÃ¡rio invÃ¡lido.",
+    });
+  }
+
+  const usernameExistente = await prisma.usuario.findUnique({
+    where: { nomeDeUsuario: username },
+    select: { id: true },
+  });
+
+  if (usernameExistente) {
+    return res.status(409).json({
+      code: "USERNAME_ALREADY_EXISTS",
+      error: "Este nome de usuÃ¡rio jÃ¡ estÃ¡ em uso.",
+    });
+  }
+
+  const nomeFinal = String(nome ?? "").trim();
+
+  if (!nomeFinal) {
+    return res.status(400).json({
+      code: "NAME_REQUIRED",
+      error: "Informe o nome completo.",
+    });
+  }
+
+  const nivelFinal: Nivel = Nivel.Base;
+
+  const created =
+    await prisma.$transaction(
+      async (tx) => {
+        const usuario =
+          await tx.usuario.create({
+            data: {
+              email: emailNormalizado,
+              senhaHash:
+                hash,
+              nome:
+                nomeFinal,
+              nomeDeUsuario: username,
+              tipo:
+                TipoUsuario.Admin,
+              verified:
+                true,
+
+              administrador: {
+                create: {
+                  cargo: "admin",
+                  nivel: nivelFinal,
+                },
+              },
+            },
+
+            include: {
+              administrador:
+                true,
+            },
+          });
+
+        await tx.usuarioPapel.upsert({
+          where: {
+            usuarioId_papel: {
+              usuarioId:
+                usuario.id,
+
+              papel:
+                TipoUsuario.Admin,
+            },
+          },
+
+          update: {
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:
+              new Date(),
+
+            desativadoEm:
+              null,
+          },
+
+          create: {
+            usuarioId:
+              usuario.id,
+
+            papel:
+              TipoUsuario.Admin,
+
+            status:
+              StatusUsuarioPapel.ATIVO,
+
+            ativadoEm:

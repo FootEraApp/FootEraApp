@@ -31,6 +31,7 @@ import {
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
+import socket from "../../services/socket.js";
 
 interface Usuario {
   id: string;
@@ -471,170 +472,219 @@ export default function ProfileHeader({
     "";
 
   const alvoId = String(perfilId || "").trim();
-  if (!alvoId) {
-    return;
-  }
-
-  if (!token) {
-    setSeguindo(false);
-    setFollowPendente(false);
-    return;
-  }
-
-  let alive = true;
-  setChecouMutuoFollow(false);
-
-  (async () => {
-    try {
-      const r = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!alive) return;
-
-      const arr = r.ok ? await r.json().catch(() => []) : [];
-      const ids = (Array.isArray(arr) ? arr : [])
-        .map((x: any) => String(x?.id ?? x?.usuarioId ?? x).trim())
-        .filter(Boolean);
-
-      setIsMutuoFollow(ids.includes(alvoId));
-      setChecouMutuoFollow(true);
-    } catch {
-      if (!alive) return;
-      setIsMutuoFollow(false);
-      setChecouMutuoFollow(true);
+    if (!alvoId) {
+      return;
     }
-  })();
 
-  return () => {
-    alive = false;
-  };
-}, [perfilId, isOwnProfile, isMe]);
-
-useEffect(() => {
-  if (isOwnProfile || isMe) return;
-
-  const token =
-    Storage.token ||
-    localStorage.getItem("token") ||
-    sessionStorage.getItem("token") ||
-    "";
-
-  const usuarioAlvoId = String(perfilId || "").trim();
-
-  if (!token || !usuarioAlvoId) return;
-
-  setChecouVinculo(false);
-  setTemVinculoTreino(false);
-
-  if (
-    !alvoTipoNormGlobal ||
-    !viewerTipoNorm
-  ) {
-    setTemVinculoTreino(
-      false
-    );
-
-    setChecouVinculo(
-      true
-    );
-
-    return;
-  }
-
-  if (!podeChecarVinculo) {
-    setTemVinculoTreino(false);
-    setChecouVinculo(true);
-    return;
-  }
-
-  let alive = true;
-
-  (async () => {
-    try {
-      const qs =
-        new URLSearchParams({
-          usuarioAlvoId,
-
-          meuPapel:
-            viewerTipoNorm,
-
-          alvoPapel:
-            alvoTipoNormGlobal,
-        }).toString();
-      const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
-
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!alive) return;
-
-      if (!resp.ok) {
-        setTemVinculoTreino(false);
-        setChecouVinculo(true);
-        return;
-      }
-
-      const body = await resp.json().catch(() => null as any);
-
-      const vinculo = Boolean(
-        body?.vinculo === true || body?.relacao || body?.relacaoId
-      );
-
-      setTemVinculoTreino(vinculo);
-      setChecouVinculo(true);
-    } catch {
-      if (!alive) return;
-      setTemVinculoTreino(false);
-      setChecouVinculo(true);
+    if (!token) {
+      setSeguindo(false);
+      setFollowPendente(false);
+      return;
     }
-  })();
 
-  return () => {
-    alive = false;
-  };
-}, [
-  perfilId,
-  isOwnProfile,
-  isMe,
-  viewerTipoNorm,
-  alvoTipoNormGlobal,
-  podeChecarVinculo,
-  vinculoRefreshKey,
-]);
-
-  useEffect(() => {
-    if (!isOwnProfile) return;
-
-    const token = Storage.token;
-    if (!token) return;
+    let alive = true;
+    setChecouMutuoFollow(false);
 
     (async () => {
       try {
-        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-count`, {
+        const r = await fetch(`${API.BASE_URL}/api/seguidores/mutuos`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (r.ok) {
-          const j = await r.json();
-          const count = typeof j === "number" ? j : j?.count ?? 0;
-          setUnreadDM(count);
+
+        if (!alive) return;
+
+        const arr = r.ok ? await r.json().catch(() => []) : [];
+        const ids = (Array.isArray(arr) ? arr : [])
+          .map((x: any) => String(x?.id ?? x?.usuarioId ?? x).trim())
+          .filter(Boolean);
+
+        setIsMutuoFollow(ids.includes(alvoId));
+        setChecouMutuoFollow(true);
+      } catch {
+        if (!alive) return;
+        setIsMutuoFollow(false);
+        setChecouMutuoFollow(true);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [perfilId, isOwnProfile, isMe]);
+
+  useEffect(() => {
+    if (isOwnProfile || isMe) return;
+
+    const token =
+      Storage.token ||
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
+
+    const usuarioAlvoId = String(perfilId || "").trim();
+
+    if (!token || !usuarioAlvoId) return;
+
+    setChecouVinculo(false);
+    setTemVinculoTreino(false);
+
+    if (
+      !alvoTipoNormGlobal ||
+      !viewerTipoNorm
+    ) {
+      setTemVinculoTreino(
+        false
+      );
+
+      setChecouVinculo(
+        true
+      );
+
+      return;
+    }
+
+    if (!podeChecarVinculo) {
+      setTemVinculoTreino(false);
+      setChecouVinculo(true);
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      try {
+        const qs =
+          new URLSearchParams({
+            usuarioAlvoId,
+
+            meuPapel:
+              viewerTipoNorm,
+
+            alvoPapel:
+              alvoTipoNormGlobal,
+          }).toString();
+        const url = `${API.BASE_URL}/api/solicitacoes-treino/vinculo?${qs}`;
+
+        const resp = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!alive) return;
+
+        if (!resp.ok) {
+          setTemVinculoTreino(false);
+          setChecouVinculo(true);
           return;
         }
-      } catch {}
+
+        const body = await resp.json().catch(() => null as any);
+
+        const vinculo = Boolean(
+          body?.vinculo === true || body?.relacao || body?.relacaoId
+        );
+
+        setTemVinculoTreino(vinculo);
+        setChecouVinculo(true);
+      } catch {
+        if (!alive) return;
+        setTemVinculoTreino(false);
+        setChecouVinculo(true);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    perfilId,
+    isOwnProfile,
+    isMe,
+    viewerTipoNorm,
+    alvoTipoNormGlobal,
+    podeChecarVinculo,
+    vinculoRefreshKey,
+  ]);
+
+  useEffect(() => {
+    if (!isOwnProfile) {
+      setUnreadDM(0);
+      return;
+    }
+
+    let ativo = true;
+
+    const carregarMensagensNaoLidas = async () => {
+      const token = Storage.token;
+
+      if (!token) {
+        if (ativo) setUnreadDM(0);
+        return;
+      }
 
       try {
-        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (r.ok) {
-          const arr = await r.json();
-          setUnreadDM(Array.isArray(arr) ? arr.length : 0);
-          return;
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/mensagem/unread-count`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!resposta.ok) return;
+
+        const dados = await resposta.json();
+
+        if (ativo) {
+          setUnreadDM(
+            Number(dados?.count ?? 0)
+          );
         }
-      } catch {}
-      setUnreadDM(0);
-    })();
+      } catch (erro) {
+        console.warn(
+          "[ProfileHeader] Falha ao consultar mensagens:",
+          erro
+        );
+      }
+    };
+
+    const atualizarViaSocket = (dados: any) => {
+      if (
+        dados &&
+        typeof dados.mensagens === "number"
+      ) {
+        setUnreadDM(dados.mensagens);
+      } else {
+        void carregarMensagensNaoLidas();
+      }
+    };
+
+    const atualizarViaEvento = () => {
+      void carregarMensagensNaoLidas();
+    };
+
+    void carregarMensagensNaoLidas();
+
+    socket.on("badge:update", atualizarViaSocket);
+
+    window.addEventListener(
+      "mensagens:atualizar-badge",
+      atualizarViaEvento
+    );
+
+    return () => {
+      ativo = false;
+
+      socket.off(
+        "badge:update",
+        atualizarViaSocket
+      );
+
+      window.removeEventListener(
+        "mensagens:atualizar-badge",
+        atualizarViaEvento
+      );
+    };
   }, [isOwnProfile]);
 
   useEffect(() => {
@@ -2157,10 +2207,21 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={() => {
-                  const destino =
-                    `/creator/profile?id=${encodeURIComponent(
-                      creatorUsuarioId
-                    )}`;
+                  const creatorId = String(
+                    creatorUsuarioId ?? ""
+                  ).trim();
+
+                  const ehInstitucional = creatorId.startsWith(
+                    "organization:"
+                  );
+
+                  const destino = ehInstitucional
+                    ? `/creator/profile?organizacaoId=${encodeURIComponent(
+                        creatorId.slice("organization:".length)
+                      )}`
+                    : `/creator/profile?id=${encodeURIComponent(
+                        creatorId
+                      )}`;
 
                   if (
                     requireAuth({

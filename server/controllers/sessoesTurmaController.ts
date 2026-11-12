@@ -4,11 +4,20 @@ import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { prisma } from "../prisma.js";
 import { deleteFromS3 } from "../middlewares/s3Upload.js";
 import {
+  recomputePontuacaoAtleta,
+} from "../services/recomputePontuacao.js";
+import {
   getActiveContext,
 } from "../services/activeContext.js";
 import {
   canPermission,
 } from "../services/permissions.js";
+import {
+  janelaDiaTreino,
+  verificarLimiteDiarioNaTransacao,
+  registrarRealizacaoDiaria,
+  respostaErroLimiteDiario,
+} from "../services/limiteDiarioTreinos.service.js";
 
 type EscopoSessao = {
   usuarioId: string;
@@ -394,6 +403,22 @@ async function podeGerenciarSessao(
   );
 }
 
+export async function usuarioPodeGerenciarSessaoTreino(
+  req: AuthenticatedRequest,
+  sessaoId: string
+): Promise<boolean> {
+  try {
+    const escopo = await assertInstrutor(req);
+
+    return await podeGerenciarSessao({
+      escopo,
+      sessaoId,
+    });
+  } catch {
+    return false;
+  }
+}
+
 function getTodayRangeBRT() {
   const now = new Date();
   const br = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
@@ -499,7 +524,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       where: { id: treinoProgramadoId },
       select: {
         id: true,
-        nome: true, 
+        nome: true,
         professorId: true,
         clubeId: true,
         escolinhaId: true,
@@ -551,7 +576,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
       sessaoId: sessao.id,
       exercicioId: e.exercicioId ?? null,
       exercicioTemporarioId: e.exercicioTemporarioId ?? null,
-      exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null, 
+      exercicioPersonalizadoId: e.exercicioPersonalizadoId ?? null,
       ordem: e.ordem ?? idx + 1,
       concluido: false,
     }));
@@ -632,7 +657,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
                 },
-                exercicioPersonalizado: { 
+                exercicioPersonalizado: {
                   select: {
                     id: true,
                     nome: true,
@@ -651,7 +676,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             id: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-            exercicioPersonalizadoId: true, 
+            exercicioPersonalizadoId: true,
             ordem: true,
             concluido: true,
             concluidoEm: true,
@@ -666,7 +691,7 @@ export async function criarSessao(req: AuthenticatedRequest, res: Response) {
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
-            exercicioPersonalizado: { 
+            exercicioPersonalizado: {
               select: {
                 id: true,
                 nome: true,
@@ -781,7 +806,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 id: true,
                 exercicioId: true,
                 exercicioTemporarioId: true,
-                exercicioPersonalizadoId: true, 
+                exercicioPersonalizadoId: true,
                 ordem: true,
                 repeticoes: true,
                 series: true,
@@ -798,7 +823,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
                 exercicioTemporario: {
                   select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
                 },
-                exercicioPersonalizado: { 
+                exercicioPersonalizado: {
                   select: {
                     id: true,
                     nome: true,
@@ -817,7 +842,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             id: true,
             exercicioId: true,
             exercicioTemporarioId: true,
-            exercicioPersonalizadoId: true, 
+            exercicioPersonalizadoId: true,
             ordem: true,
             concluido: true,
             concluidoEm: true,
@@ -832,7 +857,7 @@ export async function listarSessoesInstrutor(req: AuthenticatedRequest, res: Res
             exercicioTemporario: {
               select: { id: true, nome: true, descricao: true, videoDemonstrativoUrl: true },
             },
-            exercicioPersonalizado: { 
+            exercicioPersonalizado: {
               select: {
                 id: true,
                 nome: true,
@@ -1190,31 +1215,100 @@ export async function remarcarSessao(
       return res.status(400).json({ error: "novaDataHoraISO/novaDataISO inválida." });
     }
 
-    const atualizada = await prisma.$transaction(async (tx) => {
-      const sessaoAtualizada = await tx.sessaoTreinoTurma.update({
-        where: { id },
-        data: {
-          data: novaData,
-          status: StatusSessaoTreinoTurma.AGENDADO,
-          startedAt: null,
-          finishedAt: null,
-        },
-      });
+    const atualizada = await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(
+            hashtext('footera_training_session'),
+            hashtext(${String(id)})
+          )::text AS lock_result
+        `;
 
-      await tx.treinoAgendado.updateMany({
-        where: {
-          treinoProgramadoId: sessao.treinoProgramadoId,
-          turmaId: sessao.turmaId,
-          dataTreino: sessao.data,
-        },
-        data: { dataTreino: novaData },
-      });
+        const sessaoAtual = await tx.sessaoTreinoTurma.findUnique({
+          where: { id },
+          select: {
+            status: true,
+            treinoProgramadoId: true,
+            turmaId: true,
+            data: true,
+          },
+        });
 
-      return sessaoAtualizada;
-    });
+        if (!sessaoAtual) {
+          throw new Error("SESSAO_NAO_ENCONTRADA");
+        }
+
+        if (
+          sessaoAtual.status ===
+            StatusSessaoTreinoTurma.FINALIZADO ||
+          sessaoAtual.status ===
+            StatusSessaoTreinoTurma.CANCELADO
+        ) {
+          throw new Error("SESSAO_ENCERRADA");
+        }
+
+        const concluidos = await tx.treinoAgendado.count({
+          where: {
+            treinoProgramadoId:
+              sessaoAtual.treinoProgramadoId,
+            turmaId: sessaoAtual.turmaId,
+            dataTreino: sessaoAtual.data,
+            status: "CONCLUIDO",
+          },
+        });
+
+        if (concluidos > 0) {
+          throw new Error("TREINOS_JA_REALIZADOS");
+        }
+
+        const sessaoAtualizada =
+          await tx.sessaoTreinoTurma.update({
+            where: { id },
+            data: {
+              data: novaData,
+              status: StatusSessaoTreinoTurma.AGENDADO,
+              startedAt: null,
+              finishedAt: null,
+            },
+          });
+
+        await tx.treinoAgendado.updateMany({
+          where: {
+            treinoProgramadoId:
+              sessaoAtual.treinoProgramadoId,
+            turmaId: sessaoAtual.turmaId,
+            dataTreino: sessaoAtual.data,
+            status: {
+              not: "CONCLUIDO",
+            },
+          },
+          data: {
+            dataTreino: novaData,
+          },
+        });
+
+        return sessaoAtualizada;
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      }
+    );
 
     return res.json(atualizada);
   } catch (err: any) {
+    if (
+      [
+        "SESSAO_ENCERRADA",
+        "TREINOS_JA_REALIZADOS",
+      ].includes(err?.message)
+    ) {
+      return res.status(409).json({
+        code: err.message,
+        message:
+          "Esta sessão já possui realizações ou foi encerrada e não pode ser remarcada.",
+      });
+    }
     console.error("Erro remarcarSessao", err);
     res
       .status(err.status || 500)
@@ -1361,54 +1455,260 @@ export async function finalizarSessao(
       (p: any) => p.presente && p.atleta,
     );
 
-    const updatesPontuacao = presentes.map((p: any) =>
-      prisma.pontuacaoAtleta.upsert({
-        where: { atletaId: p.atletaId },
-        update: { pontuacaoTotal: { increment: pontosAplicados } },
-        create: {
-          atletaId: p.atletaId,
-          pontuacaoTotal: pontosAplicados,
+    const { inicio: inicioDia, fim: fimDia } =
+      janelaDiaTreino(sessao.data);
+
+    const outrasSessoesMesmoTreino =
+      await prisma.sessaoTreinoTurma.count({
+        where: {
+          id: { not: String(id) },
+          turmaId: sessao.turmaId,
+          treinoProgramadoId: sessao.treinoProgramadoId,
+          data: {
+            gte: inicioDia,
+            lt: fimDia,
+          },
+          status: {
+            not: StatusSessaoTreinoTurma.CANCELADO,
+          },
         },
-      }),
+      });
+
+    if (outrasSessoesMesmoTreino > 0) {
+      return res.status(409).json({
+        code: "TRAINING_SESSION_AMBIGUOUS",
+        message:
+          "Existe outra sessão da mesma turma e do mesmo treino neste dia. Não é possível identificar com segurança qual agendamento deve ser concluído.",
+      });
+    }
+
+    const idsPresentes = [
+      ...new Set<string>(
+        presentes.map((p: any) => String(p.atletaId))
+      ),
+    ].sort();
+
+    const finalizada = await prisma.$transaction(
+      async (tx) => {
+        // Impede que a mesma sessão seja finalizada
+        // simultaneamente por duas requisições.
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(
+            hashtext('footera_training_session'),
+            hashtext(${String(id)})
+          )::text AS lock_result
+        `;
+
+        const sessaoAtual = await tx.sessaoTreinoTurma.findUnique({
+          where: { id: String(id) },
+          select: { status: true },
+        });
+
+        if (
+          !sessaoAtual ||
+          (
+            sessaoAtual.status !==
+              StatusSessaoTreinoTurma.AGENDADO &&
+            sessaoAtual.status !==
+              StatusSessaoTreinoTurma.EM_ANDAMENTO
+          )
+        ) {
+          throw new Error("SESSAO_JA_FINALIZADA");
+        }
+
+        for (const atletaId of idsPresentes) {
+          // Mesmo bloqueio usado pelos treinos livres
+          // e pelas conclusões individuais.
+          await tx.$queryRaw`
+            SELECT pg_advisory_xact_lock(
+              hashtext('footera_daily_training'),
+              hashtext(${atletaId})
+            )::text AS lock_result
+          `;
+
+          const agendamentos = await tx.treinoAgendado.findMany({
+            where: {
+              atletaId,
+              treinoProgramadoId: sessao.treinoProgramadoId,
+              turmaId: sessao.turmaId,
+              dataTreino: {
+                gte: inicioDia,
+                lt: fimDia,
+              },
+            },
+            select: {
+              id: true,
+              status: true,
+              finishedAt: true,
+            },
+          });
+
+          // Não escolher arbitrariamente um agendamento
+          // quando há registros duplicados para o dia.
+          if (agendamentos.length !== 1) {
+            throw new Error(
+              `AGENDAMENTO_TURMA_AMBIGUO:${atletaId}`
+            );
+          }
+
+          const agendado = agendamentos[0];
+          const jaConcluido =
+            agendado.status === "CONCLUIDO";
+
+          await verificarLimiteDiarioNaTransacao(tx, {
+            atletaId,
+            data: agora,
+            jaContado: jaConcluido,
+          });
+
+          const submissaoExistente =
+            await tx.submissaoTreino.findUnique({
+              where: {
+                atletaId_treinoAgendadoId: {
+                  atletaId,
+                  treinoAgendadoId: agendado.id,
+                },
+              },
+              select: {
+                id: true,
+                aprovado: true,
+              },
+            });
+
+          const realizadoEm =
+            agendado.finishedAt ?? agora;
+
+          if (!jaConcluido) {
+            await tx.submissaoTreino.upsert({
+              where: {
+                atletaId_treinoAgendadoId: {
+                  atletaId,
+                  treinoAgendadoId: agendado.id,
+                },
+              },
+              create: {
+                atletaId,
+                treinoAgendadoId: agendado.id,
+                aprovado: true,
+                duracaoMinutos: minutosConsiderados,
+                pontosCreditados: pontosAplicados,
+                pontuacaoSnapshot: pontosAplicados,
+              },
+              update: {
+                aprovado: true,
+                duracaoMinutos: minutosConsiderados,
+                pontosCreditados: pontosAplicados,
+                pontuacaoSnapshot: pontosAplicados,
+              },
+            });
+
+            await tx.treinoAgendado.update({
+              where: { id: agendado.id },
+              data: {
+                status: "CONCLUIDO",
+                execucaoStatus: "COMPLETED",
+                finishedAt: realizadoEm,
+                duracaoSegundos: minutosReal * 60,
+              },
+            });
+
+            const atleta = presentes.find(
+              (p: any) => String(p.atletaId) === atletaId
+            );
+
+            const usuarioId = atleta?.atleta?.usuarioId;
+
+            if (usuarioId) {
+              await tx.treinoUsuario.upsert({
+                where: {
+                  treinoId_usuarioId: {
+                    treinoId: agendado.id,
+                    usuarioId,
+                  },
+                },
+                create: {
+                  treinoId: agendado.id,
+                  usuarioId,
+                  status: "COMPLETED",
+                  startedAt: inicio,
+                  completedAt: realizadoEm,
+                },
+                update: {
+                  status: "COMPLETED",
+                  completedAt: realizadoEm,
+                },
+              });
+            }
+
+            // Evita creditar novamente uma submissão
+            // que já estava aprovada anteriormente.
+            if (!submissaoExistente?.aprovado) {
+              if (usuarioId) {
+                await tx.atividadeRecente.create({
+                  data: {
+                    usuarioId,
+                    tipo: "TREINO_TURMA",
+                    titulo:
+                      sessao.treino?.nome ??
+                      "Treino em turma",
+                    imagemUrl:
+                      sessao.treino?.imagemUrl ?? null,
+                    link: sessao.treino?.id
+                      ? `/treinos/unico?programadoId=${encodeURIComponent(
+                          sessao.treino.id
+                        )}`
+                      : "/trainings",
+                  },
+                });
+              }
+            }
+          }
+
+          // Persiste o consumo da vaga mesmo
+          // se o agendamento for apagado depois.
+          await registrarRealizacaoDiaria(tx, {
+            atletaId,
+            origem: "AGENDADO",
+            origemId: agendado.id,
+            realizadoEm,
+          });
+        }
+
+        return tx.sessaoTreinoTurma.update({
+          where: { id: String(id) },
+          data: {
+            status: StatusSessaoTreinoTurma.FINALIZADO,
+            finishedAt: agora,
+            duracaoMinutosReal: minutosReal,
+            penalidadeAtraso,
+          },
+          include: {
+            presencas: true,
+          },
+        });
+      },
+      {
+        timeout: 60000,
+        maxWait: 10000,
+      }
     );
 
-    const atividades = presentes
-      .filter((p: any) => p.atleta?.usuarioId)
-      .map((p: any) =>
-        prisma.atividadeRecente.create({
-          data: {
-            usuarioId:
-              p.atleta.usuarioId!,
+    const resultadosPontuacao = await Promise.allSettled(
+      idsPresentes.map((atletaId) =>
+        recomputePontuacaoAtleta(atletaId)
+      )
+    );
 
-            tipo: "TREINO_TURMA",
-
-            titulo:
-              sessao.treino?.nome ??
-              "Treino em turma",
-
-            imagemUrl:
-              sessao.treino?.imagemUrl ??
-              null,
-
-            link: "/trainings",
-          },
-        }),
-      );
-
-    await Promise.all([...updatesPontuacao, ...atividades]);
-
-    const finalizada = await prisma.sessaoTreinoTurma.update({
-      where: { id },
-      data: {
-        status: StatusSessaoTreinoTurma.FINALIZADO,
-        finishedAt: agora,
-        duracaoMinutosReal: minutosReal,
-        penalidadeAtraso,
-      },
-      include: {
-        presencas: true,
-      },
-    });
+    for (const [indice, resultado] of
+      resultadosPontuacao.entries()) {
+      if (resultado.status === "rejected") {
+        console.error(
+          "[finalizarSessao] Falha ao recalcular pontuação:",
+          idsPresentes[indice],
+          resultado.reason
+        );
+      }
+    }
 
     res.json({
       ...finalizada,
@@ -1418,10 +1718,35 @@ export async function finalizarSessao(
       penalidadeAtraso,
     });
   } catch (err: any) {
+    const limite = respostaErroLimiteDiario(err);
+
+    if (limite) {
+      return res.status(403).json(limite);
+    }
+
+    if (err?.message === "SESSAO_JA_FINALIZADA") {
+      return res.status(409).json({
+        code: "SESSION_ALREADY_FINISHED",
+        message: "Esta sessão já foi finalizada.",
+      });
+    }
+
+    if (
+      typeof err?.message === "string" &&
+      err.message.startsWith("AGENDAMENTO_TURMA_AMBIGUO:")
+    ) {
+      return res.status(409).json({
+        code: "TRAINING_SCHEDULE_MISMATCH",
+        message:
+          "Um atleta presente não possui um agendamento único para esta sessão.",
+      });
+    }
+
     console.error("Erro finalizarSessao", err);
-    res
-      .status(err.status || 500)
-      .json({ error: err.message || "Erro ao finalizar sessão" });
+
+    return res.status(err?.status || 500).json({
+      message: err?.message || "Erro ao finalizar sessão.",
+    });
   }
 }
 
@@ -1463,30 +1788,92 @@ export async function excluirSessao(
       });
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.treinoAgendado.deleteMany({
-        where: {
-          treinoProgramadoId: sessao.treinoProgramadoId,
-          turmaId: sessao.turmaId,
-          dataTreino: sessao.data,
-        },
-      });
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(
+            hashtext('footera_training_session'),
+            hashtext(${String(id)})
+          )::text AS lock_result
+        `;
 
-      await tx.presencaSessaoTreino.deleteMany({
-        where: { sessaoId: id },
-      });
+        const sessaoAtual = await tx.sessaoTreinoTurma.findUnique({
+          where: { id },
+          select: {
+            status: true,
+            treinoProgramadoId: true,
+            turmaId: true,
+            data: true,
+          },
+        });
 
-      await tx.sessaoTreinoTurmaExercicio.deleteMany({
-        where: { sessaoId: id },
-      });
+        if (!sessaoAtual) {
+          throw new Error("SESSAO_NAO_ENCONTRADA");
+        }
 
-      await tx.sessaoTreinoTurma.delete({
-        where: { id },
-      });
-    });
+        if (
+          sessaoAtual.status ===
+          StatusSessaoTreinoTurma.FINALIZADO
+        ) {
+          throw new Error("SESSAO_COM_TREINOS_REALIZADOS");
+        }
+
+        const concluidos = await tx.treinoAgendado.count({
+          where: {
+            treinoProgramadoId:
+              sessaoAtual.treinoProgramadoId,
+            turmaId: sessaoAtual.turmaId,
+            dataTreino: sessaoAtual.data,
+            status: "CONCLUIDO",
+          },
+        });
+
+        if (concluidos > 0) {
+          throw new Error("SESSAO_COM_TREINOS_REALIZADOS");
+        }
+
+        await tx.treinoAgendado.deleteMany({
+          where: {
+            treinoProgramadoId:
+              sessaoAtual.treinoProgramadoId,
+            turmaId: sessaoAtual.turmaId,
+            dataTreino: sessaoAtual.data,
+            status: {
+              not: "CONCLUIDO",
+            },
+          },
+        });
+
+        await tx.presencaSessaoTreino.deleteMany({
+          where: { sessaoId: id },
+        });
+
+        await tx.sessaoTreinoTurmaExercicio.deleteMany({
+          where: { sessaoId: id },
+        });
+
+        await tx.sessaoTreinoTurma.delete({
+          where: { id },
+        });
+      },
+      {
+        timeout: 15000,
+        maxWait: 10000,
+      }
+    );
 
     return res.json({ success: true });
   } catch (err: any) {
+    if (
+      err?.message === "SESSAO_COM_TREINOS_REALIZADOS"
+    ) {
+      return res.status(409).json({
+        code: "SESSION_HAS_COMPLETED_TRAININGS",
+        message:
+          "Esta sessão possui treinos realizados e não pode ser excluída.",
+      });
+    }
+
     console.error("Erro excluirSessao", err);
     res.status(err.status || 500).json({
       error: err.message || "Erro ao excluir sessão",
@@ -1550,8 +1937,8 @@ export async function obterSessao(req: AuthenticatedRequest, res: Response) {
       status: sessao.status,
       treino: sessao.treino,
       turma: sessao.turma,
-      alunos,     
-      presentes,   
+      alunos,
+      presentes,
     });
   } catch (err: any) {
     console.error("Erro obterSessao", err);
@@ -1564,7 +1951,7 @@ export async function salvarVideosExecucaoSessao(
   res: Response,
 ) {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const escopo =
       await assertInstrutor(
         req

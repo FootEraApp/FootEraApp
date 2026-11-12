@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "MembroGrupo" ADD COLUMN     "ultimaLeituraEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

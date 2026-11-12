@@ -333,17 +333,30 @@ export async function getProfileIdForRole(
         })
       )?.id ?? null;
 
-    case TipoUsuario.Creator:
-      return (
-        await prisma.creator.findUnique({
-          where: {
-            usuarioId,
-          },
-          select: {
-            id: true,
-          },
-        })
-      )?.id ?? null;
+    case TipoUsuario.Creator: {
+      const creator = await prisma.creator.findUnique({
+        where: {
+          usuarioId,
+        },
+        select: {
+          id: true,
+          tipo: true,
+          ativo: true,
+          organizacaoId: true,
+        },
+      });
+
+      if (
+        !creator ||
+        !creator.ativo ||
+        creator.tipo !== "PESSOA_FISICA" ||
+        creator.organizacaoId !== null
+      ) {
+        return null;
+      }
+
+      return creator.id;
+    }
 
     case TipoUsuario.Admin:
       return (

@@ -1085,7 +1085,10 @@ export default function PerfilLearning({ idDaUrl }: { idDaUrl?: string }) {
           </div>
         )}
 
-        {aba === "postagens" && <ProfilePostsSection usuarioId={usuarioId} />}
+        {aba === "postagens" && <ProfilePostsSection
+          usuarioId={usuarioId}
+          papel="Professor"
+        />}
       </div>
     </div>
    </div>

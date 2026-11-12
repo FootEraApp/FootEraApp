@@ -1,0 +1,28 @@
+
+Path                                                          LineNumber Line                                                  
+----                                                          ---------- ----                                                  
+C:\dev\FootEraApp-app\server\controllers\billingController.ts         30   sendBillingEmail,                                   
+C:\dev\FootEraApp-app\server\controllers\billingController.ts       1727       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts              3 import { sendBillingEmail } from "../utils/mailer.js";
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts             27       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts             78       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                           2 import nodemailer from "nodemailer";                  
+C:\dev\FootEraApp-app\server\utils\mailer.ts                           4 type Transporter = nodemailer.Transporter;            
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          31 export async function createTransport(): Promise<Tr...
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          38     return nodemailer.createTransport({               
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          51     return nodemailer.createTransport({               
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          59     return nodemailer.createTransport({               
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          87   const acc = await nodemailer.createTestAccount();   
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          88   return nodemailer.createTransport({                 
+C:\dev\FootEraApp-app\server\utils\mailer.ts                          97   const transporter = await createTransport();        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         108   const preview = (nodemailer as any).getTestMessag...
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         123   const transporter = await createTransport();        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         185   const transporter = await createTransport();        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         266   const preview = (nodemailer as any).getTestMessag...
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         271 export async function sendBillingEmail(opts: {        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         280   const transporter = await createTransport();        
+C:\dev\FootEraApp-app\server\utils\sendMail.ts                         1 import nodemailer from "nodemailer";                  
+C:\dev\FootEraApp-app\server\utils\sendMail.ts                         4   const transporter = nodemailer.createTransport({    
+
+
+

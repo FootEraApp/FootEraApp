@@ -1,0 +1,90 @@
+      } as any,
+    });
+
+    if (isMetodologiaAvulsa(planoNorm)) {
+      const mid = extractMetodologiaId(planoNorm);
+      await prisma.metodologiaAssinante.upsert({
+        where: { metodologiaId_usuarioId: { metodologiaId: mid, usuarioId } },
+        update: { status: "ATIVA", cancelouEm: null },
+        create: { metodologiaId: mid, usuarioId, status: "ATIVA" },
+      });
+    } else {
+      await upsertSubscription(
+        usuarioId,
+        activeContext,
+        planoNorm,
+        periodicidade
+      );
+    }
+    await resgatarCupom(cupom.id, usuarioId, pagamento.id);
+
+    res.json({
+      status: "APROVADO",
+      pagamento,
+      message: "Presente resgatado e assinatura ativada.",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Erro ao resgatar presente", err });
+  }
+}
+
+export async function checkExpiringSubscriptions(
+  req: Request,
+  res: Response
+) {
+  try {
+    const resultado =
+      await processExpiringSubscriptions();
+
+    return res.json({
+      ok: true,
+      bloqueadas: resultado.bloqueadas,
+      lembretes: resultado.avisadas,
+      desativadas: resultado.desativadas,
+    });
+  } catch (error) {
+    console.error(
+      "[billingController.checkExpiringSubscriptions]",
+      error
+    );
+
+    return res.status(500).json({
+      message:
+        "Erro ao verificar assinaturas expirando.",
+    });
+  }
+}
+
+export async function getAulasAoVivoPagas(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const agora =
+      new Date();
+
+    const limiteReplay =
+      new Date(
+        agora.getTime() -
+          REPLAY_COMPRA_MS
+      );
+
+    const aulas =
+      await prisma
+        .aulaAoVivo
+        .findMany({
+          where: {
+            metodologiaId:
+              null,
+            metodologiaAvulsaId:
+              null,
+            acessoPago:
+              true,
+            precoAcesso: {
+              gt:
+                0,
+            },
+            OR: [
+              {
+                status:
+                  "AGENDADA",

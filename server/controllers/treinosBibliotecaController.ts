@@ -2,7 +2,9 @@ import type {
   Request,
   Response,
 } from "express";
-
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
 import {
   TipoUsuario,
   StatusResponsavelAtleta,
@@ -128,12 +130,11 @@ async function resolverUsuarioBiblioteca(
     contexto.tipoUsuario ===
     TipoUsuario.Responsavel
   ) {
-    const atletaId =
-      String(
-        req.query
-          ?.atletaId ??
-        ""
-      ).trim();
+    const atletaId = String(
+      req.query?.atletaId ??
+      req.body?.atletaId ??
+      ""
+    ).trim();
 
     if (!atletaId) {
       return null;
@@ -148,62 +149,21 @@ async function resolverUsuarioBiblioteca(
       return null;
     }
 
-    const vinculo =
-      await prisma
-        .responsavelAtleta
-        .findUnique({
-          where: {
-            responsavelUsuarioId_atletaId:
-              {
-                responsavelUsuarioId:
-                  usuarioLogadoId,
+        const autorizado =
+      await verificarPermissaoResponsavelAtleta({
+        responsavelUsuarioId: usuarioLogadoId,
+        atletaId: atletaAlvo.id,
+        permissao: "podeGerenciarTreinos",
+      });
 
-                atletaId:
-                  atletaAlvo.id,
-              },
-          },
-
-          include: {
-            atleta: {
-              select: {
-                id: true,
-                usuarioId: true,
-              },
-            },
-          },
-        });
-
-    if (
-      !vinculo ||
-      vinculo.status !==
-        StatusResponsavelAtleta.ATIVO
-    ) {
-      return null;
-    }
-
-    const podeGerenciarTreinos =
-      vinculo.principal ===
-        true ||
-      vinculo
-        .podeGerenciarTreinos ===
-        true;
-
-    if (
-      !podeGerenciarTreinos
-    ) {
+    if (!autorizado) {
       return null;
     }
 
     return {
-      atletaId:
-        vinculo.atleta.id,
-
-      usuarioId:
-        vinculo.atleta
-          .usuarioId,
-
-      comoResponsavel:
-        true,
+      atletaId: atletaAlvo.id,
+      usuarioId: atletaAlvo.usuarioId,
+      comoResponsavel: true,
     };
   }
 

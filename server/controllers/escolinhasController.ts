@@ -4,6 +4,7 @@ import { touchFairUse } from "server/lib/usage.js";
 import { aplicarCorteEscolinha, getRangeFromQuery } from "../utils/analyticsWindow.js";
 import { salvarHistoricoAtletaVinculo } from "../services/historicoAtleta.js";
 import { garantirOrganizacaoLegada } from "../services/organizacoes.js";
+import type { Prisma } from "@prisma/client";
 
 export async function relatorioRetencaoEscolinha(req: Request, res: Response) {
   try {
@@ -123,35 +124,113 @@ export const createEscolinha = async (req: Request, res: Response) => {
 
 export const updateEscolinha = async (req: Request, res: Response) => {
   const { id } = req.params;
-  try {
-    const escolinha = await prisma.escolinha.findUnique({ where: { id } });
-    if (!escolinha) {
-      return res.status(404).json({ message: "Escolinha não encontrada." });
+
+  const camposProtegidos = [
+    "id",
+    "usuarioId",
+    "organizacaoId",
+    "usuario",
+    "organizacao",
+  ] as const;
+
+  for (const campo of camposProtegidos) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        req.body ?? {},
+        campo,
+      )
+    ) {
+      return res.status(400).json({
+        code: "PROTECTED_ORGANIZATION_FIELD",
+        message:
+          `O campo "${campo}" não pode ser alterado pela edição comum. ` +
+          "Para trocar o proprietário, utilize a transferência de propriedade.",
+      });
     }
+  }
+
+  try {
+    const escolinhaExistente = await prisma.escolinha.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!escolinhaExistente) {
+      return res.status(404).json({
+        message: "Escolinha não encontrada.",
+      });
+    }
+
+    const camposPermitidos = [
+      "nome",
+      "cnpj",
+      "telefone1",
+      "telefone2",
+      "email",
+      "siteOficial",
+      "sede",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+      "cidade",
+      "estado",
+      "pais",
+      "cep",
+      "logo",
+      "descricao",
+    ] as const;
+
+    const dados: Record<string, unknown> = {};
+
+    for (const campo of camposPermitidos) {
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, campo)) {
+        const valor = req.body[campo];
+
+        if (typeof valor !== "string" && valor !== null) {
+          return res.status(400).json({
+            code: "INVALID_FIELD_VALUE",
+            message: `Valor inválido para ${campo}.`,
+          });
+        }
+
+        dados[campo] = valor;
+      }
+    }
+
+    if (Object.keys(dados).length === 0) {
+      return res.status(400).json({
+        code: "NO_EDITABLE_FIELDS",
+        message: "Nenhum campo editável informado.",
+      });
+    }
+
     const atualizada = await prisma.escolinha.update({
       where: { id },
-      data: req.body,
+      data: dados as Prisma.EscolinhaUncheckedUpdateInput,
     });
-    res.json(atualizada);
+
+    return res.json(atualizada);
   } catch (error) {
-    console.error("Erro ao atualizar escolinha:", error);
-    res.status(500).json({ message: "Erro ao atualizar escolinha." });
+    console.error("[updateEscolinha]", error);
+
+    return res.status(500).json({
+      message: "Erro ao atualizar escolinha.",
+    });
   }
 };
 
-export const deleteEscolinha = async (req: Request, res: Response) => {
-  const { id } = req.params;
-  try {
-    const escolinha = await prisma.escolinha.findUnique({ where: { id } });
-    if (!escolinha) {
-      return res.status(404).json({ message: "Escolinha não encontrada." });
-    }
-    await prisma.escolinha.delete({ where: { id } });
-    res.json({ message: "Escolinha excluída com sucesso." });
-  } catch (error) {
-    console.error("Erro ao deletar escolinha:", error);
-    res.status(500).json({ message: "Erro ao deletar escolinha." });
-  }
+export const deleteEscolinha = async (
+  _req: Request,
+  res: Response,
+) => {
+  return res.status(409).json({
+    code: "ORGANIZATION_DELETION_REQUIRES_REVIEW",
+    message:
+      "A exclusão definitiva de escolinhas está desativada. " +
+      "Utilize a transferência de propriedade ou o futuro " +
+      "procedimento de encerramento institucional.",
+  });
 };
 
 export const desvincularAtletaDaEscolinha = async (req: Request, res: Response) => {

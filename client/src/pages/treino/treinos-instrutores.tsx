@@ -147,9 +147,9 @@ type MetodologiaCard = {
   nivel?: "Base" | "Avancado" | "Performance" | string | null;
   jaAssinada?: boolean;
   tags?: string[];
-  mediaAvaliacao: number;   
-  notaCount: number;    
-  pontos: number; 
+  mediaAvaliacao: number;
+  notaCount: number;
+  pontos: number;
   publicoAlvo?: MetodologiaPublico | null;
   totalReviews?: number | null;
 };
@@ -176,11 +176,11 @@ type SessaoDeHoje = {
 };
 
 type StartWindowInfo = {
-  hasTime: boolean;    
-  canStart: boolean; 
-  isLate: boolean;     
-  startAt: Date;       
-  lateAt: Date;       
+  hasTime: boolean;
+  canStart: boolean;
+  isLate: boolean;
+  startAt: Date;
+  lateAt: Date;
 };
 
 function parseDateSafe(raw: any): Date | null {
@@ -239,8 +239,8 @@ function getStartWindowInfo(d: Date | null): StartWindowInfo | null {
 
   if (hasHoraMarcada(d)) {
     const startAt = d;
-    const canStartFrom = new Date(startAt.getTime() - 60 * 60 * 1000); 
-    const lateAt = new Date(startAt.getTime() + 60 * 60 * 1000);       
+    const canStartFrom = new Date(startAt.getTime() - 60 * 60 * 1000);
+    const lateAt = new Date(startAt.getTime() + 60 * 60 * 1000);
 
     const canStart = now >= canStartFrom && now <= lateAt;
     const isLate = now > lateAt;
@@ -385,7 +385,7 @@ function getYMDInBRT(d: Date) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(d); 
+  }).format(d);
   const [Y, M, D] = parts.split("-").map(Number);
   return { Y, M, D };
 }
@@ -403,6 +403,40 @@ function endOfDayBRT(d: Date) {
 function isVideoUrl(url: string) {
   const clean = url.split("?")[0].toLowerCase();
   return /\.(mp4|webm|ogg|mov|m4v)$/i.test(clean);
+}
+
+function prepararUrlVideo(raw: string): string {
+  try {
+    const url = new URL(raw);
+
+    if (
+      url.hostname === "youtu.be" ||
+      url.hostname === "www.youtu.be"
+    ) {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      if (id) {
+        return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
+      }
+    }
+
+    if (
+      url.hostname === "youtube.com" ||
+      url.hostname === "www.youtube.com" ||
+      url.hostname === "m.youtube.com"
+    ) {
+      const id =
+        url.searchParams.get("v") ||
+        url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1];
+
+      if (id) {
+        return `https://www.youtube.com/embed/${encodeURIComponent(id)}`;
+      }
+    }
+  } catch {
+    // Mantém o endereço original se não for URL absoluta.
+  }
+
+  return raw;
 }
 
 function pickFirstId(obj: any, keys: string[]): string {
@@ -827,7 +861,7 @@ export default function TreinosInstrutores({
         );
 
         const txt = await res.text().catch(() => "");
-        
+
         if (!res.ok) {
           setProfessoresVinculadosIds([]);
           setProfessoresVinculadosNomeById({});
@@ -882,7 +916,7 @@ export default function TreinosInstrutores({
   useEffect(() => {
     const id = setInterval(() => {
       setClockNow(Date.now());
-    }, 1000); 
+    }, 1000);
 
     return () => clearInterval(id);
   }, []);
@@ -918,7 +952,7 @@ export default function TreinosInstrutores({
     setErroMetodologias(null);
 
     try {
-      const publicoParam = filtroPublico; 
+      const publicoParam = filtroPublico;
 
       const r = await fetch(
         `${API.BASE_URL}/api/metodologias/visiveis?publico=${encodeURIComponent(publicoParam)}`,
@@ -1920,7 +1954,7 @@ export default function TreinosInstrutores({
   const listaParaExibir =
     usuario?.tipo === "admin"
       ? treinos
-      : treinos; 
+      : treinos;
 
   const listaOrdenadaParaExibir = useMemo(() => {
     const meuId = String(usuario?.tipoUsuarioId ?? "").trim();
@@ -2412,7 +2446,7 @@ export default function TreinosInstrutores({
         const professorNomes = Array.from(
           new Set(
             [
-              ...splitNomes(professorNomeSingular), 
+              ...splitNomes(professorNomeSingular),
               ...professorNomesDireto,
               ...nomesFromIds,
             ]
@@ -2589,7 +2623,7 @@ export default function TreinosInstrutores({
 
   const treinosVinculadosLista = useMemo(() => {
     if (!usuario) return [];
-    if (String(usuario.tipo).toLowerCase() === "admin") return []; 
+    if (String(usuario.tipo).toLowerCase() === "admin") return [];
     return (listaOrdenadaParaExibir || []).filter((t) => !isTreinoMeuDeVerdade(t, usuario));
   }, [listaOrdenadaParaExibir, usuario]);
 
@@ -3025,7 +3059,7 @@ export default function TreinosInstrutores({
                             : [turmaLocal?.professorNome ?? ""];
 
                           const nomesTurmaLocal = baseTurma
-                            .flatMap(splitNomes) 
+                            .flatMap(splitNomes)
                             .map((x) => String(x || "").trim())
                             .filter(Boolean);
 
@@ -3042,7 +3076,7 @@ export default function TreinosInstrutores({
                             </div>
                           );
                         })()}
-                        
+
                         {s.dataSessao && (
                           <div className="text-sm text-gray-500 mt-1 mb-1">
                             Agendado para: {formatarDataBR(s.dataSessao)}
@@ -3120,7 +3154,7 @@ export default function TreinosInstrutores({
                 </ul>
               )}
             </div>
-          )}   
+          )}
         </div>
       </div>
 
@@ -3278,8 +3312,8 @@ export default function TreinosInstrutores({
         const horaRemarcar = remarcarHoraBySessaoId[sessao.id] ?? "";
 
         return (
-          <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/40 px-4">
-            <div className="bg-white rounded-2xl shadow-lg max-w-md sm:max-w-lg w-full p-4 sm:p-5 space-y-3">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 px-4 py-4">
+            <div className="bg-white rounded-2xl shadow-lg max-w-md sm:max-w-lg w-full max-h-[calc(100dvh-2rem)] p-4 sm:p-5 flex flex-col gap-3 overflow-hidden">
               <div className="flex items-center justify-between mb-1">
                 <button
                   onClick={() => setSessaoAbertaExerciciosId(null)}
@@ -3294,8 +3328,8 @@ export default function TreinosInstrutores({
                     const emAndamento =
                       sessao.status === "em_andamento" ||
                       (!!startedAtISO && sessao.status !== "finalizada");
-                   
-                      if (!emAndamento) return null; 
+
+                      if (!emAndamento) return null;
 
                     const tempoStr = formatElapsed(startedAtISO, clockNow);
 
@@ -3308,7 +3342,7 @@ export default function TreinosInstrutores({
                   })()}
                 </div>
 
-                <div className="w-8" /> 
+                <div className="w-8" />
               </div>
 
               <h3 className="text-base sm:text-lg font-bold text-green-900">
@@ -3333,7 +3367,7 @@ export default function TreinosInstrutores({
                 </div>
               )}
 
-              <div className="mt-2 max-h-[60vh] overflow-y-auto space-y-3">
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain space-y-3 pr-1">
                 {exercicios.length === 0 ? (
                   <p className="text-sm text-gray-500">
                     Nenhum exercício cadastrado para este treino.
@@ -3367,7 +3401,7 @@ export default function TreinosInstrutores({
                     const duracao = ex.duracao ?? null;
                     const descanso = ex.descanso ?? null;
                     const videoUrl = video ? resolveUploadUrl(video) : null;
-                    
+
                     return (
                       <div
                         key={ex.id}
@@ -3484,20 +3518,20 @@ export default function TreinosInstrutores({
                   });
 
                 return (
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <div className="shrink-0 border-t border-gray-200 bg-white pt-3">
                     {emAndamento ? (
                       <button
                         type="button"
                         disabled={!podeFinalizar}
                         title={
                           !podeFinalizar
-                            ? "Marque todos os exercícios para habilitar o finalizar."
-                            : ""
+                            ? "Marque todos os exercícios para habilitar a finalização."
+                            : "Finalizar treino e abrir a página de submissão."
                         }
-                        className={`flex-1 px-3 py-2 rounded-full text-white text-sm ${
+                        className={`w-full min-h-12 px-4 py-3 rounded-xl text-white text-sm font-semibold transition ${
                           podeFinalizar
-                            ? "bg-red-600 hover:bg-red-700"
-                            : "bg-red-300 cursor-not-allowed"
+                            ? "bg-emerald-700 hover:bg-emerald-800"
+                            : "bg-gray-400 cursor-not-allowed"
                         }`}
                         onClick={async () => {
                           if (!podeFinalizar) return;
@@ -3507,9 +3541,15 @@ export default function TreinosInstrutores({
                           await finalizarTreinoSessao(sessao.id);
                         }}
                       >
-                        Finalizar treino
+                        Finalizar e ir para submissão
                       </button>
                     ) : null}
+
+                    {emAndamento && !podeFinalizar && (
+                      <p className="mt-2 text-center text-xs text-gray-500">
+                        Marque todos os exercícios para liberar a finalização.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
@@ -3556,10 +3596,11 @@ export default function TreinosInstrutores({
       })()}
 
       {videoModal && (() => {
-        const isArquivo = isVideoUrl(videoModal.url);
+        const urlPreparada = prepararUrlVideo(videoModal.url);
+        const isArquivo = isVideoUrl(urlPreparada);
 
         return (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
             <div className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-semibold">{videoModal.nome}</h4>
@@ -3569,7 +3610,7 @@ export default function TreinosInstrutores({
               <div className="w-full flex justify-center">
                 {isArquivo ? (
                 <video
-                  src={videoModal.url}
+                  src={urlPreparada}
                   className="max-h-[70vh] w-auto rounded-xl"
                   controls
                   autoPlay
@@ -3578,7 +3619,7 @@ export default function TreinosInstrutores({
                 />
                 ) : (
                   <iframe
-                    src={videoModal.url}
+                    src={urlPreparada}
                     className="w-full h-[70vh] rounded-xl"
                     allow="autoplay; fullscreen"
                     allowFullScreen

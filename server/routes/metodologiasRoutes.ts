@@ -119,9 +119,18 @@ router.post(
   authenticateToken,
   concluirItemMetodologia
 );
-
-router.post("/:metodologiaId/itens", authenticateToken, createMetodologiaItens);
-router.delete("/:metodologiaId/itens", authenticateToken, deleteMetodologiaItens);
+router.post(
+  "/:metodologiaId/itens",
+  authenticateToken,
+  requireMetodologiaOwnership,
+  createMetodologiaItens
+);
+router.delete(
+  "/:metodologiaId/itens",
+  authenticateToken,
+  requireMetodologiaOwnership,
+  deleteMetodologiaItens
+);
 router.post("/:metodologiaId/estruturas", authenticateToken, requireMetodologiaOwnership, createMetodologiaEstruturas);
 router.put("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, updateMetodologiaEstrutura);
 router.delete("/:metodologiaId/estruturas/:estruturaId", authenticateToken, requireMetodologiaOwnership, deleteMetodologiaEstrutura);

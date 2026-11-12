@@ -87,14 +87,18 @@ async function filtrarPorPapelAtivo<
           id: {
             in: ids,
           },
+          deletedAt: null,
         },
-
         select: {
           id: true,
           tipo: true,
         },
       }),
     ]);
+
+  const usuariosDisponiveis = new Set(
+    usuarios.map((usuario) => usuario.id)
+  );
 
   const porUsuario =
     new Map<
@@ -145,7 +149,10 @@ async function filtrarPorPapelAtivo<
           item
         );
 
-      if (!usuarioId) {
+      if (
+        !usuarioId ||
+        !usuariosDisponiveis.has(usuarioId)
+      ) {
         return false;
       }
 
@@ -353,16 +360,6 @@ async function buscarProfessorIdsDaOrganizacao(
   return professoresAtivos.map(
     (professor) =>
       professor.id
-  );
-
-  return Array.from(
-    new Set<string>(
-      ids.filter(
-        (id): id is string =>
-          typeof id === "string" &&
-          id.trim().length > 0
-      )
-    )
   );
 }
 

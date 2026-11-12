@@ -49,6 +49,7 @@ export type AuthSessionResponse = {
   };
   id?: string;
   nomeDeUsuario?: string;
+  somenteGestaoConta?: boolean;
   tipo?: string;
   token?: string;
   tipoUsuarioId?: string | number | null;
@@ -125,6 +126,7 @@ const SESSION_KEYS = [
   "tipoUsuarioId",
   "plano",
   "activeContext",
+  "somenteGestaoConta",
 ] as const;
 
 const MAP_TIPO: Record<string, string> = {
@@ -160,8 +162,8 @@ export type AuthSessionSnapshot = {
   usuarioId: string;
   nomeUsuario: string;
   plano: string;
-  activeContext:
-    ActiveContextSession | null;
+  activeContext: ActiveContextSession | null;
+  somenteGestaoConta: boolean;
 };
 
 export function readAuthSessionSnapshot():
@@ -177,6 +179,7 @@ export function readAuthSessionSnapshot():
       plano: "FREE",
       activeContext:
         null,
+      somenteGestaoConta: false,
     };
   }
 
@@ -246,6 +249,8 @@ export function readAuthSessionSnapshot():
     nomeUsuario,
     plano,
     activeContext,
+    somenteGestaoConta:
+      store.getItem("somenteGestaoConta") === "true",
   };
 }
 
@@ -268,14 +273,14 @@ function writeActiveContext(
     )
   );
 
-  store.setItem(
-    "tipoUsuario",
-    MAP_TIPO[
-      rawTipo
-    ] ??
-      rawTipo ??
-      "atleta"
-  );
+  if (rawTipo) {
+    store.setItem(
+      "tipoUsuario",
+      MAP_TIPO[rawTipo] ?? rawTipo,
+    );
+  } else {
+    store.removeItem("tipoUsuario");
+  }
 
   store.setItem(
     "usuarioTipoRaw",
@@ -393,15 +398,30 @@ export function applyAuthSession(
   store.setItem("usuarioId", usuarioId);
   if (usuarioNome) store.setItem("nomeUsuario", usuarioNome);
 
-  const rawTipo = String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
-  const isAdmin =
-    data.isAdmin ===
-      true ||
-    rawTipo ===
-      "admin";
+  const somenteGestaoConta =
+    data.somenteGestaoConta === true;
 
-  store.setItem("tipoUsuario", isAdmin ? "admin" : MAP_TIPO[rawTipo] ?? "atleta");
-  store.setItem("usuarioTipoRaw", rawTipo);
+  store.setItem(
+    "somenteGestaoConta",
+    somenteGestaoConta ? "true" : "false",
+  );
+
+  const rawTipo = somenteGestaoConta
+    ? ""
+    : String(usuario.tipo ?? data.tipo ?? "").toLowerCase();
+
+  const isAdmin =
+    !somenteGestaoConta && data.isAdmin === true;
+
+  if (somenteGestaoConta) {
+    clearActiveContextSession();
+  } else if (rawTipo) {
+    store.setItem(
+      "tipoUsuario",
+      isAdmin ? "admin" : MAP_TIPO[rawTipo] ?? rawTipo,
+    );
+    store.setItem("usuarioTipoRaw", rawTipo);
+  }
 
   const tipoAtivo =
     MAP_TIPO[rawTipo] ??
@@ -443,23 +463,21 @@ export function applyAuthSession(
         data?.administrador?.id,
     };
 
-  const tipoUsuarioId =
-    data.tipoUsuarioId ??
-    idsPorTipo[tipoAtivo] ??
-    null;
+  const tipoUsuarioId = somenteGestaoConta
+    ? null
+    : data.tipoUsuarioId ?? idsPorTipo[tipoAtivo] ?? null;
 
-  if (tipoUsuarioId) store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+  if (tipoUsuarioId) {
+    store.setItem("tipoUsuarioId", String(tipoUsuarioId));
+  }
 
   const activeContext =
     usuario.activeContext ??
     data.activeContext ??
     null;
 
-  if (activeContext) {
-    writeActiveContext(
-      store,
-      activeContext
-    );
+  if (!somenteGestaoConta && activeContext) {
+    writeActiveContext(store, activeContext);
   }
 
   const plano = String(usuario.plano ?? data.plano ?? "FREE");

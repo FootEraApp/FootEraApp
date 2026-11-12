@@ -87,13 +87,11 @@ export async function requireAdmin(
         req
       );
 
-    if (!me) {
-      return res
-        .status(401)
-        .json({
-          error:
-            "Usuário não encontrado.",
-        });
+    if (!me || me.deletedAt || !me.administrador) {
+      return res.status(403).json({
+        code: "ADMIN_ACCESS_REVOKED",
+        error: "Acesso administrativo indisponível.",
+      });
     }
 
     (req as any).me =
@@ -152,10 +150,7 @@ export async function requireSuperAdmin(
         req
       );
 
-    if (
-      !me ||
-      !me.administrador
-    ) {
+    if (!me || me.deletedAt || !me.administrador) {
       return res
         .status(403)
         .json({

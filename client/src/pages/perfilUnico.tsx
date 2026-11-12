@@ -125,6 +125,8 @@ export default function PerfilUnico() {
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasCreator, setHasCreator] = useState(false);
+  const [creatorDestinoId, setCreatorDestinoId] =
+    useState<string | null>(null);
   const [perfilData, setPerfilData] = useState<PerfilMinimo | null>(null);
   const [erroPerfil, setErroPerfil] = useState<ErroPerfil | null>(null);
   const [modoVisitante, setModoVisitante] = useState(!token);
@@ -257,24 +259,77 @@ export default function PerfilUnico() {
   }, [id, token, rotaOrganizacao, papelDaUrl]);
 
   useEffect(() => {
-    if (!usuarioId || !token || modoVisitante) return;
-
     let cancelled = false;
 
-    fetch(`${API.BASE_URL}/api/creator/profile/${usuarioId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => {
-        if (!cancelled) setHasCreator(r.ok);
-      })
-      .catch(() => {
-        if (!cancelled) setHasCreator(false);
-      });
+    setHasCreator(false);
+    setCreatorDestinoId(null);
+
+    if (!usuarioId || !perfilData) return;
+
+    const tipoPerfil = String(
+      perfilData.tipo ?? ""
+    ).toLowerCase();
+
+    const ehOrganizacao = [
+      "clube",
+      "escolinha",
+      "escola",
+      "marca",
+      "federacao",
+    ].includes(tipoPerfil);
+
+    const dados = perfilData.dadosEspecificos ?? {};
+
+    const organizacaoId = String(
+      dados.organizacaoId ??
+      dados.organizacao?.id ??
+      ""
+    ).trim();
+
+    if (ehOrganizacao && !organizacaoId) {
+      // Não usar o ID do usuário como substituto
+      // para o ID da organização.
+      return;
+    }
+
+    const destinoId = ehOrganizacao
+      ? `organization:${organizacaoId}`
+      : usuarioId;
+
+    const endpoint = ehOrganizacao
+      ? `/api/creator/organization/${encodeURIComponent(
+          organizacaoId
+        )}`
+      : `/api/creator/profile/${encodeURIComponent(
+          usuarioId
+        )}`;
+
+    async function verificarCreator() {
+      try {
+        const resposta = await fetch(
+          `${API.BASE_URL}${endpoint}`
+        );
+
+        if (cancelled) return;
+
+        setHasCreator(resposta.ok);
+        setCreatorDestinoId(
+          resposta.ok ? destinoId : null
+        );
+      } catch {
+        if (cancelled) return;
+
+        setHasCreator(false);
+        setCreatorDestinoId(null);
+      }
+    }
+
+    void verificarCreator();
 
     return () => {
       cancelled = true;
     };
-  }, [usuarioId, token, modoVisitante]);
+  }, [usuarioId, perfilData]);
 
   if (loading) {
     return (
@@ -699,7 +754,10 @@ export default function PerfilUnico() {
           )}
 
           {abaPublica === "postagens" && (
-            <ProfilePostsSection usuarioId={usuarioId} />
+            <ProfilePostsSection
+              usuarioId={usuarioId}
+              papel={tipo}
+            />
           )}
         </div>
 
@@ -735,7 +793,7 @@ export default function PerfilUnico() {
         <PerfilAtleta
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -743,7 +801,7 @@ export default function PerfilUnico() {
         <PerfilProfessor
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -751,7 +809,7 @@ export default function PerfilUnico() {
         <PerfilOlheiro
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -759,7 +817,7 @@ export default function PerfilUnico() {
         <PerfilClube
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -767,7 +825,7 @@ export default function PerfilUnico() {
         <PerfilEscola
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -775,7 +833,7 @@ export default function PerfilUnico() {
         <PerfilFederacao
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -783,7 +841,7 @@ export default function PerfilUnico() {
         <PerfilMarca
           idDaUrl={usuarioId}
           hasCreator={hasCreator}
-          creatorUsuarioId={usuarioId}
+          creatorUsuarioId={creatorDestinoId}
         />
       )}
 
@@ -812,6 +870,7 @@ export default function PerfilUnico() {
                 usuarioId={
                   usuarioId
                 }
+                papel="Responsavel"
               />
             </div>
           </>

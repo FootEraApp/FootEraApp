@@ -8,6 +8,7 @@ import {
   StatusUsuarioPapel,
   StatusResponsavelAtleta,
   AuthProvider,
+  CreatorTipo,
 } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -134,15 +135,15 @@ export const checarUsername = async (req: Request, res: Response) => {
   res.json({ ok: true, disponivel: !existe });
 };
 
-export const deletarUsuario = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    await prisma.usuario.delete({ where: { id } });
-    return res.json({ message: "Usuário deletado com sucesso!" });
-  } catch (error) {
-    console.error("Erro ao deletar usuário:", error);
-    return res.status(500).json({ message: "Erro interno" });
-  }
+export const deletarUsuario = async (
+  _req: Request,
+  res: Response
+) => {
+  return res.status(409).json({
+    code: "ACCOUNT_DELETION_UNDER_REVIEW",
+    message:
+      "A exclusão definitiva de contas está temporariamente indisponível enquanto verificamos a preservação dos dados financeiros e institucionais.",
+  });
 };
 
 export async function buscarPerfisPublico(req: Request, res: Response) {
@@ -701,19 +702,44 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     headline,
   } = body;
 
-  function dataNascimentoPermitida(valor?: string | null) {
-    if (!valor) return false;
+  function dataNascimentoPermitida(
+    valor?: string | null
+  ): boolean {
+    if (
+      typeof valor !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+    ) {
+      return false;
+    }
 
-    const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return false;
+    const nascimento = new Date(
+      `${valor}T00:00:00.000Z`
+    );
 
-    const min = new Date("1900-01-01T00:00:00.000Z");
-    const hoje = new Date();
+    if (
+      Number.isNaN(nascimento.getTime()) ||
+      nascimento.toISOString().slice(0, 10) !== valor
+    ) {
+      return false;
+    }
 
-    data.setHours(0, 0, 0, 0);
-    hoje.setHours(23, 59, 59, 999);
+    const partes = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
 
-    return data >= min && data <= hoje;
+    const parte = (tipo: string) =>
+      partes.find((p) => p.type === tipo)?.value ?? "";
+
+    const hojeBrasil =
+      `${parte("year")}-${parte("month")}-${parte("day")}`;
+
+    return (
+      valor >= "1900-01-01" &&
+      valor <= hojeBrasil
+    );
   }
 
   try {
@@ -734,7 +760,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
     }
 
     const dataNascFinal =
-      precisaNascimento && dataNascimento ? new Date(dataNascimento) : null;
+      precisaNascimento && dataNascimento
+        ? new Date(`${dataNascimento}T00:00:00.000Z`)
+        : null;
 
     const idadeCalcInicial = dataNascFinal
       ? calcularIdadePorNascimento(dataNascFinal)
@@ -1169,6 +1197,9 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
         responsavelTelefone: precisaResponsavel
           ? responsavelTelefoneFinal
           : null,
+        aniversarioElegivelApartirDe: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ),
         papeis: {
           create: {
             papel: tipoEnum,
@@ -1572,103 +1603,128 @@ export const cadastrarUsuario = async (req: Request, res: Response) => {
       }
 
       case TipoUsuario.Federacao: {
-        const federacao = await prisma.federacao.create({
-          data: {
-            usuarioId: usuario.id,
-            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
-            cnpj: cnpjClube || cnpjEscolinha || null,
-            telefone1: telefone1Clube || telefone1Escolinha || null,
-            telefone2: telefone2Clube || telefone2Escolinha || null,
-            email: emailClube || emailEscolinha || emailNorm,
-            siteOficial: siteOficialClube || siteOficialEscolinha || null,
-            sede: sedeClube || sedeEscolinha || null,
-            cidade: cidadeClube || cidadeEscolinha || cidade || null,
-            estado: estadoClube || estadoEscolinha || estado || null,
-            pais: paisClube || paisEscolinha || pais || null,
-            cep: cepClube || cepEscolinha || null,
-            descricao: descricao ?? null,
-          },
-          select: { id: true },
-        });
+        const federacao = await prisma.$transaction(
+          async (tx) => {
+            const novaFederacao = await tx.federacao.create({
+              data: {
+                usuarioId: usuario.id,
+                nome:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
 
-        await prisma.creator.upsert({
-          where: { usuarioId: usuario.id },
-          update: {
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-          },
-          create: {
-            usuarioId: usuario.id,
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-            nomePublico: nomeOrganizacao || usuario.nome,
-            headline: "Canal oficial FootEra",
-          },
-        });
+                cnpj: cnpjClube || cnpjEscolinha || null,
+                telefone1: telefone1Clube || telefone1Escolinha || null,
+                telefone2: telefone2Clube || telefone2Escolinha || null,
+                email: emailClube || emailEscolinha || emailNorm,
+                siteOficial:
+                  siteOficialClube || siteOficialEscolinha || null,
+                sede: sedeClube || sedeEscolinha || null,
+                cidade:
+                  cidadeClube || cidadeEscolinha || cidade || null,
+                estado:
+                  estadoClube || estadoEscolinha || estado || null,
+                pais: paisClube || paisEscolinha || pais || null,
+                cep: cepClube || cepEscolinha || null,
+                descricao: descricao ?? null,
+              },
+              select: {
+                id: true,
+              },
+            });
 
-        await garantirOrganizacaoLegada({
-          tipo:
-            "FEDERACAO",
+            const organizacao = await garantirOrganizacaoLegada({
+              tipo: "FEDERACAO",
+              ownerId: novaFederacao.id,
+              proprietarioUsuarioId: usuario.id,
+              tx,
+            });
 
-          ownerId:
-            federacao.id,
+            await tx.creator.create({
+              data: {
+                usuarioId: null,
+                organizacaoId: organizacao.id,
+                tipo: CreatorTipo.INSTITUCIONAL,
+                ativo: true,
+                instituicaoOficial: true,
+                verificado: false,
+                nomePublico:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
+                headline: "Canal oficial FootEra",
+              },
+            });
 
-          proprietarioUsuarioId:
-            usuario.id,
-        });
+            return novaFederacao;
+          }
+        );
 
         tipoUsuarioId = federacao.id;
         break;
       }
 
       case TipoUsuario.Marca: {
-        const marca = await prisma.marca.create({
-          data: {
-            usuarioId: usuario.id,
-            nome: nomeOrganizacao || nomeClube || nomeEscolinha || nomeFinal,
-            cnpj: cnpjClube || cnpjEscolinha || null,
-            telefone1: telefone1Clube || telefone1Escolinha || null,
-            telefone2: telefone2Clube || telefone2Escolinha || null,
-            email: emailClube || emailEscolinha || emailNorm,
-            siteOficial: siteOficialClube || siteOficialEscolinha || null,
-            cidade: cidadeClube || cidadeEscolinha || cidade || null,
-            estado: estadoClube || estadoEscolinha || estado || null,
-            pais: paisClube || paisEscolinha || pais || null,
-            cep: cepClube || cepEscolinha || null,
-            descricao: descricao ?? null,
-          },
-          select: { id: true },
-        });
+        const marca = await prisma.$transaction(
+          async (tx) => {
+            const novaMarca = await tx.marca.create({
+              data: {
+                usuarioId: usuario.id,
+                nome:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
 
-        await prisma.creator.upsert({
-          where: { usuarioId: usuario.id },
-          update: {
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-          },
-          create: {
-            usuarioId: usuario.id,
-            tipo: "INSTITUCIONAL",
-            instituicaoOficial: true,
-            ativo: true,
-            nomePublico: nomeOrganizacao || usuario.nome,
-            headline: "Canal oficial FootEra",
-          },
-        });
+                cnpj: cnpjClube || cnpjEscolinha || null,
+                telefone1: telefone1Clube || telefone1Escolinha || null,
+                telefone2: telefone2Clube || telefone2Escolinha || null,
+                email: emailClube || emailEscolinha || emailNorm,
+                siteOficial:
+                  siteOficialClube || siteOficialEscolinha || null,
+                cidade:
+                  cidadeClube || cidadeEscolinha || cidade || null,
+                estado:
+                  estadoClube || estadoEscolinha || estado || null,
+                pais: paisClube || paisEscolinha || pais || null,
+                cep: cepClube || cepEscolinha || null,
+                descricao: descricao ?? null,
+              },
+              select: {
+                id: true,
+              },
+            });
 
-        await garantirOrganizacaoLegada({
-          tipo:
-            "MARCA",
+            const organizacao = await garantirOrganizacaoLegada({
+              tipo: "MARCA",
+              ownerId: novaMarca.id,
+              proprietarioUsuarioId: usuario.id,
+              tx,
+            });
 
-          ownerId:
-            marca.id,
+            await tx.creator.create({
+              data: {
+                usuarioId: null,
+                organizacaoId: organizacao.id,
+                tipo: CreatorTipo.INSTITUCIONAL,
+                ativo: true,
+                instituicaoOficial: true,
+                verificado: false,
+                nomePublico:
+                  nomeOrganizacao ||
+                  nomeClube ||
+                  nomeEscolinha ||
+                  nomeFinal,
+                headline: "Canal oficial FootEra",
+              },
+            });
 
-          proprietarioUsuarioId:
-            usuario.id,
-        });
+            return novaMarca;
+          }
+        );
+
         tipoUsuarioId = marca.id;
         break;
       }

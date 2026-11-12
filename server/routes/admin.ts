@@ -4,6 +4,10 @@ import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/guards.js";
 import { adminRestaurarConta } from "../controllers/adminRestoreController.js";
 import { getMe } from "../controllers/adminAdminsController.js";
+import {
+  listarPendenciasEventoAdmin,
+  verificarPendenciaEventoNoMpAdmin,
+} from "../controllers/adminBillingPendenciasController.js";
 
 const router = Router();
 
@@ -25,6 +29,18 @@ router.get(
   authenticateToken,
   requireAdmin,
   adminDiagnostico
+);
+router.get(
+  "/billing/pendencias-eventos",
+  authenticateToken,
+  requireAdmin,
+  listarPendenciasEventoAdmin
+);
+router.get(
+  "/billing/pendencias-eventos/:pagamentoId/verificar-provedor",
+  authenticateToken,
+  requireAdmin,
+  verificarPendenciaEventoNoMpAdmin
 );
 router.get("/", authenticateToken, requireAdmin, adminDashboard);
 

@@ -7,7 +7,17 @@ import {
   TipoUsuario,
 } from "@prisma/client";
 
-const SECRET = process.env.JWT_SECRET || "footera_secret"
+const SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error(
+      "[admin] JWT_SECRET não configurado."
+    );
+  }
+
+  return secret;
+})();
 
 export const adminDashboard = async (
   _: Request,
@@ -30,6 +40,9 @@ export const adminDashboard = async (
       desafios,
     ] = await Promise.all([
       prisma.usuario.findMany({
+        where: {
+          deletedAt: null,
+        },
         select: {
           id: true,
           tipo: true,
@@ -37,6 +50,11 @@ export const adminDashboard = async (
       }),
 
       prisma.usuarioPapel.findMany({
+        where: {
+          usuario: {
+            deletedAt: null,
+          },
+        },
         select: {
           usuarioId: true,
           papel: true,
@@ -45,23 +63,33 @@ export const adminDashboard = async (
       }),
 
       prisma.administrador.findMany({
+        where: {
+          usuario: {
+            deletedAt: null,
+          },
+        },
         select: {
-          usuarioId:
-            true,
+          usuarioId: true,
         },
       }),
 
-      prisma.usuario.count(),
+      prisma.usuario.count({
+        where: {
+          deletedAt: null,
+        },
+      }),
 
       prisma.usuario.count({
         where: {
           verified: true,
+          deletedAt: null,
         },
       }),
 
       prisma.usuario.count({
         where: {
           verified: false,
+          deletedAt: null,
         },
       }),
 
@@ -206,6 +234,11 @@ export const adminDashboard = async (
         TipoUsuario.Atleta
       );
 
+    const totalResponsaveis =
+      contarPapel(
+        TipoUsuario.Responsavel
+      );
+
     const totalClubes =
       contarPapel(
         TipoUsuario.Clube
@@ -278,6 +311,7 @@ export const adminDashboard = async (
       totalUsuarios,
       totalCreators,
       totalAtletas,
+      totalResponsaveis,
       totalClubes,
       totalEscolinhas,
       totalAdministradores,

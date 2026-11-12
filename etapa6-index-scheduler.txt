@@ -1,0 +1,144 @@
+﻿
+  server\index.ts:127:import sessoesTurmaRoutes from "./routes/sessoesTurma.js";
+  server\index.ts:128:import feedbackRoutes from "./routes/feedback.js";
+  server\index.ts:129:import statusRoutes from "./routes/status.js";
+  server\index.ts:130:import comentariosRoutes from "./routes/comentarios.js";
+  server\index.ts:131:import estatisticasRoutes from "./routes/estatisticas.js";
+  server\index.ts:132:import configuracoesPerfilRoutes from "./routes/configuracoesPerfil.js";
+  server\index.ts:133:import presencaRoutes from "./routes/presenca.js";
+  server\index.ts:134:import metodologiasRoutes from "./routes/metodologiasRoutes.js";
+  server\index.ts:135:import adminMetodologiasRoutes from "./routes/adminMetodologiasRoutes.js";
+  server\index.ts:136:import permissoesRoutes from "./routes/permissoesRoutes.js";
+  server\index.ts:137:import gerenciarOrganizacoesRoutes from "./routes/gerenciarOrganizacoesRoutes.js";
+  server\index.ts:138:import dashboardOrganizacaoRoutes from "./routes/dashboardOrganizacao.js";
+> server\index.ts:139:import { processExpiringSubscriptions } from "./controllers/billingController.js";
+  server\index.ts:140:import { prisma as prismaBilling } from "./prisma.js";
+  server\index.ts:141:import {
+  server\index.ts:142:  consultarPagamentoMercadoPago,
+  server\index.ts:143:  classificarConciliacaoMercadoPago,
+  server\index.ts:144:} from "./services/billingConciliacaoMercadoPagoService.js";
+  server\index.ts:145:import googleAuthRoutes from "./routes/googleAuth.js";
+  server\index.ts:146:import creatorRoutes from "./routes/creator.js";
+  server\index.ts:147:import aulasAoVivoRoutes from "./routes/aulasAoVivoRoutes.js";
+  server\index.ts:148:import learningEventosRoutes from "./routes/learningEventos.js";
+  server\index.ts:149:import { setupSocket } from "./socket.js";
+  server\index.ts:150:import responsaveisRoutes from "./routes/responsaveis.js";
+  server\index.ts:151:import usuarioPapelRoutes from "./routes/usuarioPapel.js";
+  server\index.ts:152:
+  server\index.ts:153:const __filename = fileURLToPath(import.meta.url);
+  server\index.ts:154:const __dirname = dirname(__filename);
+  server\index.ts:155:
+  server\index.ts:156:const prisma = new PrismaClient();
+  server\index.ts:157:
+  server\index.ts:158:const app = express();
+  server\index.ts:159:app.set("trust proxy", 1);
+  server\index.ts:160:const server = http.createServer(app);
+  server\index.ts:161:
+  server\index.ts:162:setupSocket(server);
+  server\index.ts:163:ensureUploadDirs();
+  server\index.ts:164:
+  server\index.ts:165:if (process.env.NODE_ENV !== "test") {
+  server\index.ts:166:  startExpiredTrainingsJob();
+  server\index.ts:167:  startNotificationScheduler();
+  server\index.ts:469:  }
+  server\index.ts:470:});
+  server\index.ts:471:
+  server\index.ts:472:process.on("unhandledRejection", (reason) => console.error("Unhandled Rejection:", reason));
+  server\index.ts:473:process.on("uncaughtException", (err) => console.error("Uncaught Exception:", err));
+  server\index.ts:474:
+  server\index.ts:475:setInterval(async () => {
+  server\index.ts:476:  try { await limparTreinosSalvosExpirados({} as any, { json(){} } as any); } catch {}
+  server\index.ts:477:}, 24 * 60 * 60 * 1000);
+  server\index.ts:478:
+  server\index.ts:479:
+  server\index.ts:480:const BILLING_SCHEDULER_ENABLED =
+> server\index.ts:481:  process.env.ENABLE_BILLING_SCHEDULER === "true";
+  server\index.ts:482:
+> server\index.ts:483:let billingEmExecucao = false;
+  server\index.ts:484:
+  server\index.ts:485:async function runBillingDailyCheck() {
+  server\index.ts:486:  if (!BILLING_SCHEDULER_ENABLED) {
+  server\index.ts:487:    return;
+  server\index.ts:488:  }
+  server\index.ts:489:
+> server\index.ts:490:  if (billingEmExecucao) {
+  server\index.ts:491:    console.log(
+  server\index.ts:492:      "[billing] Verificação anterior ainda está em execução."
+  server\index.ts:493:    );
+  server\index.ts:494:    return;
+  server\index.ts:495:  }
+  server\index.ts:496:
+> server\index.ts:497:  billingEmExecucao = true;
+  server\index.ts:498:
+  server\index.ts:499:  try {
+  server\index.ts:500:    const result =
+> server\index.ts:501:      await processExpiringSubscriptions();
+  server\index.ts:502:
+  server\index.ts:503:    console.log(
+  server\index.ts:504:      "[billing] Rotina executada:",
+  server\index.ts:505:      result
+  server\index.ts:506:    );
+  server\index.ts:507:  } catch (error) {
+  server\index.ts:508:    console.error(
+  server\index.ts:509:      "[billing] Erro na rotina:",
+  server\index.ts:510:      error
+  server\index.ts:511:    );
+  server\index.ts:512:  } finally {
+> server\index.ts:513:    billingEmExecucao = false;
+  server\index.ts:514:  }
+  server\index.ts:515:}
+  server\index.ts:516:
+  server\index.ts:517:if (BILLING_SCHEDULER_ENABLED) {
+  server\index.ts:518:  console.log(
+  server\index.ts:519:    "[billing] Scheduler de assinaturas ativado."
+  server\index.ts:520:  );
+  server\index.ts:521:
+  server\index.ts:522:  void runBillingDailyCheck();
+  server\index.ts:523:
+  server\index.ts:524:  setInterval(() => {
+  server\index.ts:525:    void runBillingDailyCheck();
+  server\index.ts:526:  }, 12 * 60 * 60 * 1000);
+  server\index.ts:527:} else {
+  server\index.ts:528:  console.log(
+  server\index.ts:529:    "[billing] Scheduler automático desativado."
+  server\index.ts:530:  );
+  server\index.ts:531:}
+  server\index.ts:532:
+  server\index.ts:533:
+  server\index.ts:534:// ======================================================
+  server\index.ts:535:// CONCILIACAO MERCADO PAGO — SOMENTE LEITURA
+  server\index.ts:536:// ======================================================
+  server\index.ts:537:
+  server\index.ts:538:const MP_CONCILIACAO_SCHEDULER_ENABLED =
+> server\index.ts:539:  process.env.ENABLE_MP_CONCILIACAO_SCHEDULER === "true";
+  server\index.ts:540:
+  server\index.ts:541:let mpConciliacaoEmExecucao = false;
+  server\index.ts:542:
+  server\index.ts:543:async function revisarPagamentosMercadoPago() {
+  server\index.ts:544:  if (
+  server\index.ts:545:    !MP_CONCILIACAO_SCHEDULER_ENABLED ||
+  server\index.ts:546:    mpConciliacaoEmExecucao
+  server\index.ts:547:  ) {
+  server\index.ts:548:    return;
+  server\index.ts:549:  }
+  server\index.ts:550:
+  server\index.ts:551:  if (!process.env.MP_ACCESS_TOKEN) {
+  server\index.ts:552:    console.warn(
+  server\index.ts:553:      "[mp-conciliacao] Token nao configurado."
+  server\index.ts:554:    );
+  server\index.ts:555:    return;
+  server\index.ts:556:  }
+  server\index.ts:557:
+  server\index.ts:558:  mpConciliacaoEmExecucao = true;
+  server\index.ts:559:
+  server\index.ts:560:  try {
+  server\index.ts:561:    const pagamentos =
+  server\index.ts:562:      await prismaBilling.pagamento.findMany({
+  server\index.ts:563:        where: {
+  server\index.ts:564:          provider: "MERCADOPAGO",
+  server\index.ts:565:          status: "PENDENTE",
+  server\index.ts:566:        },
+  server\index.ts:567:        orderBy: {
+
+
+

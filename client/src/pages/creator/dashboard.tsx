@@ -2,6 +2,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
 } from "react";
 import {
   UserContext,
@@ -64,16 +65,35 @@ export default function CreatorDashboard() {
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [erroDashboard, setErroDashboard] =
+    useState<string | null>(null);
 
-  const creatorAtivo =
+  const requisicaoAtual = useRef(0);
+
+  const creatorPessoalAtivo =
     activeContext?.kind === "PERSONAL" &&
     String(
-      activeTipoUsuario ?? ""
-    ).toLowerCase() ===
-      "creator";
+      activeContext.role ??
+        activeTipoUsuario ??
+        ""
+    ).toLowerCase() === "creator";
+
+  const creatorInstitucionalAtivo =
+    activeContext?.kind === "ORGANIZATION" &&
+    Boolean(activeContext.organizationId) &&
+    ["PROPRIETARIO", "ADMINISTRADOR"].includes(
+      String(
+        activeContext.organizationRole ?? ""
+      ).toUpperCase()
+    );
+
+  const creatorAtivo =
+    creatorPessoalAtivo || creatorInstitucionalAtivo;
 
   const carregar = async () => {
+    const numeroRequisicao = ++requisicaoAtual.current;
     setLoading(true);
+    setErroDashboard(null);
 
     try {
       const res = await fetch(`${API.BASE_URL}/api/creator/dashboard`, {
@@ -93,8 +113,17 @@ export default function CreatorDashboard() {
       }
 
       if (res.status === 403) {
-        window.location.href = "/perfil";
-        return;
+        const respostaErro = await res.json().catch(() => ({}));
+
+        console.error(
+          "[CreatorDashboard] Acesso negado:",
+          respostaErro
+        );
+
+        throw new Error(
+          respostaErro.message ||
+          "Você não possui permissão para acessar este Creator."
+        );
       }
 
       if (!res.ok) {
@@ -102,23 +131,58 @@ export default function CreatorDashboard() {
         throw new Error(txt || `Erro ao carregar dashboard. HTTP ${res.status}`);
       }
       const json = await res.json();
+
+      if (numeroRequisicao !== requisicaoAtual.current) {
+        return;
+      }
+
       setData(json);
     } catch (err) {
+      if (numeroRequisicao !== requisicaoAtual.current) {
+        return;
+      }
+
       console.error(err);
+
+      setErroDashboard(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível carregar o Creator."
+      );
+
       setData(null);
-    } finally {
-      setLoading(false);
     }
-  };
+     finally {
+      if (numeroRequisicao === requisicaoAtual.current) {
+        setLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     if (contextsLoading) return;
-    if (!creatorAtivo) return;
 
-    carregar();
+    ++requisicaoAtual.current;
+
+    if (!creatorAtivo) {
+      setData(null);
+      setErroDashboard(null);
+      setLoading(false);
+      return;
+    }
+
+    setData(null);
+    void carregar();
+
+    return () => {
+      ++requisicaoAtual.current;
+    };
   }, [
     contextsLoading,
     creatorAtivo,
+    activeContext?.kind,
+    activeContext?.organizationId,
+    activeContext?.role,
   ]);
 
   if (
@@ -150,6 +214,30 @@ export default function CreatorDashboard() {
     return (
       <div className="min-h-screen bg-[#f5f7f3] flex items-center justify-center">
         <div className="font-semibold text-emerald-900">Carregando dashboard Creator...</div>
+      </div>
+    );
+  }
+
+  if (erroDashboard) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-lg rounded-2xl border bg-white p-6">
+          <h2 className="text-xl font-bold text-red-800">
+            Não foi possível acessar o Creator
+          </h2>
+
+          <p className="mt-3 text-sm text-gray-700">
+            {erroDashboard}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => window.location.assign("/perfil")}
+            className="mt-5 rounded-lg bg-green-800 px-4 py-3 text-white"
+          >
+            Voltar ao perfil
+          </button>
+        </div>
       </div>
     );
   }
@@ -205,7 +293,15 @@ export default function CreatorDashboard() {
 
             <div className="flex flex-col gap-3 w-full md:w-auto md:min-w-[320px]">
               <a
-                href={`/creator/profile?id=${creator.usuarioId}`}
+                href={
+                  creator.organizacaoId
+                    ? `/creator/profile?organizacaoId=${encodeURIComponent(
+                        creator.organizacaoId
+                      )}`
+                    : `/creator/profile?id=${encodeURIComponent(
+                        creator.usuarioId
+                      )}`
+                }
                 className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm font-bold hover:bg-white/15 text-left flex items-center justify-start"
               >
                 Ver perfil público

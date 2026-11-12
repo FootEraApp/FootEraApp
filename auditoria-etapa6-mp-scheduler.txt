@@ -1,0 +1,72 @@
+      });
+
+    for (const pagamento of pagamentos) {
+      const referencia =
+        pagamento.providerRef ?? "";
+
+      // Preferencias nao sao IDs de pagamento.
+      if (!/^\d+$/.test(referencia)) {
+        continue;
+      }
+
+      try {
+        const retorno =
+          await consultarPagamentoMercadoPago(
+            referencia
+          );
+
+        const resultado =
+          classificarConciliacaoMercadoPago(
+            {
+              id: pagamento.id,
+              provider: pagamento.provider ?? "",
+              providerRef: pagamento.providerRef,
+              valor: pagamento.valor,
+              moeda: pagamento.moeda,
+              status: pagamento.status,
+            },
+            retorno
+          );
+
+        console.log(
+          "[mp-conciliacao]",
+          {
+            pagamentoId: pagamento.id,
+            decisao: resultado.acao,
+            motivo: resultado.motivo,
+          }
+        );
+
+        // SOMENTE DIAGNOSTICO.
+        // Nao aprova nem cancela neste scheduler.
+      } catch (error) {
+        console.error(
+          "[mp-conciliacao] Falha na consulta:",
+          pagamento.id,
+          error
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      "[mp-conciliacao] Erro geral:",
+      error
+    );
+  } finally {
+    mpConciliacaoEmExecucao = false;
+  }
+}
+
+if (MP_CONCILIACAO_SCHEDULER_ENABLED) {
+  console.log(
+    "[mp-conciliacao] Scheduler de leitura ativado."
+  );
+
+  cron.schedule("*/15 * * * *", () => {
+    void revisarPagamentosMercadoPago();
+  });
+} else {
+  console.log(
+    "[mp-conciliacao] Scheduler desativado."
+  );
+}

@@ -1,0 +1,398 @@
+﻿C:\dev\FootEraApp-app\server\controllers\feedController.ts:43: organizacaoId: string | null;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:47: usuarioId: string,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:66: usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:85: organizacaoId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:104: usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:131: const organizacaoId =
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:137: if (!organizacaoId) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:152: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:158: organizacaoId: null,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:185: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:195: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:205: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:215: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:221: curtidas: { select: { usuarioId: true } },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:267: .clube.usuarioId ??
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:279: .usuarioId ??
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:290: .marca.usuarioId ??
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:302: .usuarioId ??
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:347: if (!post?.repostOfId) return post;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:353: while (atual?.repostOfId && depth < MAX_DEPTH) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:355: where: { id: atual.repostOfId },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:464: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:565: usuarioId?: string | null
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:585: await podeVisualizarPostagem(atual, usuarioId);
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:617: filterWhere = { usuarioId: userId };
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:621: if (userId) filterWhere = { NOT: { usuarioId: userId } };
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:638: filterWhere = { usuarioId: { in: ids } };
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:647: where: { usuarioId: userId },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:655: filterWhere = { usuarioId: { in: ids } };
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:800: const usuarioId = req.userId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:802: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:815: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:816: organizacaoId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:841: usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:859: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:874: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:883: * organização, usuarioId continua
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:887: String(post.usuarioId) !==
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:888: String(usuarioId)
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:903: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:904: post.usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:907: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:962: const organizacaoId =
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:968: organizacaoId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:973: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:975: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:983: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:985: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:995: const usuarioId = req.userId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:996: if (!usuarioId) return res.status(401).json({ message: "Usuário não autenticado." });
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1039: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1043: const organizacaoId =
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1044: autorResolvido.organizacaoId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1052: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1053: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1082: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1132: usuarioId: atletaUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1175: const usuarioId =
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1178: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1198: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1199: organizacaoId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1200: repostOfId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1217: post.usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1220: usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1247: post.organizacaoId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1262: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1263: post.usuarioId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1311: post.repostOfId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1314: post.repostOfId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1326: repostOfId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1332: cursor?.repostOfId
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1336: .repostOfId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1345: .repostOfId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1349: repostOfId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1413: post.usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1416: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1461: const usuarioId = req.userId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1463: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1469: where: { id: usuarioId },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1513: await prisma.postagem.deleteMany({ where: { usuarioId: id } });
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1541: repostOfId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1542: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1545: organizacaoId: true,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1588: let cursor: { repostOfId: string | null } | null = clicked;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1590: while (cursor?.repostOfId) {
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1591: rootId = cursor.repostOfId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1593: where: { id: cursor.repostOfId },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1594: select: { repostOfId: true },
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1608: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1609: repostOfId: parentId,
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1635: autorRepost.organizacaoId;
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1643: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1646: organizacaoId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1655: repostOfId:
+C:\dev\FootEraApp-app\server\controllers\feedController.ts:1713: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:35: organizacaoId: string | null;
+C:\dev\FootEraApp-app\server\controllers\postController.ts:39: usuarioId: string,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:57: usuarioId
+C:\dev\FootEraApp-app\server\controllers\postController.ts:76: organizacaoId:
+C:\dev\FootEraApp-app\server\controllers\postController.ts:87: usuarioId
+C:\dev\FootEraApp-app\server\controllers\postController.ts:114: const organizacaoId =
+C:\dev\FootEraApp-app\server\controllers\postController.ts:120: if (!organizacaoId) {
+C:\dev\FootEraApp-app\server\controllers\postController.ts:135: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:141: organizacaoId: null,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:198: const organizacaoId =
+C:\dev\FootEraApp-app\server\controllers\postController.ts:199: autorResolvido.organizacaoId;
+C:\dev\FootEraApp-app\server\controllers\postController.ts:203: usuarioId: req.userId!,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:204: organizacaoId,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:328: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:329: organizacaoId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:364: data: { conteudo: text, postagemId: postId, usuarioId: req.userId! },
+C:\dev\FootEraApp-app\server\controllers\postController.ts:368: String(post.usuarioId) !==
+C:\dev\FootEraApp-app\server\controllers\postController.ts:384: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\postController.ts:385: post.usuarioId,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:418: if (!postagem || postagem.usuarioId !== req.userId) {
+C:\dev\FootEraApp-app\server\controllers\postController.ts:433: if (!postagem || postagem.usuarioId !== req.userId) {
+C:\dev\FootEraApp-app\server\controllers\postController.ts:451: usuarioId: postUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:516: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:517: organizacaoId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:536: post.usuarioId ===
+C:\dev\FootEraApp-app\server\controllers\postController.ts:562: post.organizacaoId
+C:\dev\FootEraApp-app\server\controllers\postController.ts:578: post.usuarioId
+C:\dev\FootEraApp-app\server\controllers\postController.ts:651: post.usuarioId,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:742: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\postController.ts:811: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\postController.ts:892: usuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:259: r.usuarioId ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:262: r.user?.usuarioId ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:535: criadorUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:571: usuarioId: asNullableString(c.usuarioId),
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:576: .filter((c: any) => c.usuarioId || c.nome);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:644: criadorUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1035: criadorUsuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1054: usuarioId: asNullableString(c.usuarioId),
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1059: .filter((c: any) => c.usuarioId || c.nome);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1075: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1091: metodologia.criadorUsuarioId !== userId &&
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1100: async function recalcularStatusMetodologiaAssinante(metodologiaId: string, usuarioId: string) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1105: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1173: await unlockConquistaMetodologia(usuarioId, metodologiaId).catch(() => null);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1178: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1185: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1452: const criadorUsuarioId = (req.query.criadorUsuarioId as string) || undefined;
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1455: where: criadorUsuarioId ? { criadorUsuarioId } : undefined,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1458: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1480: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1489: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1604: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1669: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1706: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1749: if (current.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:1789: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2068: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2083: if (metodologia.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2139: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2161: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2170: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2182: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2221: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2329: criadorUsuario: m.criadorUsuario,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2330: criadorNome: m.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2439: criadorUsuario: m.criadorUsuario,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2440: criadorNome: m.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2493: where: { criadorUsuarioId: userId },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2496: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2502: where: { criadorUsuarioId: userId },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2505: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2522: criadorNome: m.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2544: criadorNome: m.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2586: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2598: criadorUsuario: { select: { id: true, nome: true, foto: true, parceiro: true } },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2760: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2777: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2795: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2851: aula.criadorUsuario?.nome ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2852: aula.metodologiaAvulsa?.criadorUsuario?.nome ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2853: aula.metodologia?.criadorUsuario?.nome ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2909: criadorUsuario: aula.criadorUsuario,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2967: select: { id: true, criadorUsuarioId: true },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:2974: if (metodologia.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3168: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3232: .criadorUsuarioId ||
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3252: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3292: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3312: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3328: !!userId && String(metodologia.criadorUsuarioId || "") === String(userId);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3350: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3378: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3549: criadorNome: metodologia.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3656: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3689: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3722: usuarioId:
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3787: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3812: select: { id: true, criadorUsuarioId: true },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3819: if (metodologia.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3883: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3898: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3962: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:3986: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4006: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4012: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4162: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4170: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4210: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:4251: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5085: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5101: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5129: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5163: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5483: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5553: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5621: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5836: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:5861: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6070: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6116: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6163: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6181: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6246: !!userId && String(item.criadorUsuarioId || "") === String(userId);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6266: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6298: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6413: criadorUsuarioId: item.criadorUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6422: criadorNome: item.criadorUsuario?.nome ?? null,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6516: if (atual.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6530: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6768: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6826: if (metodologia.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6882: if (atual.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:6990: criadorUsuarioId: atual.criadorUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7000: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7070: if (atual.criadorUsuarioId !== userId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7170: criadorUsuarioId: atual.criadorUsuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7180: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7235: const criadorUsuarioId = String(
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7236: req.query.criadorUsuarioId || ""
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7295: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7305: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7315: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7329: if (criadorUsuarioId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7330: filtroCriador.id = criadorUsuarioId;
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7361: where.criadorUsuario = {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7376: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7394: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7606: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7622: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7650: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7684: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7753: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:7767: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8021: select: { id: true, criadorUsuarioId: true },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8030: if (metodologia.criadorUsuarioId !== userId && !isAdmin) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8122: const usuarioId = getUserId(req);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8124: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8129: where: { usuarioId },
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8151: const usuarioId = getUserId(req);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8153: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8177: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8199: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8218: const usuarioId = getUserId(req);
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8220: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\controllers\metodologiasController.ts:8235: usuarioId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:92: { criadorUsuario: { is: { nome: { contains: q, mode: "insensitive" } } } },
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:93: { criadorUsuario: { is: { nomeDeUsuario: { contains: q, mode: "insensitive" } } } },
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:94: { criadorUsuario: { is: { email: { contains: q, mode: "insensitive" } } } },
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:106: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:149: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:258: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:277: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:303: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:319: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:361: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:368: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:396: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:409: usuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:424: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:518: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:643: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:647: criadorUsuarioId: userId,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:665: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:716: criadorUsuario: {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:828: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:836: if (String(metodologiaAvulsa.criadorUsuarioId) !== String(userId)) {
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:853: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\controllers\adminMetodologiasController.ts:861: if (String(metodologia.criadorUsuarioId) !== String(userId)) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:25: usuarioId: string;
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:33: usuarioId: params.usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:69: if (aula.criadorUsuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:70: ids.add(String(aula.criadorUsuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:73: if (aula.metodologia?.criadorUsuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:74: ids.add(String(aula.metodologia.criadorUsuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:77: if (aula.metodologiaAvulsa?.criadorUsuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:78: ids.add(String(aula.metodologiaAvulsa.criadorUsuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:87: if (convidado?.usuarioId) ids.add(String(convidado.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:98: select: { usuarioId: true },
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:102: if (assinante.usuarioId) ids.add(String(assinante.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:112: select: { usuarioId: true },
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:116: if (assinante.usuarioId) ids.add(String(assinante.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:126: if (treino.atleta?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:127: ids.add(String(treino.atleta.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:132: if (tp?.criadorProfessor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:133: ids.add(String(tp.criadorProfessor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:136: if (tp?.Professor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:137: ids.add(String(tp.Professor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:140: if (tp?.clube?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:141: ids.add(String(tp.clube.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:144: if (tp?.escolinha?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:145: ids.add(String(tp.escolinha.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:150: if (item?.professor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:151: ids.add(String(item.professor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:163: if (tp?.criadorProfessor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:164: ids.add(String(tp.criadorProfessor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:167: if (tp?.Professor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:168: ids.add(String(tp.Professor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:171: if (tp?.clube?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:172: ids.add(String(tp.clube.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:175: if (tp?.escolinha?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:176: ids.add(String(tp.escolinha.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:181: if (item?.professor?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:182: ids.add(String(item.professor.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:207: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:216: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:221: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:226: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:231: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:238: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:267: const atletaUsuarioId = treino.atleta?.usuarioId
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:268: ? String(treino.atleta.usuarioId)
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:273: usuarioId: atletaUsuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:283: usuarioId: atletaUsuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:326: for (const usuarioId of responsaveis) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:327: if (usuarioId && usuarioId !== atletaUsuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:328: atual.usuarioIds.add(usuarioId);
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:336: for (const usuarioId of responsaveis) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:337: if (!usuarioId || usuarioId === atletaUsuarioId) continue;
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:340: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:351: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:364: for (const usuarioId of grupo.usuarioIds) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:367: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:378: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:422: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:429: criadorUsuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:444: for (const usuarioId of destinatarios) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:446: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:455: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:476: if (evento.clube?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:477: ids.add(String(evento.clube.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:480: if (evento.escolinha?.usuarioId) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:481: ids.add(String(evento.escolinha.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:486: if (inscricao?.usuarioId) ids.add(String(inscricao.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:511: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:516: if (atleta.usuarioId) ids.add(String(atleta.usuarioId));
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:545: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:551: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:557: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:571: for (const usuarioId of destinatarios) {
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:573: usuarioId,
+C:\dev\FootEraApp-app\server\services\notificationScheduler.ts:582: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:65: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:66: organizacaoId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:79: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:80: organizacaoId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:93: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:94: organizacaoId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:107: usuarioId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:108: organizacaoId: true,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:119: organizacaoId: string,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:122: organizacaoId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:163: organizacaoId: string;
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:164: usuarioId: string;
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:177: organizacaoId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:178: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:189: organizacaoId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:190: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:232: organizacaoId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:233: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:252: organizacaoId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:253: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:269: usuarioId: string;
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:277: const usuarioId =
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:279: params.usuarioId || ""
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:282: if (!usuarioId) {
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:289: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:312: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:330: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:340: usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:480: legado.organizacaoId !==
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:493: legado.usuarioId ??
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:502: organizacaoId:
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:505: usuarioId:
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:521: usuarioId:
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:539: usuarioId: string;
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:574: organizacaoId:
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:577: usuarioId:
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:578: params.usuarioId,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:619: legado.organizacaoId
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:622: legado.organizacaoId
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:642: usuarioId: string,
+C:\dev\FootEraApp-app\server\services\organizacoes.ts:646: usuarioId

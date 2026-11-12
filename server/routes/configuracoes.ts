@@ -3,6 +3,7 @@ import {
   getConfiguracoes,
   atualizarConfiguracoes,
   solicitarExclusaoConta,
+  consultarDiagnosticoExclusaoConta,
 } from "../controllers/configuracoesController.js";
 import { authenticateToken } from "../middlewares/auth.js";
 import { requireAdmin } from "../middlewares/guards.js";
@@ -16,11 +17,15 @@ router.patch(
   requireAdmin,
   atualizarConfiguracoes
 );
+router.get(
+  "/minha-conta/diagnostico",
+  authenticateToken,
+  consultarDiagnosticoExclusaoConta,
+);
 router.delete(
   "/minha-conta",
   authenticateToken,
   solicitarExclusaoConta
 );
-
 
 export default router;

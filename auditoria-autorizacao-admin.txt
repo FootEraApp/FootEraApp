@@ -1,0 +1,635 @@
+﻿========== server/middlewares/adminGuard.ts ==========
+
+  server\middlewares\adminGuard.ts:37:    getUserId(req);
+  server\middlewares\adminGuard.ts:38:
+  server\middlewares\adminGuard.ts:39:  if (!userId) {
+  server\middlewares\adminGuard.ts:40:    return null;
+  server\middlewares\adminGuard.ts:41:  }
+  server\middlewares\adminGuard.ts:42:
+  server\middlewares\adminGuard.ts:43:  return prisma.usuario.findUnique({
+  server\middlewares\adminGuard.ts:44:    where: {
+  server\middlewares\adminGuard.ts:45:      id: userId,
+  server\middlewares\adminGuard.ts:46:    },
+  server\middlewares\adminGuard.ts:47:
+  server\middlewares\adminGuard.ts:48:    include: {
+> server\middlewares\adminGuard.ts:49:      administrador: true,
+  server\middlewares\adminGuard.ts:50:    },
+  server\middlewares\adminGuard.ts:51:  });
+  server\middlewares\adminGuard.ts:52:}
+  server\middlewares\adminGuard.ts:53:
+> server\middlewares\adminGuard.ts:54:export async function requireAdmin(
+  server\middlewares\adminGuard.ts:55:  req: AuthedReq,
+  server\middlewares\adminGuard.ts:56:  res: Response,
+  server\middlewares\adminGuard.ts:57:  next: NextFunction
+  server\middlewares\adminGuard.ts:58:) {
+  server\middlewares\adminGuard.ts:59:  try {
+  server\middlewares\adminGuard.ts:60:    const userId =
+  server\middlewares\adminGuard.ts:61:      getUserId(req);
+  server\middlewares\adminGuard.ts:62:
+  server\middlewares\adminGuard.ts:63:    if (!userId) {
+  server\middlewares\adminGuard.ts:64:      return res.status(401).json({
+  server\middlewares\adminGuard.ts:65:        error:
+  server\middlewares\adminGuard.ts:66:          "Não autenticado.",
+  server\middlewares\adminGuard.ts:67:      });
+  server\middlewares\adminGuard.ts:68:    }
+  server\middlewares\adminGuard.ts:69:
+  server\middlewares\adminGuard.ts:70:    const permitido =
+  server\middlewares\adminGuard.ts:71:      await canPermission(
+  server\middlewares\adminGuard.ts:72:        userId,
+> server\middlewares\adminGuard.ts:73:        "VER_ADMIN"
+  server\middlewares\adminGuard.ts:74:      );
+  server\middlewares\adminGuard.ts:75:
+  server\middlewares\adminGuard.ts:76:    if (!permitido) {
+  server\middlewares\adminGuard.ts:77:      return res
+  server\middlewares\adminGuard.ts:78:        .status(403)
+  server\middlewares\adminGuard.ts:79:        .json({
+  server\middlewares\adminGuard.ts:80:          error:
+> server\middlewares\adminGuard.ts:81:            "Acesso restrito a administradores.",
+  server\middlewares\adminGuard.ts:82:        });
+  server\middlewares\adminGuard.ts:83:    }
+  server\middlewares\adminGuard.ts:84:
+  server\middlewares\adminGuard.ts:85:    const me =
+  server\middlewares\adminGuard.ts:86:      await loadCurrentUser(
+  server\middlewares\adminGuard.ts:87:        req
+  server\middlewares\adminGuard.ts:88:      );
+  server\middlewares\adminGuard.ts:89:
+> server\middlewares\adminGuard.ts:90:    if (!me || me.deletedAt || !me.administrador) {
+  server\middlewares\adminGuard.ts:91:      return res.status(403).json({
+> server\middlewares\adminGuard.ts:92:        code: "ADMIN_ACCESS_REVOKED",
+> server\middlewares\adminGuard.ts:93:        error: "Acesso administrativo indisponível.",
+  server\middlewares\adminGuard.ts:94:      });
+  server\middlewares\adminGuard.ts:95:    }
+  server\middlewares\adminGuard.ts:96:
+  server\middlewares\adminGuard.ts:97:    (req as any).me =
+  server\middlewares\adminGuard.ts:98:      me;
+  server\middlewares\adminGuard.ts:99:
+> server\middlewares\adminGuard.ts:100:    (req as any).isAdmin =
+  server\middlewares\adminGuard.ts:101:      true;
+  server\middlewares\adminGuard.ts:102:
+  server\middlewares\adminGuard.ts:103:    return next();
+  server\middlewares\adminGuard.ts:104:  } catch (error) {
+  server\middlewares\adminGuard.ts:105:    console.error(
+> server\middlewares\adminGuard.ts:106:      "[ADMIN_GUARD] requireAdmin:",
+  server\middlewares\adminGuard.ts:107:      error
+  server\middlewares\adminGuard.ts:108:    );
+  server\middlewares\adminGuard.ts:109:
+  server\middlewares\adminGuard.ts:110:    return res.status(500).json({
+  server\middlewares\adminGuard.ts:111:      error:
+> server\middlewares\adminGuard.ts:112:        "Erro ao validar permissão administrativa.",
+  server\middlewares\adminGuard.ts:113:    });
+  server\middlewares\adminGuard.ts:114:  }
+  server\middlewares\adminGuard.ts:115:}
+  server\middlewares\adminGuard.ts:116:
+> server\middlewares\adminGuard.ts:117:export async function requireSuperAdmin(
+  server\middlewares\adminGuard.ts:118:  req: AuthedReq,
+  server\middlewares\adminGuard.ts:119:  res: Response,
+  server\middlewares\adminGuard.ts:120:  next: NextFunction
+  server\middlewares\adminGuard.ts:121:) {
+  server\middlewares\adminGuard.ts:122:  try {
+  server\middlewares\adminGuard.ts:123:    const userId =
+  server\middlewares\adminGuard.ts:124:      getUserId(req);
+  server\middlewares\adminGuard.ts:125:
+  server\middlewares\adminGuard.ts:126:    if (!userId) {
+  server\middlewares\adminGuard.ts:127:      return res.status(401).json({
+  server\middlewares\adminGuard.ts:128:        error:
+  server\middlewares\adminGuard.ts:129:          "Não autenticado.",
+  server\middlewares\adminGuard.ts:130:      });
+  server\middlewares\adminGuard.ts:131:    }
+  server\middlewares\adminGuard.ts:132:
+  server\middlewares\adminGuard.ts:133:    const permitido =
+  server\middlewares\adminGuard.ts:134:      await canPermission(
+  server\middlewares\adminGuard.ts:135:        userId,
+> server\middlewares\adminGuard.ts:136:        "VER_ADMIN"
+  server\middlewares\adminGuard.ts:137:      );
+  server\middlewares\adminGuard.ts:138:
+  server\middlewares\adminGuard.ts:139:    if (!permitido) {
+  server\middlewares\adminGuard.ts:140:      return res
+  server\middlewares\adminGuard.ts:141:        .status(403)
+  server\middlewares\adminGuard.ts:142:        .json({
+  server\middlewares\adminGuard.ts:143:          error:
+> server\middlewares\adminGuard.ts:144:            "Acesso restrito a administradores.",
+  server\middlewares\adminGuard.ts:145:        });
+  server\middlewares\adminGuard.ts:146:    }
+  server\middlewares\adminGuard.ts:147:
+  server\middlewares\adminGuard.ts:148:    const me =
+  server\middlewares\adminGuard.ts:149:      await loadCurrentUser(
+  server\middlewares\adminGuard.ts:150:        req
+  server\middlewares\adminGuard.ts:151:      );
+  server\middlewares\adminGuard.ts:152:
+> server\middlewares\adminGuard.ts:153:    if (!me || me.deletedAt || !me.administrador) {
+  server\middlewares\adminGuard.ts:154:      return res
+  server\middlewares\adminGuard.ts:155:        .status(403)
+  server\middlewares\adminGuard.ts:156:        .json({
+  server\middlewares\adminGuard.ts:157:          error:
+> server\middlewares\adminGuard.ts:158:            "Acesso restrito a administradores.",
+  server\middlewares\adminGuard.ts:159:        });
+  server\middlewares\adminGuard.ts:160:    }
+  server\middlewares\adminGuard.ts:161:
+  server\middlewares\adminGuard.ts:162:    const cargoRaw =
+  server\middlewares\adminGuard.ts:163:      String(
+> server\middlewares\adminGuard.ts:164:        me.administrador
+  server\middlewares\adminGuard.ts:165:          ?.cargo ??
+  server\middlewares\adminGuard.ts:166:          ""
+  server\middlewares\adminGuard.ts:167:      )
+  server\middlewares\adminGuard.ts:168:        .toLowerCase()
+  server\middlewares\adminGuard.ts:169:        .trim();
+  server\middlewares\adminGuard.ts:170:
+  server\middlewares\adminGuard.ts:171:    const cargo =
+  server\middlewares\adminGuard.ts:172:      cargoRaw.replace(
+  server\middlewares\adminGuard.ts:173:        /\s+/g,
+  server\middlewares\adminGuard.ts:174:        " "
+  server\middlewares\adminGuard.ts:175:      );
+  server\middlewares\adminGuard.ts:176:
+  server\middlewares\adminGuard.ts:177:    const nivel =
+  server\middlewares\adminGuard.ts:178:      String(
+> server\middlewares\adminGuard.ts:179:        (me.administrador as any)
+  server\middlewares\adminGuard.ts:180:          ?.nivel ??
+  server\middlewares\adminGuard.ts:181:          ""
+  server\middlewares\adminGuard.ts:182:      )
+  server\middlewares\adminGuard.ts:183:        .toLowerCase()
+  server\middlewares\adminGuard.ts:184:        .trim();
+  server\middlewares\adminGuard.ts:185:
+  server\middlewares\adminGuard.ts:186:    const isByCargo =
+  server\middlewares\adminGuard.ts:187:      cargo ===
+> server\middlewares\adminGuard.ts:188:        "super admin" ||
+  server\middlewares\adminGuard.ts:189:      cargo ===
+> server\middlewares\adminGuard.ts:190:        "superadmin" ||
+  server\middlewares\adminGuard.ts:191:      cargo ===
+  server\middlewares\adminGuard.ts:192:        "owner";
+  server\middlewares\adminGuard.ts:193:
+  server\middlewares\adminGuard.ts:194:    const isByNivel =
+  server\middlewares\adminGuard.ts:195:      nivel ===
+  server\middlewares\adminGuard.ts:196:      "performance";
+  server\middlewares\adminGuard.ts:197:
+  server\middlewares\adminGuard.ts:198:    const isByEnv =
+  server\middlewares\adminGuard.ts:199:      Boolean(
+  server\middlewares\adminGuard.ts:200:        process.env
+> server\middlewares\adminGuard.ts:201:          .SUPERADMIN_EMAIL
+  server\middlewares\adminGuard.ts:202:      ) &&
+  server\middlewares\adminGuard.ts:203:      me.email
+  server\middlewares\adminGuard.ts:204:        ?.toLowerCase() ===
+  server\middlewares\adminGuard.ts:205:        process.env
+> server\middlewares\adminGuard.ts:206:          .SUPERADMIN_EMAIL!
+  server\middlewares\adminGuard.ts:207:          .toLowerCase();
+  server\middlewares\adminGuard.ts:208:
+  server\middlewares\adminGuard.ts:209:    if (
+  server\middlewares\adminGuard.ts:210:      !(
+  server\middlewares\adminGuard.ts:211:        isByCargo ||
+  server\middlewares\adminGuard.ts:212:        isByNivel ||
+  server\middlewares\adminGuard.ts:213:        isByEnv
+  server\middlewares\adminGuard.ts:214:      )
+  server\middlewares\adminGuard.ts:215:    ) {
+  server\middlewares\adminGuard.ts:216:      return res
+  server\middlewares\adminGuard.ts:217:        .status(403)
+  server\middlewares\adminGuard.ts:218:        .json({
+  server\middlewares\adminGuard.ts:219:          error:
+> server\middlewares\adminGuard.ts:220:            "Apenas o super admin pode executar esta ação.",
+  server\middlewares\adminGuard.ts:221:        });
+  server\middlewares\adminGuard.ts:222:    }
+  server\middlewares\adminGuard.ts:223:
+  server\middlewares\adminGuard.ts:224:    (req as any).me =
+  server\middlewares\adminGuard.ts:225:      me;
+  server\middlewares\adminGuard.ts:226:
+> server\middlewares\adminGuard.ts:227:    (req as any).isAdmin =
+  server\middlewares\adminGuard.ts:228:      true;
+  server\middlewares\adminGuard.ts:229:
+  server\middlewares\adminGuard.ts:230:    (req as any)
+> server\middlewares\adminGuard.ts:231:      .isSuperAdmin =
+  server\middlewares\adminGuard.ts:232:      true;
+  server\middlewares\adminGuard.ts:233:
+  server\middlewares\adminGuard.ts:234:    return next();
+  server\middlewares\adminGuard.ts:235:  } catch (error) {
+  server\middlewares\adminGuard.ts:236:    console.error(
+> server\middlewares\adminGuard.ts:237:      "[ADMIN_GUARD] requireSuperAdmin:",
+  server\middlewares\adminGuard.ts:238:      error
+  server\middlewares\adminGuard.ts:239:    );
+  server\middlewares\adminGuard.ts:240:
+  server\middlewares\adminGuard.ts:241:    return res.status(500).json({
+  server\middlewares\adminGuard.ts:242:      error:
+> server\middlewares\adminGuard.ts:243:        "Erro ao validar permissão de super administrador.",
+  server\middlewares\adminGuard.ts:244:    });
+  server\middlewares\adminGuard.ts:245:  }
+  server\middlewares\adminGuard.ts:246:}
+
+
+
+========== server/middlewares/auth.ts ==========
+
+  server\middlewares\auth.ts:201:      tipoUsuarioId:
+  server\middlewares\auth.ts:202:        ctx.tipoUsuarioId ??
+  server\middlewares\auth.ts:203:        null,
+  server\middlewares\auth.ts:204:
+  server\middlewares\auth.ts:205:      activeContext:
+  server\middlewares\auth.ts:206:        ctx.activeContext ??
+  server\middlewares\auth.ts:207:        null,
+  server\middlewares\auth.ts:208:
+  server\middlewares\auth.ts:209:      plano:
+  server\middlewares\auth.ts:210:        ((ctx.plano as PlanoName) ??
+  server\middlewares\auth.ts:211:          "FREE") as PlanoName,
+  server\middlewares\auth.ts:212:
+> server\middlewares\auth.ts:213:      isAdmin:
+> server\middlewares\auth.ts:214:        !!ctx.isAdmin,
+  server\middlewares\auth.ts:215:
+  server\middlewares\auth.ts:216:      parceiro,
+  server\middlewares\auth.ts:217:    };
+  server\middlewares\auth.ts:218:
+  server\middlewares\auth.ts:219:    reqAuthed.authUser =
+  server\middlewares\auth.ts:220:      user;
+  server\middlewares\auth.ts:221:
+  server\middlewares\auth.ts:222:    (reqAuthed as any).user =
+  server\middlewares\auth.ts:223:      user;
+  server\middlewares\auth.ts:224:  } catch (e: any) {
+  server\middlewares\auth.ts:225:    if (e?.message === "NO_ACTIVE_CONTEXT") {
+  server\middlewares\auth.ts:226:      const rotaPermitida =
+  server\middlewares\auth.ts:227:        (
+  server\middlewares\auth.ts:228:          req.method === "GET" &&
+  server\middlewares\auth.ts:229:          url === "/api/auth/me"
+  server\middlewares\auth.ts:230:        ) ||
+  server\middlewares\auth.ts:231:        (
+  server\middlewares\auth.ts:232:          req.method === "GET" &&
+
+
+
+========== server/middlewares/guards.ts ==========
+
+  server\middlewares\guards.ts:116:          "Não autenticado",
+  server\middlewares\guards.ts:117:      });
+  server\middlewares\guards.ts:118:    }
+  server\middlewares\guards.ts:119:
+  server\middlewares\guards.ts:120:    if (!alvoId) {
+  server\middlewares\guards.ts:121:      return res.status(400).json({
+  server\middlewares\guards.ts:122:        error:
+  server\middlewares\guards.ts:123:          "orgId ausente",
+  server\middlewares\guards.ts:124:      });
+  server\middlewares\guards.ts:125:    }
+  server\middlewares\guards.ts:126:
+  server\middlewares\guards.ts:127:    /*
+> server\middlewares\guards.ts:128:     * Admin global não depende
+  server\middlewares\guards.ts:129:     * do contexto selecionado.
+  server\middlewares\guards.ts:130:     */
+> server\middlewares\guards.ts:131:    const isAdmin =
+  server\middlewares\guards.ts:132:      await canPermission(
+  server\middlewares\guards.ts:133:        usuarioId,
+> server\middlewares\guards.ts:134:        "VER_ADMIN",
+  server\middlewares\guards.ts:135:      );
+  server\middlewares\guards.ts:136:
+> server\middlewares\guards.ts:137:    if (isAdmin) {
+  server\middlewares\guards.ts:138:      return next();
+  server\middlewares\guards.ts:139:    }
+  server\middlewares\guards.ts:140:
+  server\middlewares\guards.ts:141:    const contexto =
+  server\middlewares\guards.ts:142:      await getActiveContext(
+  server\middlewares\guards.ts:143:        usuarioId,
+  server\middlewares\guards.ts:144:      );
+  server\middlewares\guards.ts:145:
+  server\middlewares\guards.ts:146:    if (!contexto) {
+  server\middlewares\guards.ts:147:      return res.status(403).json({
+  server\middlewares\guards.ts:148:        code:
+  server\middlewares\guards.ts:149:          "ACTIVE_CONTEXT_REQUIRED",
+  server\middlewares\guards.ts:150:
+  server\middlewares\guards.ts:151:        error:
+  server\middlewares\guards.ts:152:          "Nenhum contexto ativo válido.",
+  server\middlewares\guards.ts:153:      });
+  server\middlewares\guards.ts:154:    }
+  server\middlewares\guards.ts:155:
+  server\middlewares\guards.ts:252:        code:
+  server\middlewares\guards.ts:253:          "ACTIVE_CONTEXT_MISMATCH",
+  server\middlewares\guards.ts:254:
+  server\middlewares\guards.ts:255:        error:
+  server\middlewares\guards.ts:256:          "O ID informado não pertence ao contexto ativo.",
+  server\middlewares\guards.ts:257:      });
+  server\middlewares\guards.ts:258:    }
+  server\middlewares\guards.ts:259:
+  server\middlewares\guards.ts:260:    return next();
+  server\middlewares\guards.ts:261:  };
+  server\middlewares\guards.ts:262:}
+  server\middlewares\guards.ts:263:
+> server\middlewares\guards.ts:264:export async function requireAdmin(
+  server\middlewares\guards.ts:265:  req: AuthenticatedRequest,
+  server\middlewares\guards.ts:266:  res: Response,
+  server\middlewares\guards.ts:267:  next: NextFunction,
+  server\middlewares\guards.ts:268:) {
+  server\middlewares\guards.ts:269:  const userId =
+  server\middlewares\guards.ts:270:    String(
+  server\middlewares\guards.ts:271:      req.userId ??
+  server\middlewares\guards.ts:272:        (req as any).user?.id ??
+  server\middlewares\guards.ts:273:        (req as any).authUser?.id ??
+  server\middlewares\guards.ts:274:        "",
+  server\middlewares\guards.ts:275:    ).trim();
+  server\middlewares\guards.ts:276:
+  server\middlewares\guards.ts:277:  if (!userId) {
+  server\middlewares\guards.ts:278:    return res.status(401).json({
+  server\middlewares\guards.ts:279:      message:
+  server\middlewares\guards.ts:280:        "Não autenticado.",
+  server\middlewares\guards.ts:281:    });
+  server\middlewares\guards.ts:282:  }
+  server\middlewares\guards.ts:283:
+> server\middlewares\guards.ts:284:  const administrador = await prisma.administrador.findUnique({
+  server\middlewares\guards.ts:285:    where: {
+  server\middlewares\guards.ts:286:      usuarioId: userId,
+  server\middlewares\guards.ts:287:    },
+  server\middlewares\guards.ts:288:    select: {
+  server\middlewares\guards.ts:289:      id: true,
+  server\middlewares\guards.ts:290:    },
+  server\middlewares\guards.ts:291:  });
+  server\middlewares\guards.ts:292:
+> server\middlewares\guards.ts:293:  if (!administrador) {
+  server\middlewares\guards.ts:294:    return res.status(403).json({
+> server\middlewares\guards.ts:295:      code: "ADMIN_ACCESS_REVOKED",
+> server\middlewares\guards.ts:296:      message: "Esta conta não possui acesso administrativo ativo.",
+  server\middlewares\guards.ts:297:    });
+  server\middlewares\guards.ts:298:  }
+  server\middlewares\guards.ts:299:
+  server\middlewares\guards.ts:300:  const permitido =
+  server\middlewares\guards.ts:301:    await canPermission(
+  server\middlewares\guards.ts:302:      userId,
+> server\middlewares\guards.ts:303:      "VER_ADMIN",
+  server\middlewares\guards.ts:304:    );
+  server\middlewares\guards.ts:305:
+  server\middlewares\guards.ts:306:  if (!permitido) {
+  server\middlewares\guards.ts:307:    return res.status(403).json({
+  server\middlewares\guards.ts:308:      message:
+> server\middlewares\guards.ts:309:        "Acesso restrito a administradores.",
+  server\middlewares\guards.ts:310:    });
+  server\middlewares\guards.ts:311:  }
+  server\middlewares\guards.ts:312:
+  server\middlewares\guards.ts:313:  return next();
+  server\middlewares\guards.ts:314:}
+
+
+
+========== server/controllers/authController.ts ==========
+
+  server\controllers\authController.ts:123:      where: {
+  server\controllers\authController.ts:124:        OR: [
+  server\controllers\authController.ts:125:          { nomeDeUsuario: lowerKey },
+  server\controllers\authController.ts:126:          { email: lowerKey },
+  server\controllers\authController.ts:127:        ],
+  server\controllers\authController.ts:128:      },
+  server\controllers\authController.ts:129:      include: {
+  server\controllers\authController.ts:130:        atleta: { select: { id: true } },
+  server\controllers\authController.ts:131:        professor: { select: { id: true } },
+  server\controllers\authController.ts:132:        clube: { select: { id: true } },
+  server\controllers\authController.ts:133:        escolinha: { select: { id: true } },
+  server\controllers\authController.ts:134:        olheiro: { select: { id: true } },
+> server\controllers\authController.ts:135:        administrador: { select: { id: true } },
+  server\controllers\authController.ts:136:        learningProfile: { select: { id: true } },
+  server\controllers\authController.ts:137:        federacao: { select: { id: true } },
+  server\controllers\authController.ts:138:        marca: { select: { id: true } },
+  server\controllers\authController.ts:139:      },
+  server\controllers\authController.ts:140:    });
+  server\controllers\authController.ts:141:
+  server\controllers\authController.ts:142:    if (!usuario) {
+  server\controllers\authController.ts:143:      return res.status(404).json({ message: "Usuário não encontrado" });
+  server\controllers\authController.ts:144:    }
+  server\controllers\authController.ts:145:
+  server\controllers\authController.ts:146:    if (!usuario.senhaHash) {
+  server\controllers\authController.ts:147:      console.error("Usuário sem senhaHash no banco:", usuario.id, usuario.nomeDeUsuario);
+  server\controllers\authController.ts:148:      return res
+  server\controllers\authController.ts:149:        .status(500)
+  server\controllers\authController.ts:150:        .json({ message: "Usuário sem senha configurada. Contate o suporte ou recrie o usuário." });
+  server\controllers\authController.ts:151:    }
+  server\controllers\authController.ts:152:
+  server\controllers\authController.ts:153:    if (usuario.deletedAt) {
+  server\controllers\authController.ts:169:          ? `Sua conta foi excluída. Caso queira recuperar, faltam ${daysLeft} dia(s).`
+  server\controllers\authController.ts:170:          : "Sua conta foi excluída e o prazo de recuperação expirou.",
+  server\controllers\authController.ts:171:      });
+  server\controllers\authController.ts:172:    }
+  server\controllers\authController.ts:173:
+  server\controllers\authController.ts:174:    const status = String((usuario as any).status ?? "").toUpperCase();
+  server\controllers\authController.ts:175:
+  server\controllers\authController.ts:176:    if (status === "BLOQUEADO" || (usuario as any).blockedAt) {
+  server\controllers\authController.ts:177:      return res.status(403).json({
+  server\controllers\authController.ts:178:        ok: false,
+  server\controllers\authController.ts:179:        code: "ACCOUNT_BLOCKED",
+  server\controllers\authController.ts:180:        message:
+> server\controllers\authController.ts:181:          "Sua conta foi bloqueada pelo admin. Se quiser saber mais informações clique abaixo.",
+  server\controllers\authController.ts:182:        blockedReason: (usuario as any).blockedReason ?? null,
+  server\controllers\authController.ts:183:      });
+  server\controllers\authController.ts:184:    }
+  server\controllers\authController.ts:185:
+  server\controllers\authController.ts:186:    if (!usuario.localLoginEnabled) {
+  server\controllers\authController.ts:187:      return res.status(409).json({
+  server\controllers\authController.ts:188:        ok: false,
+  server\controllers\authController.ts:189:        code: "LOCAL_LOGIN_DISABLED",
+  server\controllers\authController.ts:190:        message:
+  server\controllers\authController.ts:191:          "Esta conta não possui uma senha FootEra ativa. Entre com Google ou use 'Esqueci minha senha' para criar uma senha.",
+  server\controllers\authController.ts:192:      });
+  server\controllers\authController.ts:193:    }
+  server\controllers\authController.ts:194:
+  server\controllers\authController.ts:195:    const senhaCorreta = await bcrypt.compare(String(senha), usuario.senhaHash);
+  server\controllers\authController.ts:196:    if (!senhaCorreta) {
+  server\controllers\authController.ts:197:      return res.status(401).json({ message: "Senha incorreta" });
+  server\controllers\authController.ts:198:    }
+  server\controllers\authController.ts:199:
+  server\controllers\authController.ts:243:
+  server\controllers\authController.ts:244:    return res.json({
+  server\controllers\authController.ts:245:      ok: true,
+  server\controllers\authController.ts:246:
+  server\controllers\authController.ts:247:      message:
+  server\controllers\authController.ts:248:        "Login bem-sucedido",
+  server\controllers\authController.ts:249:
+  server\controllers\authController.ts:250:      token,
+  server\controllers\authController.ts:251:
+  server\controllers\authController.ts:252:      tipo: contexto?.tipo ?? null,
+  server\controllers\authController.ts:253:      tipoUsuarioId: contexto?.tipoUsuarioId ?? null,
+  server\controllers\authController.ts:254:      activeContext: contexto?.activeContext ?? null,
+> server\controllers\authController.ts:255:      isAdmin: contexto?.isAdmin === true,
+  server\controllers\authController.ts:256:      somenteGestaoConta,
+  server\controllers\authController.ts:257:
+  server\controllers\authController.ts:258:      nomeDeUsuario:
+  server\controllers\authController.ts:259:        usuario.nomeDeUsuario,
+  server\controllers\authController.ts:260:
+  server\controllers\authController.ts:261:      id:
+  server\controllers\authController.ts:262:        usuario.id,
+  server\controllers\authController.ts:263:
+  server\controllers\authController.ts:264:      usuario: {
+  server\controllers\authController.ts:265:        id: usuario.id,
+  server\controllers\authController.ts:266:        nomeDeUsuario: usuario.nomeDeUsuario,
+  server\controllers\authController.ts:267:        tipo: contexto?.tipo ?? null,
+  server\controllers\authController.ts:268:        activeContext: contexto?.activeContext ?? null,
+  server\controllers\authController.ts:269:        email: usuario.email,
+  server\controllers\authController.ts:270:        verified: usuario.verified,
+  server\controllers\authController.ts:271:      },
+  server\controllers\authController.ts:272:    });
+  server\controllers\authController.ts:273:  } catch (error) {
+
+
+
+========== server/services/roles.ts ==========
+
+  server\services\roles.ts:1:import {
+> server\services\roles.ts:2:  StatusUsuarioPapel,
+  server\services\roles.ts:3:  TipoUsuario,
+  server\services\roles.ts:4:} from "@prisma/client";
+  server\services\roles.ts:5:
+  server\services\roles.ts:6:import { prisma } from "../prisma.js";
+  server\services\roles.ts:7:
+  server\services\roles.ts:8:export const PAPEIS_PESSOAIS = [
+  server\services\roles.ts:9:  TipoUsuario.Atleta,
+  server\services\roles.ts:10:  TipoUsuario.Professor,
+  server\services\roles.ts:11:  TipoUsuario.Olheiro,
+  server\services\roles.ts:12:  TipoUsuario.Creator,
+  server\services\roles.ts:13:  TipoUsuario.Learning,
+  server\services\roles.ts:14:  TipoUsuario.Responsavel,
+  server\services\roles.ts:15:] as const;
+  server\services\roles.ts:16:
+  server\services\roles.ts:17:export const PAPEIS_ORGANIZACAO = [
+  server\services\roles.ts:18:  TipoUsuario.Clube,
+  server\services\roles.ts:19:  TipoUsuario.Escolinha,
+  server\services\roles.ts:20:  TipoUsuario.Escola,
+  server\services\roles.ts:61:    case "escolinha":
+  server\services\roles.ts:62:      return TipoUsuario.Escolinha;
+  server\services\roles.ts:63:
+  server\services\roles.ts:64:    case "marca":
+  server\services\roles.ts:65:      return TipoUsuario.Marca;
+  server\services\roles.ts:66:
+  server\services\roles.ts:67:    case "federacao":
+  server\services\roles.ts:68:      return TipoUsuario.Federacao;
+  server\services\roles.ts:69:
+  server\services\roles.ts:70:    case "learning":
+  server\services\roles.ts:71:      return TipoUsuario.Learning;
+  server\services\roles.ts:72:
+> server\services\roles.ts:73:    case "admin":
+> server\services\roles.ts:74:      return TipoUsuario.Admin;
+  server\services\roles.ts:75:
+  server\services\roles.ts:76:    case "responsavel":
+  server\services\roles.ts:77:      return TipoUsuario.Responsavel;
+  server\services\roles.ts:78:
+  server\services\roles.ts:79:    default:
+  server\services\roles.ts:80:      return null;
+  server\services\roles.ts:81:  }
+  server\services\roles.ts:82:}
+  server\services\roles.ts:83:
+  server\services\roles.ts:84:export async function getRoles(
+  server\services\roles.ts:85:  usuarioId: string,
+> server\services\roles.ts:86:  statuses: StatusUsuarioPapel[] = [
+> server\services\roles.ts:87:    StatusUsuarioPapel.ATIVO,
+  server\services\roles.ts:88:  ],
+  server\services\roles.ts:89:): Promise<TipoUsuario[]> {
+  server\services\roles.ts:90:  const registros =
+> server\services\roles.ts:91:    await prisma.usuarioPapel.findMany({
+  server\services\roles.ts:92:      where: {
+  server\services\roles.ts:93:        usuarioId,
+  server\services\roles.ts:94:      },
+  server\services\roles.ts:95:
+  server\services\roles.ts:96:      select: {
+  server\services\roles.ts:97:        papel: true,
+  server\services\roles.ts:98:        status: true,
+  server\services\roles.ts:99:      },
+  server\services\roles.ts:100:
+  server\services\roles.ts:101:      orderBy: {
+  server\services\roles.ts:102:        criadoEm: "asc",
+  server\services\roles.ts:103:      },
+  server\services\roles.ts:104:    });
+  server\services\roles.ts:105:
+  server\services\roles.ts:106:  // A partir do momento em que o usuário já possui
+> server\services\roles.ts:107:  // registros em UsuarioPapel, essa tabela vira
+  server\services\roles.ts:108:  // a fonte de verdade.
+  server\services\roles.ts:109:  if (registros.length > 0) {
+  server\services\roles.ts:110:    return Array.from(
+  server\services\roles.ts:111:      new Set(
+  server\services\roles.ts:112:        registros
+  server\services\roles.ts:113:          .filter((registro) =>
+  server\services\roles.ts:114:            statuses.includes(
+  server\services\roles.ts:115:              registro.status
+  server\services\roles.ts:116:            )
+  server\services\roles.ts:117:          )
+  server\services\roles.ts:118:          .map((registro) =>
+  server\services\roles.ts:119:            papelCanonico(
+  server\services\roles.ts:120:              registro.papel
+  server\services\roles.ts:121:            )
+  server\services\roles.ts:122:          )
+  server\services\roles.ts:123:      )
+  server\services\roles.ts:124:    );
+  server\services\roles.ts:125:  }
+  server\services\roles.ts:126:
+  server\services\roles.ts:127:  // Compatibilidade SOMENTE para usuário antigo
+> server\services\roles.ts:128:  // que ainda não possui nenhuma linha em UsuarioPapel.
+  server\services\roles.ts:129:  if (
+  server\services\roles.ts:130:    !statuses.includes(
+> server\services\roles.ts:131:      StatusUsuarioPapel.ATIVO
+  server\services\roles.ts:132:    )
+  server\services\roles.ts:133:  ) {
+  server\services\roles.ts:134:    return [];
+  server\services\roles.ts:135:  }
+  server\services\roles.ts:136:
+  server\services\roles.ts:137:  const usuario =
+  server\services\roles.ts:138:    await prisma.usuario.findUnique({
+  server\services\roles.ts:139:      where: {
+  server\services\roles.ts:140:        id: usuarioId,
+  server\services\roles.ts:141:      },
+  server\services\roles.ts:142:
+  server\services\roles.ts:143:      select: {
+  server\services\roles.ts:144:        tipo: true,
+  server\services\roles.ts:145:      },
+  server\services\roles.ts:146:    });
+  server\services\roles.ts:147:
+  server\services\roles.ts:148:  if (!usuario) {
+  server\services\roles.ts:149:    return [];
+  server\services\roles.ts:150:  }
+  server\services\roles.ts:151:
+  server\services\roles.ts:152:  return [
+  server\services\roles.ts:153:    papelCanonico(
+  server\services\roles.ts:154:      usuario.tipo
+  server\services\roles.ts:155:    ),
+  server\services\roles.ts:156:  ];
+  server\services\roles.ts:157:}
+  server\services\roles.ts:158:
+  server\services\roles.ts:159:export async function hasRole(
+  server\services\roles.ts:160:  usuarioId: string,
+  server\services\roles.ts:161:  papelRecebido: TipoUsuario,
+> server\services\roles.ts:162:  statuses: StatusUsuarioPapel[] = [
+> server\services\roles.ts:163:    StatusUsuarioPapel.ATIVO,
+  server\services\roles.ts:164:  ],
+  server\services\roles.ts:165:): Promise<boolean> {
+  server\services\roles.ts:166:  const papel =
+  server\services\roles.ts:167:    papelCanonico(
+  server\services\roles.ts:168:      papelRecebido
+  server\services\roles.ts:169:    );
+  server\services\roles.ts:170:
+  server\services\roles.ts:171:  const papeis =
+  server\services\roles.ts:172:    await getRoles(
+  server\services\roles.ts:173:      usuarioId,
+  server\services\roles.ts:174:      statuses
+  server\services\roles.ts:175:    );
+  server\services\roles.ts:176:
+  server\services\roles.ts:177:  return papeis.includes(
+  server\services\roles.ts:178:    papel
+  server\services\roles.ts:179:  );
+  server\services\roles.ts:180:}
+  server\services\roles.ts:181:
+  server\services\roles.ts:349:      if (
+  server\services\roles.ts:350:        !creator ||
+  server\services\roles.ts:351:        !creator.ativo ||
+  server\services\roles.ts:352:        creator.tipo !== "PESSOA_FISICA" ||
+  server\services\roles.ts:353:        creator.organizacaoId !== null
+  server\services\roles.ts:354:      ) {
+  server\services\roles.ts:355:        return null;
+  server\services\roles.ts:356:      }
+  server\services\roles.ts:357:
+  server\services\roles.ts:358:      return creator.id;
+  server\services\roles.ts:359:    }
+  server\services\roles.ts:360:
+> server\services\roles.ts:361:    case TipoUsuario.Admin:
+  server\services\roles.ts:362:      return (
+> server\services\roles.ts:363:        await prisma.administrador.findUnique({
+  server\services\roles.ts:364:          where: {
+  server\services\roles.ts:365:            usuarioId,
+  server\services\roles.ts:366:          },
+  server\services\roles.ts:367:          select: {
+  server\services\roles.ts:368:            id: true,
+  server\services\roles.ts:369:          },
+  server\services\roles.ts:370:        })
+  server\services\roles.ts:371:      )?.id ?? null;
+  server\services\roles.ts:372:
+  server\services\roles.ts:373:    case TipoUsuario.Responsavel:
+  server\services\roles.ts:374:      return usuarioId;
+  server\services\roles.ts:375:
+  server\services\roles.ts:376:    default:
+  server\services\roles.ts:377:      return null;
+  server\services\roles.ts:378:  }
+  server\services\roles.ts:379:}
+
+
+

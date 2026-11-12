@@ -1,0 +1,19 @@
+﻿ETAPA 5 - DIFERENCAS ENTRE MIGRATIONS
+
+========== 20250910202955_add_usuario_olheiro ==========
+
+
+========== 20250911200832_add_campos_resultado_submissao ==========
+
+
+========== 20250916172248_add_eventos ==========
+
+
+========== 20250917171954_atleta_add_pontos_total ==========
+
+
+========== 20250918183925_add_indicacao ==========
+
+
+========== 20260910150000_add_local_login_enabled ==========
+

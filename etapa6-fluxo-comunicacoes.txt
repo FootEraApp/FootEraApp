@@ -1,0 +1,390 @@
+    data: {
+      usuarioId: args.usuarioId,
+      tipo: args.tipo,
+      titulo: args.titulo,
+      mensagem: args.mensagem,
+      link: args.link ?? "/pagamentos",
+      lida: false,
+    } as any,
+  });
+
+  try {
+    getIO()
+      ?.to(
+        `u:${args.usuarioId}`
+      )
+      .emit(
+        "notification:new",
+        notif
+      );
+  } catch {}
+
+  try {
+    await recomputeAndEmitBadge(args.usuarioId);
+  } catch {}
+
+  return notif;
+}
+
+
+type TipoEventoBilling =
+  | "VENCIMENTO_7_DIAS"
+  | "BLOQUEIO"
+  | "TRIAL_ENCERRADO";
+
+type ComunicacaoBillingArgs = {
+  assinaturaId: string;
+  usuarioId: string;
+  cicloKey: string;
+  evento: TipoEventoBilling;
+  canal: BillingComunicacaoCanal;
+  plano: string;
+  contexto: string;
+  dataVencimento: Date;
+  diasRestantes?: number;
+};
+
+const BILLING_MAX_TENTATIVAS = 5;
+const BILLING_LEASE_MS = 30 * 60 * 1000;
+const BILLING_RETRY_MS = 60 * 60 * 1000;
+
+async function processarComunicacaoBilling(
+  args: ComunicacaoBillingArgs
+): Promise<boolean> {
+  const chave = {
+    assinaturaId: args.assinaturaId,
+    cicloKey: args.cicloKey,
+    evento: args.evento,
+    canal: args.canal,
+  };
+
+  const registro =
+    await prisma.billingComunicacao.upsert({
+      where: {
+        assinaturaId_cicloKey_evento_canal: chave,
+      },
+      create: {
+        ...chave,
+        status: BillingComunicacaoStatus.PENDENTE,
+      },
+      update: {},
+    });
+
+  const agora = new Date();
+  const limiteLease = new Date(
+    agora.getTime() - BILLING_LEASE_MS
+  );
+
+  const adquirido =
+    await prisma.billingComunicacao.updateMany({
+      where: {
+        id: registro.id,
+        tentativas: {
+          lt: BILLING_MAX_TENTATIVAS,
+        },
+        OR: [
+          {
+            status: BillingComunicacaoStatus.PENDENTE,
+          },
+          {
+            status: BillingComunicacaoStatus.FALHOU,
+            OR: [
+              { proximaTentativaEm: null },
+              { proximaTentativaEm: { lte: agora } },
+            ],
+          },
+          {
+            status: BillingComunicacaoStatus.PROCESSANDO,
+            atualizadoEm: {
+              lt: limiteLease,
+            },
+          },
+        ],
+      },
+      data: {
+        status: BillingComunicacaoStatus.PROCESSANDO,
+        tentativas: { increment: 1 },
+        ultimoErro: null,
+        proximaTentativaEm: null,
+      },
+    });
+
+  if (adquirido.count === 0) {
+    return false;
+  }
+
+  // Número da tentativa que esta execução adquiriu.
+  // Impede que uma tentativa anterior finalize
+  // uma tentativa mais recente.
+  const tentativaAtual = registro.tentativas + 1;
+
+  try {
+    const assinaturaAtual =
+      await prisma.assinatura.findUnique({
+        where: {
+          id: args.assinaturaId,
+        },
+        select: {
+          id: true,
+          usuarioId: true,
+          status: true,
+          ativo: true,
+          renovaEm: true,
+          trialEndsAt: true,
+          bloqueadoEm: true,
+        },
+      });
+
+    const agoraValidacao = new Date();
+
+    const fimAtual =
+      args.evento === "TRIAL_ENCERRADO" ||
+      (
+        args.evento === "VENCIMENTO_7_DIAS" &&
+        assinaturaAtual?.status === "TRIAL"
+      )
+        ? assinaturaAtual?.trialEndsAt ??
+          assinaturaAtual?.renovaEm
+        : assinaturaAtual?.renovaEm;
+
+    const mesmoCiclo =
+      fimAtual instanceof Date &&
+      fimAtual.getTime() ===
+        args.dataVencimento.getTime() &&
+      args.cicloKey ===
+        args.dataVencimento.toISOString();
+
+    const avisoValido =
+      args.evento === "VENCIMENTO_7_DIAS" &&
+      assinaturaAtual?.ativo === true &&
+      (
+        assinaturaAtual.status === "ATIVA" ||
+        assinaturaAtual.status === "TRIAL"
+      ) &&
+      args.dataVencimento > agoraValidacao &&
+      diffDays(
+        args.dataVencimento,
+        agoraValidacao
+      ) <= 7;
+
+    const bloqueioValido =
+      args.evento === "BLOQUEIO" &&
+      assinaturaAtual?.status === "BLOQUEADA" &&
+      assinaturaAtual.ativo === false &&
+      assinaturaAtual.bloqueadoEm !== null &&
+      assinaturaAtual.trialEndsAt === null;
+
+    const trialEncerradoValido =
+      args.evento === "TRIAL_ENCERRADO" &&
+      assinaturaAtual?.status === "BLOQUEADA" &&
+      assinaturaAtual.ativo === false &&
+      assinaturaAtual.bloqueadoEm !== null &&
+      assinaturaAtual.trialEndsAt !== null;
+
+    const comunicacaoValida =
+      assinaturaAtual?.usuarioId === args.usuarioId &&
+      mesmoCiclo &&
+      (
+        avisoValido ||
+        bloqueioValido ||
+        trialEncerradoValido
+      );
+
+    if (!comunicacaoValida) {
+      await prisma.billingComunicacao.updateMany({
+        where: {
+          id: registro.id,
+          status: BillingComunicacaoStatus.PROCESSANDO,
+          tentativas: tentativaAtual,
+        },
+        data: {
+          status: BillingComunicacaoStatus.FALHOU,
+          tentativas: BILLING_MAX_TENTATIVAS,
+          ultimoErro:
+            "Comunicação descartada: assinatura renovada, ciclo alterado ou status incompatível.",
+          proximaTentativaEm: null,
+        },
+      });
+
+      console.log(
+        "[billing] Comunicação antiga descartada:",
+        {
+          assinaturaId: args.assinaturaId,
+          evento: args.evento,
+          canal: args.canal,
+        }
+      );
+
+      return false;
+    }
+
+    const usuario = await prisma.usuario.findUnique({
+      where: {
+        id: args.usuarioId,
+      },
+      select: {
+        nome: true,
+        email: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!usuario || usuario.deletedAt) {
+      throw new Error(
+        "Usuário inexistente ou com exclusão solicitada."
+      );
+    }
+
+    const titulo =
+      args.evento === "VENCIMENTO_7_DIAS"
+        ? "Sua assinatura está perto do vencimento"
+        : args.evento === "TRIAL_ENCERRADO"
+          ? "Seu trial terminou"
+          : "Sua assinatura venceu";
+    const vencimentoFormatado =
+      args.dataVencimento.toLocaleDateString(
+        "pt-BR",
+        { timeZone: "UTC" }
+      );
+
+    const mensagem =
+      args.evento === "VENCIMENTO_7_DIAS"
+        ? `A assinatura ${args.plano}, vinculada ao ${args.contexto}, vence em ${vencimentoFormatado}. Renove para continuar com seus benefícios.`
+        : args.evento === "TRIAL_ENCERRADO"
+          ? `O período grátis da assinatura ${args.plano}, vinculada ao ${args.contexto}, terminou em ${vencimentoFormatado}.`
+          : `A assinatura ${args.plano}, vinculada ao ${args.contexto}, venceu em ${vencimentoFormatado} e foi bloqueada.`;
+
+    if (
+      args.canal === BillingComunicacaoCanal.APP
+    ) {
+      await criarNotificacaoBilling({
+        usuarioId: args.usuarioId,
+        tipo:
+          args.evento === "VENCIMENTO_7_DIAS"
+            ? NotificacaoTipo.BILLING_WARNING
+            : NotificacaoTipo.BILLING_BLOCKED,
+        titulo,
+        mensagem,
+        link: "/pagamentos",
+      });
+    } else {
+      if (!usuario.email?.trim()) {
+        throw new Error(
+          "Usuário sem e-mail cadastrado."
+        );
+      }
+
+      await sendBillingEmail({
+        to: usuario.email,
+        nome: usuario.nome,
+        plano: args.plano,
+        contexto: args.contexto,
+        tipo:
+          args.evento === "VENCIMENTO_7_DIAS"
+            ? "VENCIMENTO"
+            : args.evento === "TRIAL_ENCERRADO"
+              ? "TRIAL_ENCERRADO"
+              : "BLOQUEIO",
+        diasRestantes: args.diasRestantes,
+        dataVencimento: args.dataVencimento,
+      });
+    }
+
+    const finalizacao =
+      await prisma.billingComunicacao.updateMany({
+        where: {
+          id: registro.id,
+          status: BillingComunicacaoStatus.PROCESSANDO,
+          tentativas: tentativaAtual,
+        },
+        data: {
+          status: BillingComunicacaoStatus.ENVIADO,
+          enviadoEm: new Date(),
+          ultimoErro: null,
+          proximaTentativaEm: null,
+        },
+      });
+
+    if (finalizacao.count === 0) {
+      console.warn(
+        "[billing] Tentativa perdeu a posse da comunicação:",
+        {
+          comunicacaoId: registro.id,
+          tentativa: tentativaAtual,
+        }
+      );
+
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    const erro =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    const proximaTentativaEm = new Date(
+      Date.now() + BILLING_RETRY_MS
+    );
+
+    await prisma.billingComunicacao.updateMany({
+      where: {
+        id: registro.id,
+        status: BillingComunicacaoStatus.PROCESSANDO,
+        tentativas: tentativaAtual,
+      },
+      data: {
+        status: BillingComunicacaoStatus.FALHOU,
+        ultimoErro: erro.slice(0, 1000),
+        proximaTentativaEm,
+      },
+    });
+
+    console.error(
+      "[billing] Falha na comunicação:",
+      {
+        assinaturaId: args.assinaturaId,
+        evento: args.evento,
+        canal: args.canal,
+        erro,
+      }
+    );
+
+    return false;
+  }
+}
+
+async function enviarComunicacoesBilling(
+  args: Omit<
+    ComunicacaoBillingArgs,
+    "canal"
+  >
+) {
+  const canais = [
+    BillingComunicacaoCanal.APP,
+    BillingComunicacaoCanal.EMAIL,
+  ];
+
+  const resultados = await Promise.allSettled(
+    canais.map((canal) =>
+      processarComunicacaoBilling({
+        ...args,
+        canal,
+      })
+    )
+  );
+
+  for (const resultado of resultados) {
+    if (resultado.status === "rejected") {
+      console.error(
+        "[billing] Erro no processamento de canal:",
+        resultado.reason
+      );
+    }
+  }
+}
+
+const METODOLOGIA_BASE = 19.9;
+const METODOLOGIA_POR_SEMANA = 2.5;
+const METODOLOGIA_POR_ITEM = 1.0;

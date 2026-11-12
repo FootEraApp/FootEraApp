@@ -1,0 +1,250 @@
+          },
+        });
+
+      if (claim.count === 0) {
+        const pagamentoDepoisDaDisputa =
+          await tx.pagamento.findUniqueOrThrow({
+            where: {
+              id: pagamentoId,
+            },
+          });
+
+        if (
+          pagamentoDepoisDaDisputa.status !==
+          PagamentoStatus.APROVADO
+        ) {
+          throw new Error(
+            "BILLING_PAYMENT_APPROVAL_CONFLICT"
+          );
+        }
+
+        return pagamentoDepoisDaDisputa;
+      }
+
+      const pg =
+        await tx.pagamento
+          .findUniqueOrThrow({
+            where: {
+              id: pagamentoId,
+            },
+          });
+
+      const financeiroV1 = obterFinanceiroPagamento(
+        pg,
+        items
+      );
+
+      const cupomParaConfirmacao = pg.cupomId
+        ? await tx.cupom.findUnique({
+            where: { id: pg.cupomId },
+            select: {
+              codigo: true,
+              concedidoParaUsuarioId: true,
+            },
+          })
+        : null;
+
+      const aniversarioNaConfirmacao =
+        ehCupomAniversario(cupomParaConfirmacao);
+
+      if (
+        aniversarioNaConfirmacao &&
+        cupomParaConfirmacao?.concedidoParaUsuarioId !==
+          pg.usuarioId
+      ) {
+        throw new Error(
+          "BIRTHDAY_COUPON_PAYMENT_OWNER_MISMATCH"
+        );
+      }
+
+      const reservaPagamento =
+        (BILLING_CUPOM_RESERVA_QA || aniversarioNaConfirmacao) &&
+        pg.cupomId
+          ? await tx.cupomReserva.findUnique({
+              where: {
+                pagamentoId: pg.id,
+              },
+            })
+          : null;
+
+      if (
+        pg.cupomId &&
+        (
+          pg.plano === "BUNDLE" ||
+          aniversarioNaConfirmacao ||
+          (
+            BILLING_CUPOM_RESERVA_QA &&
+            reservaPagamento !== null
+          )
+        )
+      ) {
+        if (!financeiroV1) {
+          throw new Error(
+            "BILLING_BUNDLE_COUPON_SNAPSHOT_REQUIRED"
+          );
+        }
+
+        const cupomAtual = await tx.cupom.findUnique({
+          where: {
+            id: pg.cupomId,
+          },
+        });
+
+        if (!cupomAtual) {
+          throw new Error("BILLING_COUPON_NOT_FOUND");
+        }
+
+        const reserva = reservaPagamento;
+
+        if (
+          aniversarioNaConfirmacao &&
+          !reserva
+        ) {
+          throw new Error(
+            "BIRTHDAY_COUPON_RESERVATION_REQUIRED"
+          );
+        }
+
+        if (
+          BILLING_CUPOM_RESERVA_QA &&
+          pg.plano === "BUNDLE" &&
+          pg.cupomId &&
+          !reserva
+        ) {
+          console.warn(
+            "[billing] Pagamento com cupom sem reserva:",
+            {
+              pagamentoId: pg.id,
+              cupomId: pg.cupomId,
+            }
+          );
+        }
+
+        if (reserva) {
+          if (
+            reserva.cupomId !== pg.cupomId ||
+            reserva.usuarioId !== pg.usuarioId ||
+            ![
+              "RESERVADA",
+              "CONCILIACAO_PENDENTE",
+            ].includes(reserva.status)
+          ) {
+            throw new Error(
+              "BILLING_COUPON_RESERVATION_MISMATCH"
+            );
+          }
+        }
+
+        const resgate = await tx.cupomResgate.findUnique({
+          where: {
+            cupomId_usuarioId: {
+              cupomId: pg.cupomId,
+              usuarioId: pg.usuarioId,
+            },
+          },
+        });
+
+        if (resgate) {
+          if (resgate.pagamentoId !== pg.id) {
+            throw new Error("BILLING_COUPON_ALREADY_REDEEMED");
+          }
+        } else {
+          const incremento = await tx.cupom.updateMany({
+            where: {
+              id: pg.cupomId,
+              ativo: true,
+              OR: [
+                { usosMax: null },
+                {
+                  usosAtuais: {
+                    lt: cupomAtual.usosMax ?? 0,
+                  },
+                },
+              ],
+            },
+            data: {
+              usosAtuais: { increment: 1 },
+            },
+          });
+
+          if (incremento.count !== 1) {
+            throw new Error("BILLING_COUPON_LIMIT_REACHED");
+          }
+
+          await tx.cupomResgate.create({
+            data: {
+              cupomId: pg.cupomId,
+              usuarioId: pg.usuarioId,
+              pagamentoId: pg.id,
+            },
+          });
+
+          if (reserva) {
+            const consumo = await tx.cupomReserva.updateMany({
+              where: {
+                id: reserva.id,
+                status: {
+                  in: [
+                    "RESERVADA",
+                    "CONCILIACAO_PENDENTE",
+                  ],
+                },
+              },
+              data: {
+                status: "CONSUMIDA",
+                consumidaEm: now,
+              },
+            });
+
+            if (consumo.count !== 1) {
+              throw new Error(
+                "BILLING_COUPON_RESERVATION_CONSUME_CONFLICT"
+              );
+            }
+          }
+        }
+      }
+
+      const contextoAssinatura =
+        getContextoAssinaturaFromPagamento(
+          pg
+        );
+
+      if (!contextoAssinatura) {
+        throw new Error(
+          "Pagamento sem contexto válido para provisionar assinatura."
+        );
+      }
+
+      for (const [itemIndex, it] of items.entries()) {
+        const pid = normalizePlanoId(it.planoId);
+
+        const financeiroItem =
+          financeiroV1?.items[itemIndex] ?? null;
+
+
+      if (isEvento(pid)) {
+        const eventoId = extractEventoId(pid);
+
+        const compensacaoExistente =
+          await tx.billingCompensacaoEvento.findUnique({
+            where: {
+              pagamentoId: pg.id,
+            },
+            select: {
+              status: true,
+            },
+          });
+
+        const pendenciaExistente =
+          await tx.billingPendenciaEvento.findUnique({
+            where: {
+              pagamentoId: pg.id,
+            },
+            select: {
+              status: true,
+            },
+          });
+
+        if (
+          compensacaoExistente !== null ||

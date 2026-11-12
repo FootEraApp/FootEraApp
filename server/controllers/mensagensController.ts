@@ -2,10 +2,15 @@ import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import { getIO } from "../socket.js";
+import {
+  CHAT_AUDIO_MAX_MS,
+  gravarChatAudio,
+  removerChatAudio,
+} from "../services/chatAudioStorage.js";
 import fs from "fs/promises";
 import path from "path";
 import { getDailyUsage } from "../services/usage.js";
-import { audit } from "../services/audit.js"; 
+import { audit } from "../services/audit.js";
 import { recomputeAndEmitBadge, criarNotificacaoEEnviarPush } from "./notificacoesController.js";
 import { NotificacaoTipo, TipoOrganizacao, TipoUsuario } from "@prisma/client";
 import {
@@ -18,6 +23,37 @@ import {
 import {
   hasRole,
 } from "../services/roles.js";
+import {
+  verificarDuracaoRealChatAudio,
+} from "../services/chatAudioDuracaoService.js";
+import {
+  contarMensagensNaoLidas,
+} from "../services/mensagensNaoLidasService.js";
+
+async function registrarAudioOrfao(
+  audioKey: string,
+  origem: string
+): Promise<void> {
+  try {
+    await prisma.exclusaoAudioMensagemPendente.upsert({
+      where: {
+        audioKey,
+      },
+      create: {
+        audioKey,
+        ultimoErro: origem,
+      },
+      update: {
+        ultimoErro: origem,
+      },
+    });
+  } catch (erro) {
+    console.error(
+      "[chat-audio] FALHA_CRITICA_REGISTRO_ORFAO",
+      { audioKey, origem, erro }
+    );
+  }
+}
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -25,7 +61,7 @@ const AD_EVERY_N = 10;
 function readNotificacoes(raw: any) {
   const c = raw && typeof raw === "object" ? raw : {};
   return {
-    notifMensagens: c.notifMensagens !== false, 
+    notifMensagens: c.notifMensagens !== false,
   };
 }
 
@@ -223,20 +259,128 @@ function isMinor(birth: Date | string | null | undefined): boolean {
   return age < 18;
 }
 
-export async function getUnreadByUser(req: any, res: Response) {
+export async function getUnreadByUser(
+  req: AuthenticatedRequest,
+  res: Response
+) {
   try {
-    const userId = req.userId as string;
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.sendStatus(401);
+    }
+
     const buckets = await prisma.mensagem.groupBy({
       by: ["deId"],
-      where: { paraId: userId, lida: false },
-      _count: { _all: true },
+      where: {
+        paraId: userId,
+        lida: false,
+      },
+      _count: {
+        _all: true,
+      },
     });
 
-    const out = buckets.map(b => ({ userId: b.deId, count: b._count._all }));
-    res.json(out);
-  } catch (e) {
-    console.error("getUnreadByUser error:", e);
-    res.status(500).json({ error: "Erro ao calcular não lidas." });
+    const resultado = await Promise.all(
+      buckets.map(async (bucket) => {
+        const primeira = await prisma.mensagem.findFirst({
+          where: {
+            paraId: userId,
+            deId: bucket.deId,
+            lida: false,
+          },
+          orderBy: [
+            { criadaEm: "asc" },
+            { id: "asc" },
+          ],
+          select: {
+            id: true,
+          },
+        });
+
+        return {
+          userId: bucket.deId,
+          count: bucket._count._all,
+          primeiraId: primeira?.id ?? null,
+        };
+      })
+    );
+
+    return res.json(resultado);
+  } catch (erro) {
+    console.error(
+      "[mensagens] Erro ao contar DMs não lidas:",
+      erro
+    );
+
+    return res.status(500).json({
+      error: "Erro ao consultar mensagens não lidas.",
+    });
+  }
+}
+
+export async function getUnreadByGroup(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const usuarioId = req.userId;
+
+    if (!usuarioId) {
+      return res.sendStatus(401);
+    }
+
+    const participacoes =
+      await prisma.membroGrupo.findMany({
+        where: { usuarioId },
+        select: {
+          grupoId: true,
+          ultimaLeituraEm: true,
+        },
+      });
+
+    const resultado = await Promise.all(
+      participacoes.map(async (membro) => {
+        const where = {
+          grupoId: membro.grupoId,
+          usuarioId: { not: usuarioId },
+          excluida: false,
+          criadaEm: {
+            gt: membro.ultimaLeituraEm,
+          },
+        };
+
+        const [count, primeira] =
+          await Promise.all([
+            prisma.mensagemGrupo.count({ where }),
+            prisma.mensagemGrupo.findFirst({
+              where,
+              orderBy: [
+                { criadaEm: "asc" },
+                { id: "asc" },
+              ],
+              select: { id: true },
+            }),
+          ]);
+
+        return {
+          grupoId: membro.grupoId,
+          count,
+          primeiraId: primeira?.id ?? null,
+        };
+      })
+    );
+
+    return res.json(resultado);
+  } catch (erro) {
+    console.error(
+      "[mensagens] Erro ao listar não lidas por grupo:",
+      erro
+    );
+
+    return res.status(500).json({
+      error: "Erro ao consultar mensagens não lidas.",
+    });
   }
 }
 
@@ -250,6 +394,28 @@ export async function markReadFromUser(req: any, res: Response) {
       data: { lida: true },
     });
 
+    await prisma.notificacao.updateMany({
+      where: {
+        usuarioId: userId,
+        lida: false,
+        OR: [
+          {
+            agrupamentoKey: `dm:${userId}:${otherId}`,
+          },
+          {
+            // Compatibilidade com avisos privados
+            // criados antes da migration 120.
+            agrupamentoKey: null,
+            tipo: NotificacaoTipo.MENSAGEM,
+            actorId: otherId,
+          },
+        ],
+      },
+      data: {
+        lida: true,
+      },
+    });
+
     await recomputeAndEmitBadge(userId);
     res.sendStatus(204);
   } catch (e) {
@@ -258,10 +424,71 @@ export async function markReadFromUser(req: any, res: Response) {
   }
 }
 
+export async function markReadFromGroup(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const usuarioId = req.userId;
+    const { grupoId } = req.params;
+
+    if (!usuarioId) {
+      return res.sendStatus(401);
+    }
+
+    const atualizado =
+      await prisma.membroGrupo.updateMany({
+        where: {
+          grupoId,
+          usuarioId,
+        },
+        data: {
+          ultimaLeituraEm: new Date(),
+        },
+      });
+
+    if (atualizado.count === 0) {
+      return res.status(404).json({
+        error: "Grupo não encontrado ou acesso negado.",
+      });
+    }
+
+    await prisma.notificacao.updateMany({
+      where: {
+        usuarioId,
+        agrupamentoKey: `grupo:${usuarioId}:${grupoId}`,
+        lida: false,
+      },
+      data: {
+        lida: true,
+      },
+    });
+
+    await recomputeAndEmitBadge(usuarioId);
+
+    return res.status(204).send();
+  } catch (erro) {
+    console.error(
+      "[mensagens] Erro ao marcar grupo como lido:",
+      erro
+    );
+
+    return res.status(500).json({
+      error: "Erro ao marcar grupo como lido.",
+    });
+  }
+}
+
 export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
   try {
     const { tipo, conteudo, paraId, clientMsgId } = req.body as {
-      tipo: "NORMAL" | "POST" | "DESAFIO" | "USUARIO" | "CARD";
+      tipo:
+        | "NORMAL"
+        | "POST"
+        | "DESAFIO"
+        | "USUARIO"
+        | "CARD"
+        | "AUDIO";
       conteudo: string;
       paraId: string;
       clientMsgId?: string;
@@ -307,7 +534,7 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
         paraId,
         TipoUsuario.Atleta
       );
-      
+
     const destPriv = readPrivacyConfig(
       destinatario.configuracoesPrivacidade
     );
@@ -378,31 +605,155 @@ export async function enviarMensagem(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    let conteudoFinal = conteudo;
-    if (tipo === "CARD" && typeof conteudo === "string" && conteudo.startsWith("data:image/")) {
-      conteudoFinal = await salvarDataUrlComoPng(conteudo, "cards");
+    const arquivoAudio = (
+      req as AuthenticatedRequest & {
+        file?: Express.Multer.File;
+      }
+    ).file;
+
+    const tiposPermitidos = [
+      "NORMAL",
+      "POST",
+      "DESAFIO",
+      "USUARIO",
+      "CARD",
+      "AUDIO",
+    ];
+
+    if (!tiposPermitidos.includes(tipo)) {
+      return res.status(400).json({
+        code: "MESSAGE_TYPE_INVALID",
+      });
     }
 
-    const saved = await prisma.mensagem.create({
-      data: {
-        tipo,
-        conteudo: conteudoFinal,
-        paraId,
-        deId: deId,
-      },
-    });
+    if (
+      (tipo === "AUDIO") !== Boolean(arquivoAudio)
+    ) {
+      return res.status(400).json({
+        code: "CHAT_AUDIO_FILE_REQUIRED",
+      });
+    }
+
+    const duracaoAudio = Number(
+      req.body?.audioDuracaoMs
+    );
+
+    if (
+      tipo === "AUDIO" &&
+      (
+        !Number.isFinite(duracaoAudio) ||
+        duracaoAudio < 700 ||
+        duracaoAudio > CHAT_AUDIO_MAX_MS
+      )
+    ) {
+      return res.status(400).json({
+        code: "CHAT_AUDIO_INVALID_DURATION",
+      });
+    }
+
+    let audioSalvo:
+      | Awaited<ReturnType<typeof gravarChatAudio>>
+      | null = null;
+
+    let duracaoRealAudio: number | null = null;
+
+    if (tipo === "AUDIO" && arquivoAudio) {
+      // Confere a duração usando o arquivo real.
+      duracaoRealAudio =
+        await verificarDuracaoRealChatAudio(
+          arquivoAudio.buffer,
+          arquivoAudio.mimetype
+        );
+
+      // Só grava depois da validação.
+      audioSalvo = await gravarChatAudio(
+        "privadas",
+        arquivoAudio.buffer,
+        arquivoAudio.mimetype
+      );
+    }
+
+    let conteudoFinal =
+      tipo === "AUDIO"
+        ? "🎤 Mensagem de voz"
+        : conteudo;
+
+    if (
+      tipo === "CARD" &&
+      typeof conteudo === "string" &&
+      conteudo.startsWith("data:image/")
+    ) {
+      conteudoFinal = await salvarDataUrlComoPng(
+        conteudo,
+        "cards"
+      );
+    }
+
+    let saved;
+
+    try {
+      saved = await prisma.mensagem.create({
+        data: {
+          tipo,
+          conteudo: conteudoFinal,
+          paraId,
+          deId,
+
+          audioKey: audioSalvo?.key ?? null,
+          audioMime: audioSalvo?.mime ?? null,
+          audioDuracaoMs: duracaoRealAudio,
+          audioTamanhoBytes:
+            audioSalvo?.bytes ?? null,
+        },
+      });
+    } catch (erroBanco) {
+      if (audioSalvo) {
+        try {
+          await removerChatAudio(audioSalvo.key);
+        } catch (erroLimpeza) {
+          console.error(
+            "[chat-audio] ARQUIVO_ORFAO_UPLOAD",
+            audioSalvo.key,
+            erroLimpeza
+          );
+          await registrarAudioOrfao(
+            audioSalvo.key,
+            "FALHA_PERSISTENCIA_MENSAGEM_PRIVADA"
+          );
+        }
+      }
+
+      throw erroBanco;
+    }
 
     const destNotif = readNotificacoes((destinatario as any).configuracoesNotificacoes);
 
     if (destNotif.notifMensagens) {
       try {
+        const remetente = await prisma.usuario.findUnique({
+          where: {
+            id: deId,
+          },
+          select: {
+            nome: true,
+            nomeDeUsuario: true,
+          },
+        });
+
+        const nomeRemetente =
+          remetente?.nomeDeUsuario?.trim().replace(/^@/, "") ||
+          remetente?.nome?.trim() ||
+          "Alguém";
+
         await criarNotificacaoEEnviarPush({
           usuarioId: paraId,
           actorId: deId,
           tipo: NotificacaoTipo.MENSAGEM,
-          titulo: "Nova mensagem",
-          mensagem: "Você recebeu uma nova mensagem.",
+          titulo: `@${nomeRemetente} enviou mensagens`,
+          mensagem: `Você tem novas mensagens de @${nomeRemetente}.`,
           link: `/mensagens?otherId=${deId}`,
+
+          agrupamentoKey: `dm:${paraId}:${deId}`,
         });
       } catch (e) {
         console.warn("[enviarMensagem] falha ao criar notificacao/push:", e);
@@ -485,6 +836,90 @@ export const buscarMensagens =
         limit = 20,
       } = req.query;
 
+      const limiteSolicitado = Number(limit);
+
+      const limiteSeguro = Number.isFinite(limiteSolicitado)
+        ? Math.min(200, Math.max(1, Math.floor(limiteSolicitado)))
+        : 20;
+
+      const startAt =
+        typeof req.query.startAt === "string"
+          ? req.query.startAt.trim()
+          : "";
+
+      const newerThan =
+        typeof req.query.newerThan === "string"
+          ? req.query.newerThan.trim()
+          : "";
+
+      if (startAt || newerThan) {
+        const referenciaId = startAt || newerThan;
+
+        const referencia = await prisma.mensagem.findFirst({
+          where: {
+            id: referenciaId,
+            OR: [
+              { deId: me, paraId: otherId },
+              { deId: otherId, paraId: me },
+            ],
+          },
+          select: {
+            id: true,
+            criadaEm: true,
+          },
+        });
+
+        if (!referencia) {
+          return res.status(404).json({
+            code: "CHAT_CURSOR_NOT_FOUND",
+            error: "Mensagem de referência não encontrada.",
+          });
+        }
+
+        const mensagensJanela = await prisma.mensagem.findMany({
+          where: {
+            AND: [
+              {
+                OR: [
+                  { deId: me, paraId: otherId },
+                  { deId: otherId, paraId: me },
+                ],
+              },
+              {
+                OR: [
+                  {
+                    criadaEm: {
+                      gt: referencia.criadaEm,
+                    },
+                  },
+                  {
+                    criadaEm: referencia.criadaEm,
+                    id: startAt
+                      ? { gte: referencia.id }
+                      : { gt: referencia.id },
+                  },
+                ],
+              },
+            ],
+          },
+          orderBy: [
+            { criadaEm: "asc" },
+            { id: "asc" },
+          ],
+          take: limiteSeguro + 1,
+        });
+
+        return res.json({
+          items: mensagensJanela.slice(0, limiteSeguro),
+          hasMoreNewer: mensagensJanela.length > limiteSeguro,
+          meta: {
+            permitirMensagens:
+              privDestinatario.permitirMensagens ||
+              me === otherId,
+          },
+        });
+      }
+
       const mensagens =
         await prisma.mensagem.findMany({
           where: {
@@ -499,10 +934,11 @@ export const buscarMensagens =
               },
             ],
           },
-          orderBy: {
-            criadaEm: "desc",
-          },
-          take: Number(limit),
+          orderBy: [
+            { criadaEm: "desc" },
+            { id: "desc" },
+          ],
+          take: limiteSeguro,
 
           ...(cursor
             ? {
@@ -1183,15 +1619,99 @@ export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Respo
     const { grupoId } = req.params as { grupoId: string };
     const { cursor, limit = 20 } = req.query as { cursor?: string; limit?: string };
 
+    const limiteSolicitado = Number(limit);
+
+    const limiteSeguro =
+      Number.isFinite(limiteSolicitado)
+        ? Math.min(
+            200,
+            Math.max(1, Math.floor(limiteSolicitado))
+          )
+        : 20;
+
     const ehMembro = await prisma.membroGrupo.findUnique({
       where: { grupoId_usuarioId: { grupoId, usuarioId } },
     });
     if (!ehMembro) return res.status(403).json({ error: "Você não participa deste grupo." });
 
+    const startAt =
+      typeof req.query.startAt === "string"
+        ? req.query.startAt.trim()
+        : "";
+
+    const newerThan =
+      typeof req.query.newerThan === "string"
+        ? req.query.newerThan.trim()
+        : "";
+
+    if (startAt || newerThan) {
+      const referenciaId = startAt || newerThan;
+
+      const referencia = await prisma.mensagemGrupo.findFirst({
+        where: {
+          id: referenciaId,
+          grupoId,
+        },
+        select: {
+          id: true,
+          criadaEm: true,
+        },
+      });
+
+      if (!referencia) {
+        return res.status(404).json({
+          code: "CHAT_CURSOR_NOT_FOUND",
+          error: "Mensagem de referência não encontrada.",
+        });
+      }
+
+      const mensagensJanela =
+        await prisma.mensagemGrupo.findMany({
+          where: {
+            grupoId,
+            OR: [
+              {
+                criadaEm: {
+                  gt: referencia.criadaEm,
+                },
+              },
+              {
+                criadaEm: referencia.criadaEm,
+                id: startAt
+                  ? { gte: referencia.id }
+                  : { gt: referencia.id },
+              },
+            ],
+          },
+          orderBy: [
+            { criadaEm: "asc" },
+            { id: "asc" },
+          ],
+          take: limiteSeguro + 1,
+          include: {
+            usuario: {
+              select: {
+                id: true,
+                nome: true,
+                foto: true,
+              },
+            },
+          },
+        });
+
+      return res.json({
+        items: mensagensJanela.slice(0, limiteSeguro),
+        hasMoreNewer: mensagensJanela.length > limiteSeguro,
+      });
+    }
+
     const mensagens = await prisma.mensagemGrupo.findMany({
       where: { grupoId },
-      orderBy: { criadaEm: "desc" },
-      take: Number(limit ?? 20),
+      orderBy: [
+        { criadaEm: "desc" },
+        { id: "desc" },
+      ],
+      take: limiteSeguro,
       ...(cursor
         ? {
             skip: 1,
@@ -1210,12 +1730,37 @@ export const listarMensagensGrupo = async (req: AuthenticatedRequest, res: Respo
   }
 };
 
-export async function getUnreadCount(req: any, res: Response) {
-  const userId = req.userId;
-  const count = await prisma.mensagem.count({
-    where: { paraId: userId, lida: false },
-  });
-  res.json({ count });
+export async function getUnreadCount(
+  req: AuthenticatedRequest,
+  res: Response
+) {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: "Não autenticado",
+      });
+    }
+
+    const contagem =
+      await contarMensagensNaoLidas(userId);
+
+    return res.json({
+      count: contagem.total,
+      privadas: contagem.privadas,
+      grupos: contagem.grupos,
+    });
+  } catch (erro) {
+    console.error(
+      "[mensagens] Erro ao contar não lidas:",
+      erro
+    );
+
+    return res.status(500).json({
+      error: "Erro ao contar mensagens não lidas.",
+    });
+  }
 }
 
 export async function listUnread(req: any, res: Response) {
@@ -1231,7 +1776,7 @@ export async function markAllRead(req: any, res: Response) {
   const userId = req.userId;
   await prisma.mensagem.updateMany({
     where: { paraId: userId, lida: false },
-    data: { lida: true },            
+    data: { lida: true },
   });
 
   await recomputeAndEmitBadge(userId);
@@ -1256,29 +1801,171 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
         contextoRemetente
       );
 
-    if (!conteudo?.trim()) return res.status(400).json({ error: "Conteúdo obrigatório." });
+    const arquivoAudio = (
+      req as AuthenticatedRequest & {
+        file?: Express.Multer.File;
+      }
+    ).file;
+
+    const ehAudio = Boolean(arquivoAudio);
+
+    if (!ehAudio && !conteudo?.trim()) {
+      return res.status(400).json({
+        error: "Conteúdo obrigatório.",
+      });
+    }
+
+    const duracaoAudio = Number(
+      req.body?.audioDuracaoMs
+    );
+
+    if (
+      ehAudio &&
+      (
+        !Number.isFinite(duracaoAudio) ||
+        duracaoAudio < 700 ||
+        duracaoAudio > CHAT_AUDIO_MAX_MS
+      )
+    ) {
+      return res.status(400).json({
+        code: "CHAT_AUDIO_INVALID_DURATION",
+      });
+    }
 
     const ehMembro = await prisma.membroGrupo.findUnique({
       where: { grupoId_usuarioId: { grupoId, usuarioId } },
     });
     if (!ehMembro) return res.status(403).json({ error: "Você não participa deste grupo." });
 
-    const nova = await prisma.mensagemGrupo.create({
-      data: { grupoId, usuarioId, conteudo, tipo: "NORMAL" },
-      include: { usuario: { select: { id: true, nome: true, foto: true } } },
-    });
+    const duracaoRealAudio =
+      ehAudio && arquivoAudio
+        ? await verificarDuracaoRealChatAudio(
+            arquivoAudio.buffer,
+            arquivoAudio.mimetype
+          )
+        : null;
+
+    const audioSalvo =
+      ehAudio && arquivoAudio
+        ? await gravarChatAudio(
+            "grupos",
+            arquivoAudio.buffer,
+            arquivoAudio.mimetype
+          )
+        : null;
+
+    let nova;
+
+    try {
+      nova = await prisma.mensagemGrupo.create({
+        data: {
+          grupoId,
+          usuarioId,
+          conteudo: ehAudio
+            ? "🎤 Mensagem de voz"
+            : conteudo,
+          tipo: ehAudio
+            ? "AUDIO"
+            : "NORMAL",
+
+          audioKey: audioSalvo?.key ?? null,
+          audioMime: audioSalvo?.mime ?? null,
+          audioDuracaoMs: duracaoRealAudio,
+          audioTamanhoBytes:
+            audioSalvo?.bytes ?? null,
+        },
+        include: {
+          usuario: {
+            select: {
+              id: true,
+              nome: true,
+              foto: true,
+            },
+          },
+        },
+      });
+    } catch (erroBanco) {
+      if (audioSalvo) {
+        try {
+          await removerChatAudio(audioSalvo.key);
+        } catch (erroLimpeza) {
+          console.error(
+            "[chat-audio] ARQUIVO_ORFAO_GRUPO",
+            audioSalvo.key,
+            erroLimpeza
+          );
+          await registrarAudioOrfao(
+            audioSalvo.key,
+            "FALHA_PERSISTENCIA_MENSAGEM_GRUPO"
+          );
+        }
+      }
+
+      throw erroBanco;
+    }
 
     const payload = {
       ...nova,
-
       clientMsgId,
-
       pending:
         false,
-
       contextoRemetente:
         contextoRemetenteSnapshot,
     };
+
+
+
+    // Notifica os outros integrantes sobre uma nova mensagem.
+    try {
+      const destinatarios = await prisma.membroGrupo.findMany({
+        where: {
+          grupoId,
+          usuarioId: {
+            not: usuarioId,
+          },
+        },
+        select: {
+          usuarioId: true,
+        },
+      });
+
+      const grupoInfo = await prisma.grupo.findUnique({
+        where: { id: grupoId },
+        select: { nome: true },
+      });
+
+      const resultados = await Promise.allSettled(
+        destinatarios.map(async ({ usuarioId: destinatarioId }) => {
+          const nomeGrupo =
+            grupoInfo?.nome?.trim() || "seu grupo";
+
+          await criarNotificacaoEEnviarPush({
+            usuarioId: destinatarioId,
+            actorId: usuarioId,
+            tipo: NotificacaoTipo.MENSAGEM_GRUPO,
+            titulo: `Novas mensagens em ${nomeGrupo}`,
+            mensagem: `Você tem novas mensagens no grupo ${nomeGrupo}.`,
+            link: `/mensagens?grupoId=${grupoId}`,
+
+            agrupamentoKey: `grupo:${destinatarioId}:${grupoId}`,
+          });
+        })
+      );
+
+      resultados.forEach((resultado) => {
+        if (resultado.status === "rejected") {
+          console.warn(
+            "[chat-grupo] Falha ao notificar participante:",
+            resultado.reason
+          );
+        }
+      });
+    } catch (erro) {
+      console.warn(
+        "[chat-grupo] Falha nas notificações:",
+        erro
+      );
+    }
 
     const io = getIO();
     if (io) {
@@ -1294,7 +1981,7 @@ export const enviarMensagemGrupo = async (req: AuthenticatedRequest, res: Respon
 
 export async function deletarMensagem(req: Request, res: Response) {
   const { id } = req.params;
-  const userId = req.user?.id || req.userId; 
+  const userId = req.user?.id || req.userId;
   const io = getIO();
 
   try {
@@ -1304,7 +1991,40 @@ export async function deletarMensagem(req: Request, res: Response) {
         return res.status(403).json({ error: "Sem permissão para apagar." });
       }
 
-      await prisma.mensagem.delete({ where: { id } });
+      await prisma.$transaction(async (tx) => {
+        if (msgPriv.audioKey) {
+          await tx.exclusaoAudioMensagemPendente.upsert({
+            where: {
+              audioKey: msgPriv.audioKey,
+            },
+            create: {
+              audioKey: msgPriv.audioKey,
+            },
+            update: {},
+          });
+        }
+
+        await tx.mensagem.delete({
+          where: { id },
+        });
+      });
+
+      if (msgPriv.audioKey) {
+        try {
+          await removerChatAudio(msgPriv.audioKey);
+
+          await prisma.exclusaoAudioMensagemPendente.deleteMany({
+            where: {
+              audioKey: msgPriv.audioKey,
+            },
+          });
+        } catch (erro) {
+          console.error(
+            "[chat-audio] Exclusão privada pendente",
+            erro
+          );
+        }
+      }
 
       if (io) {
         io.to(
@@ -1325,13 +2045,68 @@ export async function deletarMensagem(req: Request, res: Response) {
       return res.status(204).send();
     }
 
-    const msgGrupo = await prisma.mensagemGrupo.findUnique({ where: { id } });
+    const msgGrupo = await prisma.mensagemGrupo.findUnique({
+      where: { id },
+    });
+
     if (msgGrupo) {
       if (msgGrupo.usuarioId !== userId) {
-        return res.status(403).json({ error: "Sem permissão para apagar." });
+        return res.status(403).json({
+          error: "Sem permissão para apagar.",
+        });
       }
 
-      await prisma.mensagemGrupo.delete({ where: { id } });
+      const membroAtual = await prisma.membroGrupo.findUnique({
+        where: {
+          grupoId_usuarioId: {
+            grupoId: msgGrupo.grupoId,
+            usuarioId: String(userId),
+          },
+        },
+        select: {
+          usuarioId: true,
+        },
+      });
+
+      if (!membroAtual) {
+        return res.status(403).json({
+          error: "Você não participa mais deste grupo.",
+        });
+      }
+      await prisma.$transaction(async (tx) => {
+        if (msgGrupo.audioKey) {
+          await tx.exclusaoAudioMensagemPendente.upsert({
+            where: {
+              audioKey: msgGrupo.audioKey,
+            },
+            create: {
+              audioKey: msgGrupo.audioKey,
+            },
+            update: {},
+          });
+        }
+
+        await tx.mensagemGrupo.delete({
+          where: { id },
+        });
+      });
+
+      if (msgGrupo.audioKey) {
+        try {
+          await removerChatAudio(msgGrupo.audioKey);
+
+          await prisma.exclusaoAudioMensagemPendente.deleteMany({
+            where: {
+              audioKey: msgGrupo.audioKey,
+            },
+          });
+        } catch (erro) {
+          console.error(
+            "[chat-audio] Exclusão de grupo pendente",
+            erro
+          );
+        }
+      }
 
       if (io) {
         io.to(

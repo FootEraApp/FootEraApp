@@ -1,0 +1,260 @@
+﻿    tentativaId: string;
+    pagamentoProviderRef: string;
+    chaveIdempotencia: string;
+    valorEsperadoCentavos: number;
+  }
+): Promise<ResultadoTransporteEstorno> {
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.BILLING_CUPOM_RESERVA_QA === "true" ||
+    process.env.ENABLE_EVENT_REFUNDS_REAL !== "true" ||
+    process.env.ENABLE_EVENT_REFUNDS_LIVE_HOMOLOGATED !== "true" ||
+    !process.env.MP_ACCESS_TOKEN
+  ) {
+    throw new Error(
+      "BILLING_POST_ESTORNO_REAL_BLOQUEADO"
+    );
+  }
+
+  const uuid =
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+  if (
+    !uuid.test(args.pagamentoId) ||
+    !uuid.test(args.tentativaId) ||
+    !/^\d+$/.test(args.pagamentoProviderRef) ||
+    args.chaveIdempotencia !==
+      `footera-evento-refund-${args.pagamentoId}` ||
+    !Number.isSafeInteger(args.valorEsperadoCentavos) ||
+    args.valorEsperadoCentavos <= 0
+  ) {
+    throw new Error(
+      "BILLING_POST_ESTORNO_ARGUMENTOS_INVALIDOS"
+    );
+  }
+
+  // A autorizaÃ§Ã£o serÃ¡ consumida antes do POST.
+  // A transaÃ§Ã£o NÃƒO inclui nenhuma chamada HTTP.
+  const autorizada = await prisma.$transaction(
+    async (tx) => {
+      const compensacao =
+        await tx.billingCompensacaoEvento.findUnique({
+          where: {
+            pagamentoId: args.pagamentoId,
+          },
+          include: {
+            pagamento: true,
+            pendencia: true,
+            historicoTentativas: true,
+          },
+        });
+
+      const tentativa =
+        compensacao?.historicoTentativas[0];
+
+      if (
+        !compensacao ||
+        compensacao.status !==
+          "AGUARDANDO_CONFIRMACAO" ||
+        compensacao.tentativas !== 1 ||
+        compensacao.confirmadoEm !== null ||
+        compensacao.historicoTentativas.length !== 1 ||
+        !tentativa ||
+        tentativa.id !== args.tentativaId ||
+        tentativa.compensacaoId !== compensacao.id ||
+        tentativa.numero !== 1 ||
+        tentativa.ambiente !== "REAL" ||
+        tentativa.status !==
+          "CONFIRMACAO_EXTERNA_PENDENTE" ||
+        tentativa.requisicaoEnviadaEm === null ||
+        tentativa.postAutorizacaoConsumidaEm !== null ||
+        tentativa.estornoProviderRef !== null ||
+        tentativa.operacaoExternaExecutada !== false ||
+        tentativa.chaveIdempotenciaOperacao !==
+          args.chaveIdempotencia ||
+        compensacao.chaveIdempotencia !==
+          args.chaveIdempotencia ||
+        compensacao.providerRef !==
+          args.pagamentoProviderRef ||
+        compensacao.moeda !== "BRL" ||
+        !compensacao.valor
+          .mul(100)
+          .equals(args.valorEsperadoCentavos) ||
+        compensacao.pagamento.id !==
+          args.pagamentoId ||
+        compensacao.pagamento.provider !==
+          "MERCADOPAGO" ||
+        compensacao.pagamento.providerRef !==
+          args.pagamentoProviderRef ||
+        compensacao.pagamento.status !== "PENDENTE" ||
+        compensacao.pagamento.reembolsadoEm !== null ||
+        compensacao.pagamento.moeda !== "BRL" ||
+        !compensacao.pagamento.valor.equals(
+          compensacao.valor
+        ) ||
+        compensacao.pagamento.plano !==
+          `EVENTO:${compensacao.pendencia.eventoId}` ||
+        compensacao.pendencia.pagamentoId !==
+          args.pagamentoId ||
+        compensacao.pendencia.providerRef !==
+          args.pagamentoProviderRef ||
+        compensacao.pendencia.motivo !==
+          "BILLING_EVENT_CAPACITY_EXCEEDED" ||
+        !["PENDENTE_ANALISE", "EM_ANALISE"].includes(
+          compensacao.pendencia.status
+        ) ||
+        compensacao.pendencia.resolvidoEm !== null ||
+        !compensacao.pendencia.valor.equals(
+          compensacao.valor
+        ) ||
+        compensacao.pendencia.moeda !== "BRL"
+      ) {
+        return false;
+      }
+
+      const beneficios =
+        await tx.pagamentoBeneficio.count({
+          where: { pagamentoId: args.pagamentoId },
+        });
+
+      const inscricoes =
+        await tx.inscricaoEvento.count({
+          where: {
+            eventoId: compensacao.pendencia.eventoId,
+            usuarioId: compensacao.pagamento.usuarioId,
+            status: { not: "CANCELADA" },
+          },
+        });
+
+      if (beneficios !== 0 || inscricoes !== 0) {
+        return false;
+      }
+
+      const autorizacaoAdmin =
+        await tx.billingAutorizacaoEstorno.findUnique({
+          where: {
+            pagamentoId: args.pagamentoId,
+          },
+        });
+
+      if (
+        !autorizacaoAdmin ||
+        autorizacaoAdmin.status !== "CONSUMIDA" ||
+        !autorizacaoAdmin.consumidoEm ||
+        !autorizacaoAdmin.aprovadoEm ||
+        !autorizacaoAdmin.aprovadorId ||
+        autorizacaoAdmin.solicitanteId ===
+          autorizacaoAdmin.aprovadorId ||
+        autorizacaoAdmin.moeda !== "BRL" ||
+        autorizacaoAdmin.providerRef !==
+          args.pagamentoProviderRef ||
+        !autorizacaoAdmin.valor
+          .mul(100)
+          .equals(args.valorEsperadoCentavos)
+      ) {
+        return false;
+      }
+      // Apenas uma chamada concorrente pode
+      // transformar NULL em data.
+      const consumida =
+        await tx.billingCompensacaoTentativa.updateMany({
+          where: {
+            id: tentativa.id,
+            compensacaoId: compensacao.id,
+            ambiente: "REAL",
+            numero: 1,
+            status:
+              "CONFIRMACAO_EXTERNA_PENDENTE",
+            chaveIdempotenciaOperacao:
+              args.chaveIdempotencia,
+            requisicaoEnviadaEm: { not: null },
+            postAutorizacaoConsumidaEm: null,
+            estornoProviderRef: null,
+            operacaoExternaExecutada: false,
+            compensacao: {
+              is: {
+                status: "AGUARDANDO_CONFIRMACAO",
+                tentativas: 1,
+                confirmadoEm: null,
+              },
+            },
+          },
+          data: {
+            postAutorizacaoConsumidaEm: new Date(),
+            observacao:
+              "AutorizaÃ§Ã£o do POST consumida. " +
+              "Resultado financeiro ainda desconhecido.",
+          },
+        });
+
+      return consumida.count === 1;
+    },
+    {
+      isolationLevel:
+        Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: 10000,
+      timeout: 15000,
+    }
+  );
+
+  if (!autorizada) {
+    throw new Error(
+      "BILLING_POST_ESTORNO_AUTORIZACAO_NAO_ADQUIRIDA"
+    );
+  }
+
+  // A autorizaÃ§Ã£o jÃ¡ foi persistida.
+  // Daqui em diante, uma falha nÃ£o libera novo POST.
+  const base = {
+    pagamentoProviderRef: args.pagamentoProviderRef,
+  };
+
+  let resposta: Response;
+
+  try {
+    resposta = await fetch(
+      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(
+        args.pagamentoProviderRef
+      )}/refunds`,
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${process.env.MP_ACCESS_TOKEN}`,
+          "X-Idempotency-Key":
+            args.chaveIdempotencia,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: "{}",
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+  } catch {
+    return {
+      ...base,
+      resultado: "DESCONHECIDO",
+      estornoProviderRef: null,
+      statusHttp: null,
+      motivo: "TRANSPORTE_SEM_RESPOSTA",
+    };
+  }
+
+  if (!resposta.ok) {
+    return {
+      ...base,
+      resultado: "DESCONHECIDO",
+      estornoProviderRef: null,
+      statusHttp: resposta.status,
+      motivo: "HTTP_REQUER_CONCILIACAO",
+    };
+  }
+
+  let dados: unknown;
+
+  try {
+    dados = await resposta.json();
+  } catch {
+    return {
+      ...base,
+      resultado: "DESCONHECIDO",

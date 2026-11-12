@@ -1,1 +1,2 @@
 public/assets/videos/metodologias/*.mp4 filter=lfs diff=lfs merge=lfs -text
+/server/prisma/migrations/20261022193000_responsavel_principal_unico/migration.sql -text

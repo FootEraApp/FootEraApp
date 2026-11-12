@@ -6,7 +6,17 @@ import {
   obterSupervisaoMenor,
 } from "../services/supervisaoMenor.js";
 
-const SECRET = process.env.JWT_SECRET || "footera_secret";
+const SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error(
+      "JWT_SECRET não configurado no ambiente."
+    );
+  }
+
+  return secret;
+})();
 
 export async function restaurarConta(req: Request, res: Response) {
   const { nomeDeUsuario, email, senha } = req.body ?? {};

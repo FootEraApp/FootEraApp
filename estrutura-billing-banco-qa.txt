@@ -1,0 +1,86 @@
+         table_name          |         column_name          |          data_type          
+-----------------------------+------------------------------+-----------------------------
+ BillingCheckoutOperacao     | id                           | text
+ BillingCheckoutOperacao     | pagamentoId                  | text
+ BillingCheckoutOperacao     | usuarioId                    | text
+ BillingCheckoutOperacao     | chaveCliente                 | text
+ BillingCheckoutOperacao     | chaveOperacao                | text
+ BillingCheckoutOperacao     | modalidade                   | text
+ BillingCheckoutOperacao     | status                       | USER-DEFINED
+ BillingCheckoutOperacao     | fingerprintRequisicao        | text
+ BillingCheckoutOperacao     | providerRef                  | text
+ BillingCheckoutOperacao     | ultimoErro                   | text
+ BillingCheckoutOperacao     | envioPossivelEm              | timestamp without time zone
+ BillingCheckoutOperacao     | confirmadoEm                 | timestamp without time zone
+ BillingCheckoutOperacao     | criadoEm                     | timestamp without time zone
+ BillingCheckoutOperacao     | atualizadoEm                 | timestamp without time zone
+ BillingCompensacaoTentativa | id                           | text
+ BillingCompensacaoTentativa | compensacaoId                | text
+ BillingCompensacaoTentativa | numero                       | integer
+ BillingCompensacaoTentativa | status                       | USER-DEFINED
+ BillingCompensacaoTentativa | ambiente                     | text
+ BillingCompensacaoTentativa | operacaoExternaExecutada     | boolean
+ BillingCompensacaoTentativa | iniciadoEm                   | timestamp without time zone
+ BillingCompensacaoTentativa | encerradoEm                  | timestamp without time zone
+ BillingCompensacaoTentativa | observacao                   | text
+ BillingCompensacaoTentativa | chaveIdempotenciaOperacao    | text
+ BillingCompensacaoTentativa | estornoProviderRef           | text
+ BillingCompensacaoTentativa | requisicaoEnviadaEm          | timestamp without time zone
+ BillingCompensacaoTentativa | postAutorizacaoConsumidaEm   | timestamp without time zone
+ CupomReserva                | id                           | text
+ CupomReserva                | cupomId                      | text
+ CupomReserva                | usuarioId                    | text
+ CupomReserva                | pagamentoId                  | text
+ CupomReserva                | status                       | USER-DEFINED
+ CupomReserva                | criadoEm                     | timestamp without time zone
+ CupomReserva                | atualizadoEm                 | timestamp without time zone
+ CupomReserva                | expiraEm                     | timestamp without time zone
+ CupomReserva                | consumidaEm                  | timestamp without time zone
+ CupomReserva                | liberadaEm                   | timestamp without time zone
+ Pagamento                   | id                           | text
+ Pagamento                   | usuarioId                    | text
+ Pagamento                   | plano                        | text
+ Pagamento                   | periodicidade                | USER-DEFINED
+ Pagamento                   | metodo                       | USER-DEFINED
+ Pagamento                   | status                       | USER-DEFINED
+ Pagamento                   | valor                        | numeric
+ Pagamento                   | moeda                        | text
+ Pagamento                   | cupomId                      | text
+ Pagamento                   | provider                     | text
+ Pagamento                   | providerRef                  | text
+ Pagamento                   | criadoEm                     | timestamp without time zone
+ Pagamento                   | pagoEm                       | timestamp without time zone
+ Pagamento                   | canceladoEm                  | timestamp without time zone
+ Pagamento                   | reembolsadoEm                | timestamp without time zone
+ Pagamento                   | updatedAt                    | timestamp without time zone
+ Pagamento                   | pagadorNome                  | text
+ Pagamento                   | pagadorEmail                 | text
+ Pagamento                   | pagadorCpf                   | text
+ Pagamento                   | pagadorTelefone              | text
+ Pagamento                   | cardBrand                    | text
+ Pagamento                   | cardLast4                    | text
+ Pagamento                   | cardExpMes                   | integer
+ Pagamento                   | cardExpAno                   | integer
+ Pagamento                   | pixCopiaECola                | text
+ Pagamento                   | boletoLinhaDigitavel         | text
+ Pagamento                   | meta                         | jsonb
+ Pagamento                   | contextoKind                 | text
+ Pagamento                   | contextoLegacyOrganizationId | text
+ Pagamento                   | contextoOrganizacaoId        | text
+ Pagamento                   | contextoPerfilId             | text
+ Pagamento                   | contextoTipo                 | text
+ PagamentoBeneficio          | id                           | text
+ PagamentoBeneficio          | pagamentoId                  | text
+ PagamentoBeneficio          | usuarioId                    | text
+ PagamentoBeneficio          | itemKey                      | text
+ PagamentoBeneficio          | tipo                         | USER-DEFINED
+ PagamentoBeneficio          | recursoId                    | text
+ PagamentoBeneficio          | contextoKind                 | text
+ PagamentoBeneficio          | contextoTipo                 | text
+ PagamentoBeneficio          | contextoPerfilId             | text
+ PagamentoBeneficio          | contextoOrganizacaoId        | text
+ PagamentoBeneficio          | concedidoEm                  | timestamp without time zone
+ PagamentoBeneficio          | revogadoEm                   | timestamp without time zone
+ PagamentoBeneficio          | motivoRevogacao              | text
+(82 rows)
+

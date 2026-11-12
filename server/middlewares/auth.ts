@@ -222,18 +222,88 @@ const parceiro = Boolean(dbUser?.parceiro);
     (reqAuthed as any).user =
       user;
   } catch (e: any) {
+    if (e?.message === "NO_ACTIVE_CONTEXT") {
+      const rotaPermitida =
+        (
+          req.method === "GET" &&
+          url === "/api/auth/me"
+        ) ||
+        (
+          req.method === "GET" &&
+          url === "/api/configuracoes/minha-conta/diagnostico"
+        ) ||
+        (
+          req.method === "DELETE" &&
+          url === "/api/configuracoes/minha-conta"
+        ) ||
+        (
+          req.method === "GET" &&
+          url === "/api/gerenciar-organizacoes/transferencias/historico"
+        ) ||
+        (
+          req.method === "GET" &&
+          url === "/api/usuarios/me/papeis"
+        ) ||
+        (
+          req.method === "GET" &&
+          url === "/api/usuarios/me/contextos"
+        ) ||
+        (
+          req.method === "POST" &&
+          url === "/api/usuarios/me/papeis"
+        ) ||
+        (
+          req.method === "POST" &&
+          url === "/api/usuarios/me/organizacao-recuperacao"
+        ) ||
+        (
+          req.method === "POST" &&
+          /^\/api\/usuarios\/me\/papeis\/(Atleta|Professor|Olheiro|Learning|Creator)\/perfil-recuperacao$/.test(
+            url
+          )
+        ) ||
+        (
+          req.method === "PATCH" &&
+          /^\/api\/usuarios\/me\/papeis\/(Atleta|Professor|Olheiro|Learning|Responsavel|Creator)\/concluir$/.test(url)
+        ) ||
+        (
+          req.method === "GET" &&
+          url === "/api/usuarios/me/papeis/Atleta/recuperacao"
+        ) ||
+        (
+          req.method === "POST" &&
+          url === "/api/usuarios/me/papeis/Atleta/recuperacao/responsavel"
+        );
+
+      if (rotaPermitida) {
+        (
+          reqAuthed as AuthenticatedRequest & {
+            somenteGestaoConta?: boolean;
+          }
+        ).somenteGestaoConta = true;
+
+        return next();
+      }
+
+      return res.status(403).json({
+        code: "NO_ACTIVE_CONTEXT",
+        message:
+          "Sua conta não possui perfil ativo. " +
+          "Acesse Configurações para regularizar ou excluir sua conta.",
+      });
+    }
+
     console.error(
       "[AUTH] resolveUserContext failed em",
       req.originalUrl,
       "->",
-      e
+      e,
     );
 
     return res.status(500).json({
+      code: "ACTIVE_CONTEXT_RESOLUTION_FAILED",
       message:
-        "Não foi possível resolver o contexto ativo do usuário.",
-      code:
-        "ACTIVE_CONTEXT_RESOLUTION_FAILED",
+        "Não foi possível resolver o contexto ativo.",
     });
   }
 

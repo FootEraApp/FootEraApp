@@ -1,0 +1,7 @@
+﻿
+Path                                                      LineNumber Line                                                
+----                                                      ---------- ----                                                
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts          9 export async function processarRenovacoesDiarias() {
+
+
+

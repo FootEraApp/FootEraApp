@@ -207,7 +207,10 @@ export function UserProvider({
           readAuthSessionSnapshot()
             .token;
 
-        if (!token) {
+        if (
+          !token ||
+          readAuthSessionSnapshot().somenteGestaoConta
+        ) {
           setPermissions({
             ...EMPTY_PERMISSIONS,
           });
@@ -240,15 +243,19 @@ export function UserProvider({
             ...(response.data
               ?.permissions ?? {}),
           });
-        } catch (error) {
-          console.error(
-            "[UserContext] Erro ao carregar permissões:",
-            error
-          );
+        } catch (error: any) {
+          const semContexto =
+            error?.response?.status === 403 &&
+            error?.response?.data?.code === "NO_ACTIVE_CONTEXT";
 
-          setPermissions({
-            ...EMPTY_PERMISSIONS,
-          });
+          if (!semContexto) {
+            console.error(
+              "[UserContext] Erro ao carregar permissões:",
+              error,
+            );
+          }
+
+          setPermissions({ ...EMPTY_PERMISSIONS });
         } finally {
           setPermissionsLoading(
             false
@@ -285,7 +292,10 @@ export function UserProvider({
           readAuthSessionSnapshot()
             .token;
 
-        if (!token) {
+        if (
+          !token ||
+          readAuthSessionSnapshot().somenteGestaoConta
+        ) {
           clearActiveContextSession();
 
           setActiveContext(null);
@@ -340,16 +350,25 @@ export function UserProvider({
           clearActiveContextSession();
         }
 
-        } catch (error) {
+        } catch (error: any) {
+          const semContexto =
+            error?.response?.status === 403 &&
+            error?.response?.data?.code === "NO_ACTIVE_CONTEXT";
+
+          if (semContexto) {
+            clearActiveContextSession();
+            setPermissions({ ...EMPTY_PERMISSIONS });
+            setActiveContext(null);
+            setContexts([]);
+            return;
+          }
+
           console.error(
             "[UserContext] Erro ao carregar contextos:",
-            error
+            error,
           );
 
-          setActiveContext(
-            null
-          );
-
+          setActiveContext(null);
           setContexts([]);
         } finally {
           setContextsLoading(

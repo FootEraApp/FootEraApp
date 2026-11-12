@@ -1,0 +1,12 @@
+﻿
+Path                                                          LineNumber Line                                                  
+----                                                          ---------- ----                                                  
+C:\dev\FootEraApp-app\server\controllers\billingController.ts         30   sendBillingEmail,                                   
+C:\dev\FootEraApp-app\server\controllers\billingController.ts       1727       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts              3 import { sendBillingEmail } from "../utils/mailer.js";
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts             27       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\services\billingscheduler.ts             78       await sendBillingEmail({                        
+C:\dev\FootEraApp-app\server\utils\mailer.ts                         271 export async function sendBillingEmail(opts: {        
+
+
+

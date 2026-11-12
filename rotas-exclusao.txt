@@ -1,0 +1,28 @@
+﻿C:\dev\FootEraApp-app\client\src\components\perfil\PerfilOlheiro.tsx:380: `${API.BASE_URL}/api/cadastro/buscar`,
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilResponsavel.tsx:1009: `${API.BASE_URL}/api/feed/posts/${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilResponsavel.tsx:1079: async function excluirContaAtleta(
+C:\dev\FootEraApp-app\client\src\components\perfil\PerfilResponsavel.tsx:3560: excluirContaAtleta(
+C:\dev\FootEraApp-app\client\src\components\perfil\ProfilePostsSection.tsx:644: await axios.delete(`${API.BASE_URL}/api/feed/posts/${postId}`, {
+C:\dev\FootEraApp-app\client\src\pages\admin-page.tsx:1401: async function excluirContaPermanente(usuario: any) {
+C:\dev\FootEraApp-app\client\src\pages\admin-page.tsx:1902: const url = `${API.BASE_URL}/api/feedback?${params.toString()}`;
+C:\dev\FootEraApp-app\client\src\pages\admin-page.tsx:1935: const r = await fetch(`${API.BASE_URL}/api/feedback/${id}/lido`, {
+C:\dev\FootEraApp-app\client\src\pages\admin-page.tsx:3972: onClick={() => excluirContaPermanente(u)}
+C:\dev\FootEraApp-app\client\src\pages\admin-page.tsx:4161: onClick={() => excluirContaPermanente(u)}
+C:\dev\FootEraApp-app\client\src\pages\cadastro.tsx:478: `${API.BASE_URL}/api/cadastro/check/email?email=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\cadastro.tsx:508: `${API.BASE_URL}/api/cadastro/check/username?username=${encodeURIComponent(
+C:\dev\FootEraApp-app\client\src\pages\cadastro.tsx:791: const response = await fetch(`${API.BASE_URL}/api/cadastro/`, {
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:738: async function excluirConta(e: React.FormEvent) {
+C:\dev\FootEraApp-app\client\src\pages\configuracoesPerfil.tsx:1337: <form onSubmit={excluirConta} className="mt-4">
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:739: `${API.BASE_URL}/api/cadastro/buscar`,
+C:\dev\FootEraApp-app\client\src\pages\editarPerfil.tsx:774: `${API.BASE_URL}/api/cadastro/buscar`,
+C:\dev\FootEraApp-app\client\src\pages\login.tsx:138: `${API.BASE_URL}/api/cadastro/resend-verification`,
+C:\dev\FootEraApp-app\client\src\pages\login.tsx:849: await axios.post(`${API.BASE_URL}/api/feedback/blocked`, {
+C:\dev\FootEraApp-app\client\src\pages\postUnico.tsx:360: const response = await fetch(`${API.BASE_URL}/api/feed/posts/${post.id}`, {
+C:\dev\FootEraApp-app\client\src\pages\verificar-email.tsx:42: const { data } = await axios.get(`${API.BASE_URL}/api/cadastro/verify`, {
+C:\dev\FootEraApp-app\client\src\pages\olheiro\indicar.tsx:61: const r = await axios.get(`${API.BASE_URL}/api/cadastro/buscar`, {
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:198: const url = `${API.BASE_URL}/api/feed${qs ? `?${qs}` : ""}`;
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:221: const response = await fetch(`${API.BASE_URL}/api/feed/${postId}/like`, {
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:246: const r = await fetch(`${API.BASE_URL}/api/feed/posts/${postId}`, {
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:264: const r = await fetch(`${API.BASE_URL}/api/feed/${postId}/repost`, {
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:352: `${API.BASE_URL}/api/feed/post/visualizar/${id}`
+C:\dev\FootEraApp-app\client\src\services\feedService.ts:415: const POST_URL = `${API.BASE_URL}/api/feed/post`;
