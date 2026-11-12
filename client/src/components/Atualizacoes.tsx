@@ -1,4 +1,11 @@
-import React, { useState } from "react";
+// client/src/components/Atualizacoes.tsx
+import React, { useRef, useState } from "react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  LockKeyhole,
+} from "lucide-react";
 
 type UpdateType = "atualizacao" | "correcoes";
 
@@ -51,9 +58,313 @@ function UpdateCard({
   );
 }
 
+type PerfilPreview = {
+  tipo: string;
+  titulo: string;
+  descricao: string;
+  status: "emUso" | "ativo" | "configurar" | "disponivel";
+};
+
+const PERFIS_PREVIEW: PerfilPreview[] = [
+  {
+    tipo: "atleta",
+    titulo: "Atleta",
+    descricao: "Evolução, treinos, conquistas e oportunidades.",
+    status: "emUso",
+  },
+  {
+    tipo: "professor",
+    titulo: "Professor",
+    descricao: "Turmas, atletas, treinos e metodologias.",
+    status: "ativo",
+  },
+  {
+    tipo: "olheiro",
+    titulo: "Olheiro",
+    descricao: "Observação, listas e indicações de atletas.",
+    status: "disponivel",
+  },
+  {
+    tipo: "clube",
+    titulo: "Clube",
+    descricao: "Elencos, profissionais, eventos e scouting.",
+    status: "disponivel",
+  },
+  {
+    tipo: "escolinha",
+    titulo: "Escolinha",
+    descricao: "Turmas, professores e desenvolvimento de atletas.",
+    status: "disponivel",
+  },
+  {
+    tipo: "learning",
+    titulo: "Learning",
+    descricao: "Conteúdos, eventos e metodologias da FootEra.",
+    status: "disponivel",
+  },
+  {
+    tipo: "federacao",
+    titulo: "Federação",
+    descricao: "Competições, eventos e presença institucional.",
+    status: "disponivel",
+  },
+  {
+    tipo: "marca",
+    titulo: "Marca",
+    descricao: "Ativações, eventos e conexão com a comunidade.",
+    status: "disponivel",
+  },
+  {
+    tipo: "creator",
+    titulo: "Creator",
+    descricao: "Conteúdos, metodologias e experiências autorais.",
+    status: "disponivel",
+  },
+];
+
+function PapeisPreview() {
+  const carrosselRef = useRef<HTMLDivElement>(null);
+
+  const moverCarrossel = (direcao: "anterior" | "proximo") => {
+    carrosselRef.current?.scrollBy({
+      left: direcao === "anterior" ? -250 : 250,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <div className="mt-5 overflow-hidden rounded-2xl border border-green-200 bg-green-50/40 p-4 sm:p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">👤</span>
+
+            <h5 className="font-semibold text-gray-950">
+              Seus perfis na FootEra
+            </h5>
+          </div>
+
+          <p className="mt-1 text-xs leading-5 text-gray-500 sm:text-sm">
+            Um único login pode representar diferentes formas de participar da
+            FootEra.
+          </p>
+        </div>
+
+        <div className="hidden shrink-0 gap-2 sm:flex">
+          <button
+            type="button"
+            onClick={() => moverCarrossel("anterior")}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:border-green-300 hover:text-green-700"
+            aria-label="Ver perfis anteriores"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => moverCarrossel("proximo")}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition hover:border-green-300 hover:text-green-700"
+            aria-label="Ver próximos perfis"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={carrosselRef}
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {PERFIS_PREVIEW.map((perfil) => {
+          const liberado =
+            perfil.status === "emUso" ||
+            perfil.status === "ativo" ||
+            perfil.status === "configurar";
+
+          const statusTexto =
+            perfil.status === "emUso"
+              ? "Em uso"
+              : perfil.status === "ativo"
+                ? "Ativo"
+                : perfil.status === "configurar"
+                  ? "Configurar"
+                  : "Disponível";
+
+          return (
+            <div
+              key={perfil.tipo}
+              className={`relative flex min-h-[180px] min-w-[220px] snap-start flex-col rounded-2xl border p-4 text-left transition sm:min-w-[240px] ${
+                perfil.status === "emUso"
+                  ? "border-green-600 bg-green-50 shadow-sm ring-2 ring-green-600/10"
+                  : "border-gray-200 bg-white"
+              }`}
+            >
+              <div className="mb-5 flex w-full items-start justify-between gap-3">
+                <span
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
+                    liberado
+                      ? "bg-green-700 text-white"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {liberado ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : (
+                    <LockKeyhole className="h-5 w-5" />
+                  )}
+                </span>
+
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    perfil.status === "emUso"
+                      ? "bg-green-700 text-white"
+                      : perfil.status === "configurar"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {statusTexto}
+                </span>
+              </div>
+
+              <div className="font-semibold text-gray-950">
+                {perfil.titulo}
+              </div>
+
+              <p className="mt-1 text-sm leading-5 text-gray-500">
+                {perfil.descricao}
+              </p>
+
+              {perfil.status === "ativo" && (
+                <div className="mt-auto pt-4">
+                  <div className="flex w-full items-center justify-center rounded-xl bg-green-700 px-3 py-2 text-sm font-semibold text-white">
+                    Usar este perfil
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-2 text-xs text-green-800 sm:hidden">
+        <ChevronLeft className="h-4 w-4" />
+        <span>Deslize para conhecer os perfis</span>
+        <ChevronRight className="h-4 w-4" />
+      </div>
+
+      <p className="mt-4 border-t border-green-100 pt-3 text-center text-xs text-gray-500">
+        Prévia demonstrativa da nova experiência de perfis.
+      </p>
+    </div>
+  );
+}
+
 export default function Atualizacoes() {
   return (
     <div className="space-y-4 text-sm text-gray-800">
+
+
+
+      <UpdateCard
+        type="atualizacao"
+        title="✨ Uma conta, vários perfis — 07/10/2026"
+      >
+        <div className="space-y-4">
+          <div>
+            <h5 className="text-lg font-bold text-green-900">
+              Sua FootEra está ficando ainda mais completa.
+            </h5>
+
+            <p className="mt-2 leading-6">
+              Estamos implementando uma nova forma de usar a plataforma: agora uma
+              mesma conta poderá possuir <strong>mais de um papel</strong> dentro da
+              FootEra.
+            </p>
+
+            <p className="mt-2 leading-6">
+              Isso significa que você não precisará mais criar contas diferentes para
+              cada função que exerce no futebol.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+            <p className="font-semibold text-green-950">
+              ⚽ Por exemplo:
+            </p>
+
+            <p className="mt-1 leading-6 text-green-900">
+              Você pode utilizar a FootEra como <strong>Atleta</strong> e também
+              possuir um perfil de <strong>Professor</strong>, alternando entre eles
+              sempre que precisar — utilizando o mesmo login.
+            </p>
+          </div>
+
+          <PapeisPreview />
+
+          <ul className="list-disc list-inside space-y-2">
+            <li>
+              Um mesmo usuário poderá possuir{" "}
+              <strong>vários papéis dentro da FootEra</strong>.
+            </li>
+
+            <li>
+              Será possível <strong>alternar entre os perfis ativos</strong> sem sair
+              da conta.
+            </li>
+
+            <li>
+              Cada perfil contará com suas{" "}
+              <strong>próprias informações e funcionalidades</strong>.
+            </li>
+
+            <li>
+              Na área de <strong>Editar perfis</strong>, você poderá visualizar os
+              perfis que já possui e conhecer outros disponíveis.
+            </li>
+
+            <li>
+              Novos perfis poderão ser ativados sem criar uma nova conta, mantendo o{" "}
+              <strong>mesmo login e e-mail</strong>.
+            </li>
+
+            <li>
+              A FootEra passará a adaptar páginas, ferramentas e ações de acordo com o{" "}
+              <strong>perfil que estiver em uso</strong>.
+            </li>
+          </ul>
+
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <p className="font-semibold text-gray-900">
+              Alguns exemplos de combinações:
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-full border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-800">
+                Atleta + Professor
+              </span>
+
+              <span className="rounded-full border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-800">
+                Professor + Creator
+              </span>
+
+              <span className="rounded-full border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-800">
+                Olheiro + Creator
+              </span>
+
+              <span className="rounded-full border border-green-200 bg-white px-3 py-1.5 text-xs font-medium text-green-800">
+                Clube + Creator
+              </span>
+            </div>
+          </div>
+
+          <p className="font-medium text-green-800">
+            💚 Você continua sendo você. Agora a sua conta também acompanha todas as
+            formas como você vive o futebol.
+          </p>
+        </div>
+      </UpdateCard>
+
       <UpdateCard
         type="atualizacao"
         title="✨ Novidades da FootEra — 04/08/2026"

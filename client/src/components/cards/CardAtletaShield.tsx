@@ -1,11 +1,11 @@
+// client/src/components/cards/CardAtletaShield
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { API } from "@/config.js";
-
 const SHIELD_W_DESK = 150;
 const SHIELD_H_DESK = 210;
 const SHIELD_PATH =
   "M92 6 C120 6 146 10 168 18 C168 22 168 26 174 30 C178 33 182 34 184 34 L184 188 C184 197 139 204 115 212 C98 218 88 228 92 254 C86 240 74 233 48 224 C21 215 0 209 0 196 L0 34 C2 34 6 33 10 30 C16 26 16 22 16 18 C38 10 64 6 92 6 Z";
-
 export type CardAtletaShieldProps = {
   atleta: {
     id?: string;
@@ -21,12 +21,12 @@ export type CardAtletaShieldProps = {
   resp?: number;
   size?: { w: number; h: number };
   goldenMinOVR?: number;
+  // Opcional: quando informado, ocupa o lugar da foto na mesma carta.
+  qrValue?: string;
 };
-
-const GOLDEN_MIN_OVR = 0;
+const GOLDEN_MIN_OVR = 88;
 const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
   (Number.isFinite(ovr) ? Number(ovr) : 0) >= min;
-
   const CardAtletaShield: React.FC<CardAtletaShieldProps> = ({
     atleta,
     ovr,
@@ -35,12 +35,12 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
     resp,
     size,
     goldenMinOVR,
+    qrValue,
   }) => {
     const W = size?.w ?? SHIELD_W_DESK;
     const H = size?.h ?? SHIELD_H_DESK;
-    
+    const modoQR = Boolean(qrValue);
     const clipId = `shieldClip-${atleta.atletaId || atleta.id || atleta.nome || "x"}`;
-
    function buildFotoCandidates(raw?: string | null): string[] {
       const v = (raw || "").trim();
       if (!v) return [];
@@ -50,42 +50,36 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
       if (v.startsWith("/uploads/"))     return [`${API.BASE_URL}${v}`];
       return [`/assets/usuarios/${v}`];
     }
-
   const [fotoIdx, setFotoIdx] = useState(0);
   const fotoCandidates = useMemo(() => buildFotoCandidates(atleta.foto), [atleta.foto]);
   const fotoSrc = fotoCandidates[fotoIdx] ?? "";
   const imgRef = useRef<SVGImageElement | null>(null);
-
   useEffect(() => {
     try {
       imgRef.current?.setAttribute("referrerpolicy", "no-referrer");
       imgRef.current?.setAttribute("crossorigin", "anonymous");
     } catch {}
   }, [fotoSrc]);
-
   useEffect(() => {
     try {
       imgRef.current?.setAttribute("referrerpolicy", "no-referrer");
     } catch {}
   }, []);
-
   const ovrShow = Number.isFinite(ovr) ? Math.round(Number(ovr)) : 0;
   const perfShow = Number.isFinite(perf) ? Math.round(Number(perf)) : 0;
   const discShow = Number.isFinite(disc) ? Math.round(Number(disc)) : 0;
   const respShow = Number.isFinite(resp) ? Math.round(Number(resp)) : 0;
   const golden = isGolden(ovrShow, goldenMinOVR ?? GOLDEN_MIN_OVR);
-
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
-
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (modoQR) return;
     setIsDragging(true);
     setLastPos({ x: e.clientX, y: e.clientY });
   };
-
   const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDragging || modoQR) return;
     const deltaX = e.clientX - lastPos.x;
     const deltaY = e.clientY - lastPos.y;
     setRotation((prev) => ({
@@ -94,12 +88,10 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
     }));
     setLastPos({ x: e.clientX, y: e.clientY });
   };
-
   const handleMouseUp = () => {
     setIsDragging(false);
     setRotation({ x: 0, y: 0 });
   };
-
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleMouseMove);
@@ -113,43 +105,39 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, lastPos]);
-
   useEffect(() => {
     const handleGlobalTouchMove = (e: TouchEvent) => {
-      if (isDragging) e.preventDefault();
+      if (isDragging && !modoQR) e.preventDefault();
     };
     document.addEventListener("touchmove", handleGlobalTouchMove, { passive: false });
     return () => {
       document.removeEventListener("touchmove", handleGlobalTouchMove);
     };
-  }, [isDragging]);
-
+  }, [isDragging, modoQR]);
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (modoQR) return;
     const touch = e.touches[0];
     setIsDragging(true);
     setLastPos({ x: touch.clientX, y: touch.clientY });
   };
-
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
+    if (!isDragging || modoQR) return;
     const touch = e.touches[0];
     const deltaX = touch.clientX - lastPos.x;
     const deltaY = touch.clientY - lastPos.y;
     setRotation(prev => ({ x: prev.x - deltaY / 5, y: prev.y + deltaX / 5 }));
     setLastPos({ x: touch.clientX, y: touch.clientY });
   };
-
   const handleTouchEnd = () => {
     setIsDragging(false);
     setRotation({ x: 0, y: 0 });
   };
-
   return (
     <div
-      className={`cursor-grab select-none ${!isDragging ? "transition-transform duration-500 ease-out" : ""}`}
+      className={`select-none ${modoQR ? "cursor-pointer" : "cursor-grab"} ${!isDragging ? "transition-transform duration-500 ease-out" : ""}`}
       style={{
-        touchAction: "none",              
-        transform: `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
+        touchAction: modoQR ? "pan-y" : "none",
+        transform: modoQR ? "none" : `perspective(1000px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
         width: W,
         height: H,
       }}
@@ -190,9 +178,9 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
             </feMerge>
           </filter>
         </defs>
-
         <g clipPath={`url(#${clipId})`}>
-          {fotoSrc && (
+          {modoQR && <rect x="0" y="0" width="184" height="260" fill="#10253b" />}
+          {!modoQR && fotoSrc && (
             <image
               ref={imgRef}
               href={fotoSrc}
@@ -212,28 +200,40 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
             </>
           )}
         </g>
-
+        {modoQR && qrValue && (
+          <g>
+            <rect x="28" y="35" width="128" height="124" rx="5" fill="#ffffff" />
+            <QRCodeSVG
+              x={30}
+              y={35}
+              width={124}
+              height={124}
+              value={qrValue}
+              size={124}
+              level="M"
+              marginSize={4}
+              bgColor="#ffffff"
+              fgColor="#111827"
+              title={`Abrir o perfil de ${atleta.nome}`}
+            />
+          </g>
+        )}
         {golden && <path d={SHIELD_PATH} fill="none" stroke="#daa520" strokeWidth="3.5" filter="url(#goldGlow)" />}
         <path d={SHIELD_PATH} fill="none" stroke="url(#gold)" strokeWidth="3" />
         <path d={SHIELD_PATH} fill="none" stroke="#13244b" strokeWidth="1" />
-
-        <text x="18" y="50" fontSize="28" fontWeight={800} fill="#F7D87C" style={{ textShadow: "0 1px 2px rgba(0,0,0,.35)" }}>{ovrShow}</text>
-        <text x={184 - 18} y="50" textAnchor="end" fontSize="14" fontWeight={700} fill="#d8e6ff">{atleta.posicao ?? ""}</text>
-
+        <text x="18" y={modoQR ? 31 : 50} fontSize="28" fontWeight={800} fill="#F7D87C" style={{ textShadow: "0 1px 2px rgba(0,0,0,.35)" }}>{ovrShow}</text>
+        <text x={184 - 18} y={modoQR ? 31 : 50} textAnchor="end" fontSize="14" fontWeight={700} fill="#d8e6ff">{atleta.posicao ?? ""}</text>
         <g>
           <rect x={24} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
           <text x={34} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">P</text>
           <text x={62} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{perfShow}</text>
-
           <rect x={70} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
           <text x={80} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">D</text>
           <text x={108} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{discShow}</text>
-
           <rect x={116} y={160} rx="8" ry="8" width="44" height="28" fill="rgba(10,18,40,0.55)" stroke="#d7b46a" strokeWidth="0.6" />
           <text x={126} y={178} fontSize="12" fontWeight={800} fill="#F7D87C">R</text>
           <text x={154} y={178} textAnchor="end" fontSize="12" fontWeight={700} fill="#ffffff">{respShow}</text>
         </g>
-
         <text x={92} y={204} textAnchor="middle" fontSize="13" fontWeight={700} fill="#ffffff">
           {atleta.nome?.toUpperCase()}
         </text>
@@ -242,5 +242,4 @@ const isGolden = (ovr?: number, min = GOLDEN_MIN_OVR) =>
     </div>
   );
 };
-
 export default CardAtletaShield;

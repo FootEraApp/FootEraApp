@@ -7,6 +7,9 @@ import {
   UserContext,
 } from "./context/UserContext.js";
 
+import { Capacitor } from "@capacitor/core";
+
+const LandingPage = lazy(() => import("./pages/landingPage.js"));
 const RecuperarPerfil = lazy(() => import("./pages/recuperarPerfil.js"));
 const AdminDashboard = lazy(() => import("./pages/admin-page.js"));
 const AvaliarTreino = lazy(() => import("./pages/treino/avaliarTreino.js"));
@@ -150,6 +153,26 @@ function RequireCreator({
   }
 
   return <>{children}</>;
+}
+
+function InitialPage() {
+  const isNativeApp =
+    Capacitor.isNativePlatform();
+
+  const isMobileBrowser =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod/i.test(
+      navigator.userAgent
+    );
+
+  if (
+    isNativeApp ||
+    isMobileBrowser
+  ) {
+    return <HomeRedirect />;
+  }
+
+  return <LandingPage />;
 }
 
 function PerfilComFallbackCreator() {
@@ -519,9 +542,11 @@ export function AppRoutes() {
         <Route path="/configuracoes"><Private><PaginaConfiguracoesPerfil /></Private></Route>
         <Route path="/notificacoes"><Private><PaginaNotificacoes /></Private></Route>
         <Route path="/mensagens"><Private><PaginaMensagens /></Private></Route>
+
         <Route path="/">
-          <HomeRedirect />
+          <InitialPage />
         </Route>
+
         <Route><div style={{ padding: 16 }}>Página não encontrada</div></Route>
       </Switch>
     </Suspense>
