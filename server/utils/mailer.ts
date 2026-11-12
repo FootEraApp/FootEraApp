@@ -31,13 +31,37 @@ function devTlsPatch() {
 export async function createTransport(): Promise<Transporter> {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
+  // Transporte isolado para testes do Billing.
+  // Não conecta a nenhum servidor SMTP.
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.BILLING_CUPOM_RESERVA_QA === "true"
+  ) {
+    return nodemailer.createTransport({
+      jsonTransport: true,
+    });
+  }
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.BILLING_TEST_MODE === "true"
+  ) {
+    console.log(
+      "[billing-test] Utilizando transporte JSON local."
+    );
+
+    return nodemailer.createTransport({
+      jsonTransport: true,
+    });
+  }
+
   if (SMTP_HOST) {
     const port = Number(SMTP_PORT ?? 587);
 
     return nodemailer.createTransport({
       host: SMTP_HOST,
       port,
-      secure: false, 
+      secure: false,
       requireTLS: true,
       auth:
         SMTP_USER && SMTP_PASS ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
@@ -53,6 +77,13 @@ export async function createTransport(): Promise<Transporter> {
       logger: isDevLike(),
       debug: isDevLike(),
     } as any);
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[mailer] SMTP_HOST obrigatório em produção. " +
+      "Envio de e-mail interrompido para evitar transporte de teste."
+    );
   }
 
   const acc = await nodemailer.createTestAccount();
@@ -173,9 +204,9 @@ export async function sendLiveEventAccessEmail(opts: {
   const html = `
   <div style="font-family:Inter,Arial,sans-serif;max-width:580px;margin:0 auto;padding:22px;color:#0b2f22">
     <img src="${LOGO_URL}" alt="FootEra" style="height:48px;margin-bottom:12px"/>
-    
+
     <h2 style="margin:8px 0 4px;color:#063f2a">Inscrição confirmada</h2>
-    
+
     <p style="font-size:15px;line-height:1.6;margin:8px 0 16px">
       Olá, <b>${nome}</b>! Seu acesso ao evento <b>${opts.tituloEvento}</b> foi iniciado.
     </p>
@@ -236,4 +267,84 @@ FootEra`;
 
   const preview = (nodemailer as any).getTestMessageUrl?.(info);
   if (preview) console.log("[live-event-access] preview email:", preview);
+}
+
+
+export async function sendBillingEmail(opts: {
+  to: string;
+  nome?: string | null;
+  plano: string;
+  contexto: string;
+  tipo: "VENCIMENTO" | "BLOQUEIO" | "TRIAL_ENCERRADO";
+  diasRestantes?: number;
+  dataVencimento?: Date | null;
+}) {
+  const transporter = await createTransport();
+
+  const WEB_BASE = (
+    process.env.WEB_BASE_URL ||
+    "https://footera.app.br"
+  ).replace(/\/+$/, "");
+
+  const nome = opts.nome?.trim() || "Usuário";
+  const link = `${WEB_BASE}/pagamentos`;
+
+  const dataTexto = opts.dataVencimento
+    ? opts.dataVencimento.toLocaleDateString("pt-BR")
+    : null;
+
+  let assunto = "";
+  let mensagem = "";
+
+  switch (opts.tipo) {
+    case "VENCIMENTO":
+      assunto = "Sua assinatura FootEra está perto do vencimento";
+      mensagem =
+        `Sua assinatura ${opts.plano}, vinculada ao ${opts.contexto}, ` +
+        `vence em ${opts.diasRestantes ?? 0} dia(s).`;
+      break;
+
+    case "BLOQUEIO":
+      assunto = "Sua assinatura FootEra venceu";
+      mensagem =
+        `Sua assinatura ${opts.plano}, vinculada ao ${opts.contexto}, ` +
+        "venceu e os benefícios foram bloqueados.";
+      break;
+
+    case "TRIAL_ENCERRADO":
+      assunto = "Seu período grátis FootEra terminou";
+      mensagem =
+        `O período grátis da assinatura ${opts.plano}, ` +
+        `vinculada ao ${opts.contexto}, terminou.`;
+      break;
+  }
+
+  const texto = [
+    `Olá, ${nome}!`,
+    "",
+    mensagem,
+    dataTexto ? `Data de vencimento: ${dataTexto}` : "",
+    "",
+    `Acesse seus pagamentos: ${link}`,
+    "",
+    "Equipe FootEra",
+  ].filter(Boolean).join("\n");
+
+  const info = await transporter.sendMail({
+    from: getFrom(),
+    to: opts.to,
+    replyTo: getReplyTo(),
+    subject: assunto,
+    text: texto,
+  });
+
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.BILLING_TEST_MODE === "true"
+  ) {
+    console.log(
+      "[billing-test] E-mail simulado:",
+      info.message?.toString() ?? "Sem conteúdo"
+    );
+  }
 }

@@ -5,6 +5,9 @@ import { prisma } from "../prisma.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 import { sendError } from "../utils/httpError.js";
 import {
+  criarNotificacaoEEnviarPush,
+} from "./notificacoesController.js";
+import {
   hasActiveRole,
 } from "../services/roles.js";
 import {
@@ -13,19 +16,13 @@ import {
 import {
   canPermission,
 } from "../services/permissions.js";
-
-type VinculoGestor = Prisma.OrganizacaoGestorGetPayload<{
-  select: {
-    id: true;
-    tipo: true;
-    ownerId: true;
-    papel: true;
-    permissoes: true;
-    ativo: true;
-    createdAt: true;
-    updatedAt: true;
-  };
-}>;
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  ErroTransferencia,
+  responderTransferenciaPropriedade,
+} from "../services/transferenciaOrganizacaoService.js";
 
 export async function listarMinhasOrganizacoesGerenciaveis(
   req: AuthenticatedRequest,
@@ -550,26 +547,33 @@ async function canManageOwnerOrAdmin(
   req: AuthenticatedRequest,
   tipo: string,
   ownerId: string,
-) {
-  const userId =
-    String(
-      req.user?.id || "",
-    ).trim();
+): Promise<boolean> {
+  const userId = String(
+    req.user?.id ?? req.userId ?? "",
+  ).trim();
 
-  if (!userId) {
+  if (!userId || !ownerId) {
     return false;
   }
 
-  const isAdmin =
+  if (
+    tipo !== "CLUBE" &&
+    tipo !== "ESCOLINHA"
+  ) {
+    return false;
+  }
+
+  // Admin global do FootEra.
+  if (
     await canPermission(
       userId,
       "VER_ADMIN",
-    );
-
-  if (isAdmin) {
+    )
+  ) {
     return true;
   }
 
+  // Permissão do contexto atualmente selecionado.
   const podeGerenciar =
     await canPermission(
       userId,
@@ -580,45 +584,41 @@ async function canManageOwnerOrAdmin(
     return false;
   }
 
-  if (tipo === "CLUBE") {
-    const clube =
-      await prisma.clube.findFirst({
-        where: {
-          id: ownerId,
-          usuarioId: userId,
-        },
-
-        select: {
-          id: true,
-        },
-      });
-
-    return Boolean(
-      clube,
-    );
-  }
+  const contexto =
+    await getActiveContext(userId);
 
   if (
-    tipo === "ESCOLINHA"
+    contexto?.kind !== "ORGANIZATION" ||
+    !contexto.organizationId
   ) {
-    const escolinha =
-      await prisma.escolinha.findFirst({
-        where: {
-          id: ownerId,
-          usuarioId: userId,
-        },
-
-        select: {
-          id: true,
-        },
-      });
-
-    return Boolean(
-      escolinha,
-    );
+    return false;
   }
 
-  return false;
+  // Resolver a organização associada ao ID legado.
+  const entidade =
+    tipo === "CLUBE"
+      ? await prisma.clube.findUnique({
+          where: { id: ownerId },
+          select: {
+            organizacaoId: true,
+          },
+        })
+      : await prisma.escolinha.findUnique({
+          where: { id: ownerId },
+          select: {
+            organizacaoId: true,
+          },
+        });
+
+  if (!entidade?.organizacaoId) {
+    return false;
+  }
+
+  // A autorização vale somente para a organização ativa.
+  return (
+    contexto.organizationId ===
+    entidade.organizacaoId
+  );
 }
 
 type OrgTipo = "CLUBE" | "ESCOLINHA";
@@ -899,12 +899,7 @@ export async function listarGestores(
       )
     ) {
       return res.status(403).json({
-        error:
-          "Sem permissão.",
-      });
-    } {
-      return res.status(403).json({
-        message: "Sem permissão.",
+        error: "Sem permissão.",
       });
     }
 
@@ -1395,6 +1390,838 @@ export async function removerGestor(
       error:
         e?.message ||
         "Erro ao remover responsável.",
+    });
+  }
+}
+
+
+export async function sairDaOrganizacao(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+  const organizacaoId = String(
+    req.params.organizacaoId ?? ""
+  ).trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      code: "UNAUTHENTICATED",
+      message: "Faça login para continuar.",
+    });
+  }
+
+  if (!organizacaoId) {
+    return res.status(400).json({
+      code: "ORGANIZATION_REQUIRED",
+      message: "Informe a organização.",
+    });
+  }
+
+  try {
+    const resultado = await prisma.$transaction(
+      async (tx) => {
+        const usuario = await tx.usuario.findUnique({
+          where: { id: usuarioId },
+          select: {
+            deletedAt: true,
+            contextoOrganizacaoId: true,
+          },
+        });
+
+        if (!usuario || usuario.deletedAt) {
+          return {
+            status: 403,
+            code: "ACCOUNT_NOT_AVAILABLE",
+            message: "Conta indisponível.",
+          };
+        }
+
+        if (usuario.contextoOrganizacaoId === organizacaoId) {
+          return {
+            status: 409,
+            code: "SWITCH_CONTEXT_FIRST",
+            message:
+              "Troque para outro perfil antes de sair desta organização.",
+          };
+        }
+
+        const vinculo = await tx.membroOrganizacao.findUnique({
+          where: {
+            organizacaoId_usuarioId: {
+              organizacaoId,
+              usuarioId,
+            },
+          },
+          select: {
+            id: true,
+            ativo: true,
+            funcao: true,
+            organizacao: {
+              select: {
+                ativo: true,
+              },
+            },
+          },
+        });
+
+        if (!vinculo?.ativo || !vinculo.organizacao.ativo) {
+          return {
+            status: 404,
+            code: "ACTIVE_MEMBERSHIP_NOT_FOUND",
+            message: "Vínculo ativo não encontrado.",
+          };
+        }
+
+        if (vinculo.funcao !== FuncaoMembroOrganizacao.MEMBRO) {
+          return {
+            status: 409,
+            code: "ORGANIZATION_RESPONSIBILITIES",
+            message:
+              "Professores, administradores e proprietários precisam resolver suas responsabilidades antes de sair.",
+          };
+        }
+
+        const atleta = await tx.atleta.findUnique({
+          where: { usuarioId },
+          select: {
+            id: true,
+            clubeId: true,
+            escolinhaId: true,
+          },
+        });
+
+        const organizacao = await tx.organizacao.findUnique({
+          where: { id: organizacaoId },
+          select: {
+            tipo: true,
+            clube: { select: { id: true } },
+            escolinha: { select: { id: true } },
+          },
+        });
+
+        if (atleta && organizacao) {
+          const possuiVinculoLegado =
+            (organizacao.tipo === "CLUBE" &&
+              atleta.clubeId === organizacao.clube?.id) ||
+            (organizacao.tipo === "ESCOLA" &&
+              atleta.escolinhaId === organizacao.escolinha?.id);
+
+          if (possuiVinculoLegado) {
+            return {
+              status: 409,
+              code: "ORGANIZATION_LEGACY_ATHLETE_LINK",
+              message:
+                "Este atleta possui vínculo institucional ativo. Encerre esse vínculo antes de sair da organização.",
+            };
+          }
+
+          if (
+            organizacao.tipo === "CLUBE" &&
+            organizacao.clube?.id
+          ) {
+            const participacoesEmElencos =
+              await tx.atletaElenco.count({
+                where: {
+                  atletaId: atleta.id,
+                  elenco: {
+                    ativo: true,
+                    clubeId: organizacao.clube.id,
+                  },
+                },
+              });
+
+            if (participacoesEmElencos > 0) {
+              return {
+                status: 409,
+                code: "ORGANIZATION_ACTIVE_SQUAD_LINK",
+                message:
+                  "Este atleta participa de um elenco ativo. Resolva essa participação antes de sair.",
+              };
+            }
+          }
+        }
+
+        const atualizado = await tx.membroOrganizacao.updateMany({
+          where: {
+            id: vinculo.id,
+            usuarioId,
+            ativo: true,
+            funcao: FuncaoMembroOrganizacao.MEMBRO,
+          },
+          data: {
+            ativo: false,
+          },
+        });
+
+        if (atualizado.count !== 1) {
+          return {
+            status: 409,
+            code: "MEMBERSHIP_CHANGED",
+            message: "O vínculo foi alterado. Atualize a página.",
+          };
+        }
+
+        await tx.usuario.update({
+          where: { id: usuarioId },
+          data: {
+            tokenVersion: { increment: 1 },
+          },
+        });
+
+        return {
+          status: 200,
+          code: "MEMBERSHIP_DEACTIVATED",
+          message:
+            "Participação encerrada. A organização e seus históricos foram preservados. Faça login novamente.",
+        };
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
+
+    return res.status(resultado.status).json(resultado);
+  } catch (error) {
+    console.error("[sairDaOrganizacao]", error);
+    return res.status(500).json({
+      code: "ORGANIZATION_EXIT_FAILED",
+      message: "Não foi possível encerrar a participação.",
+    });
+  }
+}
+
+export async function solicitarTransferenciaPropriedade(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+  const organizacaoId = String(req.params.organizacaoId ?? "").trim();
+  const destinatarioId = String(req.body?.destinatarioId ?? "").trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      code: "UNAUTHENTICATED",
+      message: "Faça login novamente.",
+    });
+  }
+
+  if (!organizacaoId || !destinatarioId) {
+    return res.status(400).json({
+      code: "INVALID_TRANSFER_REQUEST",
+      message: "Informe a organização e o destinatário.",
+    });
+  }
+
+  if (usuarioId === destinatarioId) {
+    return res.status(400).json({
+      code: "SAME_OWNER",
+      message: "Selecione outra pessoa para receber a organização.",
+    });
+  }
+
+  try {
+    const resultado = await prisma.$transaction(
+      async (tx) => {
+        const organizacao = await tx.organizacao.findUnique({
+          where: { id: organizacaoId },
+          select: {
+            id: true,
+            nome: true,
+            ativo: true,
+            membros: {
+              where: {
+                ativo: true,
+                funcao: FuncaoMembroOrganizacao.PROPRIETARIO,
+              },
+              select: {
+                id: true,
+                usuarioId: true,
+              },
+            },
+          },
+        });
+
+        if (
+          !organizacao?.ativo ||
+          organizacao.membros.length !== 1 ||
+          organizacao.membros[0].usuarioId !== usuarioId
+        ) {
+          return {
+            status: 403,
+            code: "NOT_ORGANIZATION_OWNER",
+            message: "Você não é o proprietário ativo desta organização.",
+          };
+        }
+
+        const destinatario = await tx.usuario.findUnique({
+          where: { id: destinatarioId },
+          select: {
+            id: true,
+            nome: true,
+            deletedAt: true,
+            blockedAt: true,
+          },
+        });
+
+        if (
+          !destinatario ||
+          destinatario.deletedAt ||
+          destinatario.blockedAt
+        ) {
+          return {
+            status: 409,
+            code: "RECIPIENT_NOT_AVAILABLE",
+            message: "O destinatário não está disponível.",
+          };
+        }
+
+        const organizacaoTipo = await tx.organizacao.findUnique({
+          where: { id: organizacaoId },
+          select: { tipo: true },
+        });
+
+        if (!organizacaoTipo) {
+          return {
+            status: 404,
+            code: "ORGANIZATION_NOT_FOUND",
+            message: "Organização não encontrada.",
+          };
+        }
+
+        const jaPossuiEntidade =
+          organizacaoTipo.tipo === "CLUBE"
+            ? await tx.clube.findUnique({
+                where: { usuarioId: destinatarioId },
+                select: { id: true },
+              })
+            : organizacaoTipo.tipo === "ESCOLA"
+              ? await tx.escolinha.findUnique({
+                  where: { usuarioId: destinatarioId },
+                  select: { id: true },
+                })
+              : organizacaoTipo.tipo === "MARCA"
+                ? await tx.marca.findUnique({
+                    where: { usuarioId: destinatarioId },
+                    select: { id: true },
+                  })
+                : await tx.federacao.findUnique({
+                    where: { usuarioId: destinatarioId },
+                    select: { id: true },
+                  });
+
+        if (jaPossuiEntidade) {
+          return {
+            status: 409,
+            code: "RECIPIENT_ALREADY_OWNS_ORGANIZATION_TYPE",
+            message:
+              "Este usuário já possui uma organização deste tipo no modelo atual. Selecione outro destinatário.",
+          };
+        }
+
+        const pendente = await tx.transferenciaPropriedade.findFirst({
+          where: {
+            organizacaoId,
+            status: "PENDENTE",
+            expiraEm: { gt: new Date() },
+          },
+          select: { id: true },
+        });
+
+        if (pendente) {
+          return {
+            status: 409,
+            code: "TRANSFER_ALREADY_PENDING",
+            message: "Já existe uma transferência pendente para esta organização.",
+          };
+        }
+
+        const solicitacao = await tx.transferenciaPropriedade.create({
+          data: {
+            organizacaoId,
+            proprietarioAtualId: usuarioId,
+            destinatarioId,
+            status: "PENDENTE",
+            expiraEm: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        return {
+          status: 201,
+          code: "TRANSFER_REQUEST_CREATED",
+          message: `Solicitação para ${destinatario.nome} registrada. A propriedade ainda não foi alterada.`,
+          solicitacaoId: solicitacao.id,
+        };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
+
+    if (
+      resultado.status === 201 &&
+      resultado.solicitacaoId
+    ) {
+      try {
+        const organizacao = await prisma.organizacao.findUnique({
+          where: { id: organizacaoId },
+          select: { nome: true },
+        });
+
+        await criarNotificacaoEEnviarPush({
+          usuarioId: destinatarioId,
+          actorId: usuarioId,
+          titulo: "Transferência de propriedade",
+          mensagem:
+            `Você recebeu uma solicitação para assumir ` +
+            `${organizacao?.nome ?? "uma organização"}. ` +
+            `Abra Configurações para aceitar ou recusar.`,
+          link:
+            `/configuracoes?secao=transferencias` +
+            `&transferenciaId=${encodeURIComponent(resultado.solicitacaoId)}`,
+        });
+      } catch (erroNotificacao) {
+        console.error(
+          "[solicitarTransferenciaPropriedade] Falha ao notificar:",
+          erroNotificacao,
+        );
+      }
+    }
+
+    return res.status(resultado.status).json(resultado);
+  } catch (error) {
+    console.error("[solicitarTransferenciaPropriedade]", error);
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      return res.status(409).json({
+        code: "TRANSFER_CONCURRENT_CHANGE",
+        message: "Ocorreu uma alteração simultânea. Tente novamente.",
+      });
+    }
+
+    return res.status(500).json({
+      code: "TRANSFER_REQUEST_FAILED",
+      message: "Não foi possível registrar a solicitação.",
+    });
+  }
+}
+
+export async function buscarDestinatariosTransferencia(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+  const organizacaoId = String(
+    req.params.organizacaoId ?? "",
+  ).trim();
+  const busca = String(req.query.q ?? "").trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      message: "Faça login novamente.",
+    });
+  }
+
+  if (busca.length < 3 || busca.length > 80) {
+    return res.status(400).json({
+      code: "INVALID_SEARCH",
+      message: "Digite pelo menos 3 caracteres.",
+    });
+  }
+
+  try {
+    const propriedade = await prisma.membroOrganizacao.findFirst({
+      where: {
+        organizacaoId,
+        usuarioId,
+        ativo: true,
+        funcao: FuncaoMembroOrganizacao.PROPRIETARIO,
+        organizacao: {
+          is: { ativo: true },
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!propriedade) {
+      return res.status(403).json({
+        code: "NOT_ORGANIZATION_OWNER",
+        message:
+          "Apenas o proprietário pode buscar destinatários de transferência.",
+      });
+    }
+
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        id: { not: usuarioId },
+        deletedAt: null,
+        blockedAt: null,
+        OR: [
+          {
+            id: busca,
+          },
+          {
+            nome: {
+              contains: busca,
+              mode: "insensitive",
+            },
+          },
+          {
+            nomeDeUsuario: {
+              contains: busca,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        foto: true,
+      },
+      orderBy: {
+        nome: "asc",
+      },
+      take: 8,
+    });
+
+    return res.json({
+      items: usuarios,
+    });
+  } catch (error) {
+    console.error(
+      "[buscarDestinatariosTransferencia]",
+      error,
+    );
+
+    return res.status(500).json({
+      code: "RECIPIENT_SEARCH_FAILED",
+      message:
+        "Não foi possível buscar os usuários.",
+    });
+  }
+}
+
+export async function listarTransferenciasRecebidas(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
+  }
+
+  try {
+    const registros =
+      await prisma.transferenciaPropriedade.findMany({
+        where: {
+          destinatarioId: usuarioId,
+          status: "PENDENTE",
+          expiraEm: { gt: new Date() },
+        },
+        orderBy: { criadoEm: "desc" },
+        take: 30,
+      });
+
+    const organizacoes = await prisma.organizacao.findMany({
+      where: {
+        id: {
+          in: registros.map((item) => item.organizacaoId),
+        },
+      },
+      select: {
+        id: true,
+        nome: true,
+        tipo: true,
+      },
+    });
+
+    const nomes = new Map(
+      organizacoes.map((item) => [item.id, item]),
+    );
+
+    const proprietarios = await prisma.usuario.findMany({
+      where: {
+        id: {
+          in: registros.map((item) => item.proprietarioAtualId),
+        },
+      },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        foto: true,
+      },
+    });
+
+    const proprietariosPorId = new Map(
+      proprietarios.map((usuario) => [usuario.id, usuario]),
+    );
+
+    return res.json({
+      items: registros.map((item) => ({
+        id: item.id,
+        status: item.status,
+        criadoEm: item.criadoEm,
+        expiraEm: item.expiraEm,
+        organizacao: nomes.get(item.organizacaoId) ?? null,
+        proprietarioAtual:
+          proprietariosPorId.get(item.proprietarioAtualId) ?? null,
+      })),
+    });
+  } catch (error) {
+    console.error("[listarTransferenciasRecebidas]", error);
+    return res.status(500).json({
+      message: "Erro ao listar transferências.",
+    });
+  }
+}
+
+export async function responderTransferenciaRecebida(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+  const transferenciaId = String(
+    req.params.transferenciaId ?? "",
+  ).trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
+  }
+
+  if (!transferenciaId) {
+    return res.status(400).json({
+      message: "Informe a solicitação.",
+    });
+  }
+
+  if (typeof req.body?.aceitar !== "boolean") {
+    return res.status(400).json({
+      message: "Informe aceitar: true ou false.",
+    });
+  }
+
+  try {
+    const resultado = await responderTransferenciaPropriedade({
+      transferenciaId,
+      destinatarioId: usuarioId,
+      aceitar: req.body.aceitar,
+      ip: req.ip,
+      userAgent: String(req.headers["user-agent"] ?? ""),
+    });
+
+    try {
+      const [organizacao, destinatario] = await Promise.all([
+        prisma.organizacao.findUnique({
+          where: { id: resultado.organizacaoId },
+          select: { nome: true },
+        }),
+        prisma.usuario.findUnique({
+          where: { id: resultado.destinatarioId },
+          select: { nome: true },
+        }),
+      ]);
+
+      const nomeOrganizacao =
+        organizacao?.nome ?? "uma organização";
+
+      const nomeDestinatario =
+        destinatario?.nome ?? "O destinatário";
+
+      const aceitou = resultado.status === "ACEITA";
+
+      await criarNotificacaoEEnviarPush({
+        usuarioId: resultado.proprietarioAnteriorId,
+        actorId: resultado.destinatarioId,
+        titulo: aceitou
+          ? "Transferência de propriedade aceita"
+          : "Transferência de propriedade recusada",
+        mensagem: aceitou
+          ? `${nomeDestinatario} aceitou a transferência ` +
+            `de ${nomeOrganizacao}. A organização agora possui ` +
+            `um novo proprietário.`
+          : `${nomeDestinatario} recusou a transferência ` +
+            `de ${nomeOrganizacao}. Você continua sendo ` +
+            `o proprietário e pode solicitar novamente.`,
+        link:
+          "/configuracoes?secao=transferencias" +
+          `&transferenciaId=${encodeURIComponent(transferenciaId)}`,
+      });
+    } catch (erroNotificacao) {
+      console.error(
+        "[responderTransferenciaRecebida] Falha ao notificar:",
+        erroNotificacao,
+      );
+    }
+
+    return res.json({
+      ok: true,
+      ...resultado,
+      message:
+        resultado.status === "ACEITA"
+          ? "Propriedade transferida. Entre novamente para atualizar suas permissões."
+          : "Solicitação recusada.",
+    });
+  } catch (error) {
+    if (error instanceof ErroTransferencia) {
+      return res.status(error.status).json({
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      ["P2034", "P2002"].includes(error.code)
+    ) {
+      console.error("[TRANSFERENCIA] Erro Prisma ao aceitar:", {
+        prismaCode: error.code,
+        meta: error.meta,
+        message: error.message,
+        transferenciaId,
+      });
+
+      return res.status(409).json({
+        code:
+          error.code === "P2034"
+            ? "TRANSFER_TRANSACTION_CONFLICT"
+            : "TRANSFER_UNIQUE_CONFLICT",
+        message:
+          error.code === "P2034"
+            ? "Houve um conflito de transação. Tente novamente."
+            : "Existe um conflito de unicidade nos registros da transferência. Verifique o log do servidor.",
+      });
+    }
+
+    console.error("[responderTransferenciaRecebida]", error);
+
+    return res.status(500).json({
+      code: "TRANSFER_RESPONSE_FAILED",
+      message: "Não foi possível responder à transferência.",
+    });
+  }
+}
+
+export async function listarHistoricoTransferencias(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  const usuarioId = String(req.userId ?? "").trim();
+
+  if (!usuarioId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
+  }
+
+  try {
+    const registros =
+      await prisma.transferenciaPropriedade.findMany({
+        where: {
+          OR: [
+            { proprietarioAtualId: usuarioId },
+            { destinatarioId: usuarioId },
+          ],
+        },
+        select: {
+          id: true,
+          organizacaoId: true,
+          proprietarioAtualId: true,
+          destinatarioId: true,
+          status: true,
+          criadoEm: true,
+          expiraEm: true,
+          respondidoEm: true,
+          concluidoEm: true,
+        },
+        orderBy: { criadoEm: "desc" },
+        take: 100,
+      });
+
+    const organizacoes = await prisma.organizacao.findMany({
+      where: {
+        id: {
+          in: [...new Set(
+            registros.map((r) => r.organizacaoId),
+          )],
+        },
+      },
+      select: {
+        id: true,
+        nome: true,
+        tipo: true,
+      },
+    });
+
+    const usuarios = await prisma.usuario.findMany({
+      where: {
+        id: {
+          in: [...new Set(
+            registros.flatMap((r) => [
+              r.proprietarioAtualId,
+              r.destinatarioId,
+            ]),
+          )],
+        },
+      },
+      select: {
+        id: true,
+        nome: true,
+        nomeDeUsuario: true,
+        foto: true,
+      },
+    });
+
+    const organizacoesPorId = new Map(
+      organizacoes.map((o) => [o.id, o]),
+    );
+
+    const usuariosPorId = new Map(
+      usuarios.map((u) => [u.id, u]),
+    );
+
+    return res.json({
+      items: registros.map((registro) => ({
+        id: registro.id,
+        sentido:
+          registro.proprietarioAtualId === usuarioId
+            ? "ENVIADA"
+            : "RECEBIDA",
+        statusEfetivo:
+          registro.status === "PENDENTE" &&
+          registro.expiraEm <= new Date()
+            ? "EXPIRADA"
+            : registro.status,
+        status: registro.status,
+        criadoEm: registro.criadoEm,
+        expiraEm: registro.expiraEm,
+        respondidoEm: registro.respondidoEm,
+        concluidoEm: registro.concluidoEm,
+        organizacao:
+          organizacoesPorId.get(registro.organizacaoId) ?? null,
+        remetente:
+          usuariosPorId.get(registro.proprietarioAtualId) ?? null,
+        destinatario:
+          usuariosPorId.get(registro.destinatarioId) ?? null,
+      })),
+    });
+  } catch (error) {
+    console.error("[listarHistoricoTransferencias]", error);
+
+    return res.status(500).json({
+      code: "TRANSFER_HISTORY_FAILED",
+      message: "Não foi possível carregar o histórico.",
     });
   }
 }

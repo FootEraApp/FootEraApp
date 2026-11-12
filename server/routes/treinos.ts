@@ -49,6 +49,7 @@ import {
   alternarFavoritoTreino,
   removerFavoritoTreino,
   iniciarTreinoPublico,
+  obterLimiteDiarioTreinos,
 } from "server/controllers/treinosController.js";
 import { criarAvaliacaoTreino } from "../controllers/avaliacoesTreinoController.js";
 import { requireElencoOwner } from "server/middlewares/membership.js";
@@ -67,6 +68,10 @@ import {
 const router = Router();
 router.use(authenticateToken);
 
+router.get(
+  "/limite-diario",
+  obterLimiteDiarioTreinos
+);
 router.get("/sessoes", listarSessoesTreino);
 router.get("/relacao-treino/status", relacaoStatus);
 router.get("/elencos/:id/escala", requireElencoOwner, getEscalaPorElencoId);

@@ -1458,7 +1458,10 @@ export default function PerfilOlheiro({
       {aba === "postagens" && (
         <section className="mt-5 px-3 sm:px-4">
           {perfilUsuarioId ? (
-            <ProfilePostsSection usuarioId={perfilUsuarioId} />
+            <ProfilePostsSection
+              usuarioId={perfilUsuarioId}
+              papel="Olheiro"
+            />
           ) : (
             <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
               Não foi possível carregar o usuário das postagens.

@@ -87,14 +87,18 @@ async function filtrarPorPapelAtivo<
           id: {
             in: ids,
           },
+          deletedAt: null,
         },
-
         select: {
           id: true,
           tipo: true,
         },
       }),
     ]);
+
+  const usuariosDisponiveis = new Set(
+    usuarios.map((usuario) => usuario.id)
+  );
 
   const porUsuario =
     new Map<
@@ -145,7 +149,10 @@ async function filtrarPorPapelAtivo<
           item
         );
 
-      if (!usuarioId) {
+      if (
+        !usuarioId ||
+        !usuariosDisponiveis.has(usuarioId)
+      ) {
         return false;
       }
 
@@ -277,13 +284,17 @@ async function buscarProfessorIdsDaOrganizacao(
     prisma.relacaoTreinamento.findMany({
       where: {
         ...ownerWhere,
+
         professorId: {
           not: null,
         },
+
         atletaId: null,
+
         ativo: true,
         encerradoEm: null,
       },
+
       select: {
         professorId: true,
       },
@@ -350,23 +361,13 @@ async function buscarProfessorIdsDaOrganizacao(
     (professor) =>
       professor.id
   );
-
-  return Array.from(
-    new Set<string>(
-      ids.filter(
-        (id): id is string =>
-          typeof id === "string" &&
-          id.trim().length > 0
-      )
-    )
-  );
 }
 
 export const gerenciarAtletasController = {
   list: async (req: Request, res: Response) => {
     try {
       const vinculo = String(req.query.vinculo || "").toLowerCase();
-      const idOrUser = String(req.query.id || "").trim(); 
+      const idOrUser = String(req.query.id || "").trim();
       const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
       const entidadeUsuarioId = tipoUsuarioId || idOrUser;
       const search = (req.query.search as string) || "";
@@ -386,34 +387,53 @@ export const gerenciarAtletasController = {
       let entidadeId: string | null = null;
 
       if (
-          vinculo === "clube" ||
-          vinculo === "escolinha"
-        ) {
-          const resolved =
-            await resolveEntidadeId(
-              vinculo,
-              entidadeUsuarioId
-            );
+        vinculo === "clube" ||
+        vinculo === "escolinha"
+      ) {
+        const resolved =
+          await resolveEntidadeId(
+            vinculo,
+            entidadeUsuarioId
+          );
 
-          if (!resolved) {
-            return res.status(404).json({
-              message:
-                vinculo === "clube"
-                  ? "Clube não encontrado"
-                  : "Escolinha não encontrada",
-            });
-          }
+        if (!resolved) {
+          return res.status(404).json({
+            message:
+              vinculo === "clube"
+                ? "Clube não encontrado"
+                : "Escolinha não encontrada",
+          });
+        }
 
-          entidadeId =
-            resolved.entidadeId;
+        entidadeId =
+          resolved.entidadeId;
 
-          const professorIds =
-            await buscarProfessorIdsDaOrganizacao(
-              vinculo,
-              entidadeId
-            );
+        const professorIds =
+          await buscarProfessorIdsDaOrganizacao(
+            vinculo,
+            entidadeId
+          );
 
-          const vinculosPermitidos: any[] = [
+        const vinculosPermitidos: any[] = [
+          vinculo === "clube"
+            ? {
+                clubeId: entidadeId,
+              }
+            : {
+                escolinhaId: entidadeId,
+              },
+        ];
+
+        if (professorIds.length > 0) {
+          vinculosPermitidos.push({
+            professorId: {
+              in: professorIds,
+            },
+          });
+        }
+
+        whereByVinculo = {
+          OR: [
             vinculo === "clube"
               ? {
                   clubeId: entidadeId,
@@ -421,75 +441,57 @@ export const gerenciarAtletasController = {
               : {
                   escolinhaId: entidadeId,
                 },
-          ];
 
-          if (professorIds.length > 0) {
-            vinculosPermitidos.push({
-              professorId: {
-                in: professorIds,
-              },
-            });
-          }
-
-          whereByVinculo = {
-            OR: [
-              vinculo === "clube"
-                ? {
-                    clubeId: entidadeId,
-                  }
-                : {
-                    escolinhaId: entidadeId,
+            {
+              relacoesTreinamento: {
+                some: {
+                  atletaId: {
+                    not: null,
                   },
-              {
-                relacoesTreinamento: {
-                  some: {
-                    atletaId: {
-                      not: null,
-                    },
 
-                    ativo: true,
-                    encerradoEm: null,
+                  ativo: true,
+                  encerradoEm: null,
 
-                    OR: vinculosPermitidos,
-                  },
+                  OR: vinculosPermitidos,
                 },
-              },
-            ],
-          };
-        } else {
-          const resolved =
-            await resolveEntidadeId(
-              "professor",
-              entidadeUsuarioId
-            );
-
-          if (!resolved) {
-            return res.status(404).json({
-              message:
-                "Professor não encontrado",
-            });
-          }
-
-          entidadeId =
-            resolved.entidadeId;
-
-          whereByVinculo = {
-            relacoesTreinamento: {
-              some: {
-                professorId:
-                  entidadeId,
-
-                atletaId: {
-                  not: null,
-                },
-
-                ativo: true,
-                encerradoEm: null,
               },
             },
-          };
+          ],
+        };
+      } else {
+        const resolved =
+          await resolveEntidadeId(
+            "professor",
+            entidadeUsuarioId
+          );
+
+        if (!resolved) {
+          return res.status(404).json({
+            message:
+              "Professor não encontrado",
+          });
         }
-      
+
+        entidadeId =
+          resolved.entidadeId;
+
+        whereByVinculo = {
+          relacoesTreinamento: {
+            some: {
+              professorId:
+                entidadeId,
+
+              atletaId: {
+                not: null,
+              },
+
+              ativo: true,
+              encerradoEm: null,
+            },
+          },
+        };
+      }
+
       const where: any = { AND: [whereByVinculo] };
 
       if (categoria) where.AND.push({ categoria: { has: categoria } });
@@ -554,7 +556,7 @@ export const gerenciarAtletasController = {
         const elencos = await prisma.elenco.findMany({ where: { clubeId: entidadeId, ativo: true }, select: { id: true } });
         elencoIds = elencos.map((e) => e.id);
       } else if (vinculo === "escolinha" && entidadeId) {
-        const elencos = await prisma.elenco.findMany({ where: { escolinhaId: entidadeId, ativo: true }, select: { id: true } });
+        const elencos = await prisma.elenco.findMany({ where: { escolinhaId: entidadeId, ativo: true}, select: { id: true } });
         elencoIds = elencos.map((e) => e.id);
       } else if (vinculo === "professor" && entidadeId) {
         const elencos = await prisma.elenco.findMany({ where: { professorId: entidadeId, ativo: true }, select: { id: true } });
@@ -767,7 +769,7 @@ export const gerenciarAtletasController = {
           (professor) =>
             professor.usuarioId
         );
-        
+
       const usuarioIds = professoresAtivos
         .map((p) => p.usuarioId)
         .filter((id): id is string => typeof id === "string" && id.length > 0);
@@ -896,7 +898,7 @@ export const gerenciarAtletasController = {
         | "admin";
 
       let idOrUser = String(req.query.id || "").trim();
-      const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim(); 
+      const tipoUsuarioId = String(req.query.tipoUsuarioId || "").trim();
       const debug = String(req.query.debug || "") === "1";
       const conteudo = String(req.query.conteudo ?? "1") === "1";
       const userIdFromToken = String(
@@ -1012,7 +1014,7 @@ export const gerenciarAtletasController = {
                   nome: t.escolinha.nome || "Escolinha",
                 }
               : null;
-                        
+
           const exercicios = Array.isArray(t?.exercicios)
             ? t.exercicios.map((e: any) => {
                 if (e.exercicio) {
@@ -1678,7 +1680,7 @@ export const gerenciarAtletasController = {
         },
         orderBy: { criadoEm: "asc" },
       });
-      
+
       const buckets = [0, 0, 0, 0];
 
       let totalPontos28d = 0;
@@ -1689,7 +1691,7 @@ export const gerenciarAtletasController = {
         totalPontos28d += pts;
 
         const diffMs = new Date(s.criadoEm).getTime() - fourWeeksAgo.getTime();
-        const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000)); 
+        const weekIndex = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
         if (weekIndex >= 0 && weekIndex <= 3) buckets[weekIndex] += pts;
       }
 
@@ -1756,8 +1758,8 @@ export const gerenciarAtletasController = {
 
         whereByVinculo = {
           OR: [
-            { escolinhaId: entidadeId },   
-            { id: { in: idsRelacao } },    
+            { escolinhaId: entidadeId },
+            { id: { in: idsRelacao } },
           ],
         };
       } else {
@@ -2271,7 +2273,7 @@ export const gerenciarAtletasController = {
         where: { atletaId: atletaId },
         include: {
           treinoProgramado: { select: { id: true, nome: true, pontuacao: true } },
-          submissaoTreinos: { 
+          submissaoTreinos: {
             orderBy: { criadoEm: "desc" },
             take: 1,
             select: { id: true, aprovado: true },

@@ -8,7 +8,7 @@ import { Link } from "wouter";
 
 export default function TreinoLivreNovo() {
   const [, navigate] = useLocation();
-  
+
   const atletaIdDaUrl = new URLSearchParams(
     window.location.search
   ).get("atletaId");
@@ -107,11 +107,11 @@ export default function TreinoLivreNovo() {
   const [duracaoMin, setDuracaoMin] = useState<number>(30);
   const [tipoAtividade, setTipoAtividade] = useState<string>("");
   const [categoria, setCategoria] = useState<string>("");
-  const [arquivoMidia, setArquivoMidia] = useState<File | null>(null); 
+  const [arquivoMidia, setArquivoMidia] = useState<File | null>(null);
 
   async function salvar() {
     const token = (Storage as any).token ?? localStorage.getItem("token");
-    
+
     if (verificandoAtleta) {
       return toast.error("Aguarde a identificação do atleta.");
     }
@@ -141,13 +141,28 @@ export default function TreinoLivreNovo() {
       return toast.error("Descreva rapidamente o treino (ex.: Corrida 5km).");
     }
 
+    if (!data) {
+      return toast.error(
+        "Selecione a data e o horário em que o treino foi realizado."
+      );
+    }
+
+    const dataTreino = new Date(data);
+
+    if (Number.isNaN(dataTreino.getTime())) {
+      return toast.error("Informe uma data e um horário válidos.");
+    }
+
+    if (dataTreino.getTime() > Date.now()) {
+      return toast.error(
+        "Essa data ou horário ainda não ocorreu. Selecione um momento anterior ou igual ao atual."
+      );
+    }
+
     try {
       const form = new FormData();
       form.append("atletaId", atletaId);
-      form.append(
-        "data",
-        data ? new Date(data).toISOString() : new Date().toISOString()
-      );
+      form.append("data", dataTreino.toISOString());
       form.append("descricao", descricao);
       form.append("duracaoMin", String(duracaoMin || 0));
       if (tipoAtividade) form.append("tipoAtividade", tipoAtividade);
@@ -163,9 +178,25 @@ export default function TreinoLivreNovo() {
       });
 
       if (!r.ok) {
-        const txt = await r.text();
-        console.error("Falha ao salvar treino livre:", r.status, txt);
-        return toast.error("Não foi possível salvar o treino.");
+        const erro = await r.json().catch(() => null);
+
+        if (erro?.code === "DAILY_TRAINING_LIMIT_REACHED") {
+          return toast.error(
+            erro.message ??
+              "Você atingiu o limite de 3 treinos por dia."
+          );
+        }
+
+        if (erro?.code === "FUTURE_TRAINING_DATE") {
+          return toast.error(
+            erro.message ??
+              "Essa data ou horário ainda não ocorreu."
+          );
+        }
+
+        return toast.error(
+          erro?.message ?? "Não foi possível salvar o treino."
+        );
       }
 
       toast.success("Treino livre registrado!");
@@ -193,7 +224,7 @@ export default function TreinoLivreNovo() {
       >
         <ArrowLeft className="h-5 w-5" />
       </Link>
-      
+
       {atletaSelecionado && (
         <div className="mb-5 rounded-2xl border border-green-200 bg-green-50 p-4">
           <p className="text-xs font-semibold uppercase text-green-800">
@@ -216,13 +247,32 @@ export default function TreinoLivreNovo() {
         onChange={(e) => setDescricao(e.target.value)}
       />
 
-      <label className="block text-sm mb-1">Data</label>
+      <label className="block text-sm mb-1">
+        Data e horário da realização
+      </label>
+
       <input
         type="datetime-local"
-        className="border w-full p-2 rounded mb-3"
-        value={data}
-        onChange={(e) => setData(e.target.value)}
-      />
+        required
+        max={(() => {
+          const agora = new Date();
+          const local = new Date(
+            agora.getTime() -
+            agora.getTimezoneOffset() * 60000
+          );
+
+          return local.toISOString().slice(0, 16);
+      })()}
+      className="border w-full p-2 rounded mb-2"
+      value={data}
+      onChange={(e) => setData(e.target.value)}
+    />
+
+    <p className="mb-3 text-xs text-gray-600">
+      Você pode registrar treinos realizados em dias anteriores.
+      O limite de 3 treinos é verificado separadamente para
+      cada dia. Datas e horários futuros não são permitidos.
+    </p>
 
       <label className="block text-sm mb-1">Duração (min)</label>
       <input

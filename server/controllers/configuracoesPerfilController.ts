@@ -20,6 +20,9 @@ import {
 import {
   audit,
 } from "../services/audit.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
 
 function getUserId(req: Request): string | null {
   const r: any = req;
@@ -554,18 +557,22 @@ async function obterVinculoPrivacidadeResponsavel(
         },
       });
 
-  if (
-    !vinculo ||
-    vinculo.status !==
-      StatusResponsavelAtleta.ATIVO ||
-    vinculo
-      .podeGerenciarPrivacidade !==
-      true
-  ) {
-    return null;
-  }
+      if (!vinculo) {
+        return null;
+      }
 
-  return vinculo;
+      const autorizado =
+        await verificarPermissaoResponsavelAtleta({
+          responsavelUsuarioId,
+          atletaId,
+          permissao: "podeGerenciarPrivacidade",
+        });
+
+      if (!autorizado) {
+        return null;
+      }
+
+      return vinculo;
 }
 
 export async function getPrivacidadeAtletaGerenciado(
@@ -985,7 +992,7 @@ export async function trocarSenha(req: Request, res: Response) {
     if (senhaAtual === senhaNova) {
       return res.status(400).json({ message: "A senha nova não pode ser igual à senha atual." });
     }
-    
+
     const u = await prisma.usuario.findUnique({
       where: { id: userId },
       select: { senhaHash: true, tokenVersion: true },
@@ -1048,8 +1055,8 @@ export async function encerrarSessoes(req: Request, res: Response) {
       where: { id: userId },
       data: {
         tokenVersion: (u?.tokenVersion ?? 0) + 1,
-        lastLogoutAt: now,                        
-        lastSeenAt: now,                          
+        lastLogoutAt: now,
+        lastSeenAt: now,
       },
     });
 

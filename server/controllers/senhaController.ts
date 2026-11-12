@@ -18,6 +18,14 @@ export async function forgotPassword(req: Request, res: Response) {
     const usuario = await prisma.usuario.findUnique({ where: { email } });
     if (!usuario) return res.status(200).json(okMessage);
 
+    const supervisao = await obterSupervisaoMenor(
+      usuario.id
+    );
+
+    if (supervisao.supervisionado) {
+      return res.status(200).json(okMessage);
+    }
+
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 

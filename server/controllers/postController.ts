@@ -5,8 +5,6 @@ import { getIO } from "../socket.js"
 import {
   VisibilidadePostagem,
   NotificacaoTipo,
-  TipoUsuario,
-  StatusResponsavelAtleta,
 } from "@prisma/client";
 import {
   audit,
@@ -26,8 +24,12 @@ import {
   listarActiveContexts,
   type ActiveContext,
 } from "../services/activeContext.js";
-type AuthedReq = Request & { userId?: string };
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
+import { canPermission } from "../services/permissions.js";
 
+type AuthedReq = Request & { userId?: string };
 type AutorPostagemResolvido = {
   contexto: ActiveContext;
   organizacaoId: string | null;
@@ -196,11 +198,15 @@ export const postarConteudo = async (req: AuthedReq, res: Response) => {
     const organizacaoId =
       autorResolvido.organizacaoId;
 
+    const autorContextoKey =
+      autorResolvido.contexto.key;
+
     const post = await prisma.postagem.create({
       data: {
         usuarioId: req.userId!,
         conteudo: descricao || "",
         organizacaoId,
+        autorContextoKey,
         tipoMidia: tipoDetectado as any,
         imagemUrl: finalImagemUrl,
         videoUrl: finalVideoUrl,
@@ -374,8 +380,8 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   });
 
   if (
-    String(post.usuarioId) !==
-    String(req.userId)
+    post.usuarioId &&
+    post.usuarioId !== req.userId
   ) {
     try {
       const nomeOrganizacao =
@@ -420,85 +426,199 @@ export const adicionarComentario = async (req: AuthedReq, res: Response) => {
   return res.status(201).json(novoComentario);
 };
 
-export const editarPostagemGet = async (req: AuthedReq, res: Response) => {
-  const { id } = req.params;
-  try {
-    const postagem = await prisma.postagem.findUnique({ where: { id } });
-    if (!postagem || postagem.usuarioId !== req.userId) {
-      return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
+async function podeEditarPostagem(
+  usuarioId: string,
+  postagem: {
+    usuarioId: string | null;
+    organizacaoId: string | null;
+  }
+): Promise<boolean> {
+  // Publicação institucional:
+  // exige autorização na organização proprietária.
+  if (postagem.organizacaoId) {
+    const contexto = await getActiveContext(usuarioId);
+
+    if (
+      contexto?.kind !== "ORGANIZATION" ||
+      contexto.organizationId !== postagem.organizacaoId
+    ) {
+      return false;
     }
+
+    return canPermission(
+      usuarioId,
+      "GERENCIAR_ORGANIZACAO"
+    );
+  }
+
+  // Publicação pessoal:
+  // somente o autor pode editar.
+  return (
+    postagem.usuarioId !== null &&
+    postagem.usuarioId === usuarioId
+  );
+}
+
+
+export const editarPostagemGet = async (
+  req: AuthedReq,
+  res: Response
+) => {
+  const { id } = req.params;
+
+  if (!req.userId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
+  }
+
+  try {
+    const postagem = await prisma.postagem.findUnique({
+      where: { id },
+    });
+
+    if (!postagem) {
+      return res.status(404).json({
+        message: "Postagem não encontrada.",
+      });
+    }
+
+    const autorizado = await podeEditarPostagem(
+      req.userId,
+      postagem
+    );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não tem permissão para editar esta postagem.",
+      });
+    }
+
     return res.json(postagem);
-  } catch {
-    return res.status(500).json({ message: "Erro ao buscar postagem." });
+  } catch (error) {
+    console.error("Erro ao buscar postagem para edição:", error);
+
+    return res.status(500).json({
+      message: "Erro ao buscar postagem.",
+    });
   }
 };
 
-export const editarPostagemPost = async (req: AuthedReq, res: Response) => {
+export const editarPostagemPost = async (
+  req: AuthedReq,
+  res: Response
+) => {
   const { id } = req.params;
-  const raw = String(req.body?.conteudo ?? "");
-  const conteudo = sanitizeText(raw, MOD.MAX_DESC_LEN);
 
-  const postagem = await prisma.postagem.findUnique({ where: { id } });
-  if (!postagem || postagem.usuarioId !== req.userId) {
-    return res.status(401).json({ message: "Você não tem permissão para editar esta postagem." });
+  if (!req.userId) {
+    return res.status(401).json({
+      message: "Não autenticado.",
+    });
   }
-  if (!conteudo) return res.status(400).json({ message: "O conteúdo não pode estar vazio." });
 
-  const fail = basicModerationFails(conteudo);
-  if (fail) return res.status(422).json({ message: fail });
+  try {
+    const postagem = await prisma.postagem.findUnique({
+      where: { id },
+    });
 
-  await prisma.postagem.update({ where: { id }, data: { conteudo } });
-  return res.json({ message: "Postagem atualizada com sucesso." });
+    if (!postagem) {
+      return res.status(404).json({
+        message: "Postagem não encontrada.",
+      });
+    }
+
+    const autorizado = await podeEditarPostagem(
+      req.userId,
+      postagem
+    );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        message:
+          "Você não tem permissão para editar esta postagem.",
+      });
+    }
+
+    const raw = String(req.body?.conteudo ?? "");
+
+    const conteudo = sanitizeText(
+      raw,
+      MOD.MAX_DESC_LEN
+    );
+
+    if (!conteudo) {
+      return res.status(400).json({
+        message: "O conteúdo não pode estar vazio.",
+      });
+    }
+
+    const fail = basicModerationFails(conteudo);
+
+    if (fail) {
+      return res.status(422).json({
+        message: fail,
+      });
+    }
+
+    await prisma.postagem.update({
+      where: { id },
+      data: { conteudo },
+    });
+
+    return res.json({
+      message: "Postagem atualizada com sucesso.",
+    });
+  } catch (error) {
+    console.error("Erro ao editar postagem:", error);
+
+    return res.status(500).json({
+      message: "Erro ao editar postagem.",
+    });
+  }
 };
 
 async function responsavelPodeGerenciarPostagem(
   responsavelUsuarioId: string,
   postUsuarioId: string
 ) {
-  const contexto =
-    await getActiveContext(
-      responsavelUsuarioId
-    );
+  const atleta = await prisma.atleta.findUnique({
+    where: {
+      usuarioId: postUsuarioId,
+    },
+    select: {
+      id: true,
+    },
+  });
 
-  if (
-    contexto?.kind !==
-      "PERSONAL" ||
-    contexto.tipoUsuario !==
-      TipoUsuario.Responsavel
-  ) {
+  if (!atleta) {
     return null;
   }
 
-  const vinculo =
-    await prisma
-      .responsavelAtleta
-      .findFirst({
-        where: {
-          responsavelUsuarioId,
+  const autorizado =
+    await verificarPermissaoResponsavelAtleta({
+      responsavelUsuarioId,
+      atletaId: atleta.id,
+      permissao: "podeGerenciarConteudo",
+    });
 
-          status:
-            StatusResponsavelAtleta.ATIVO,
+  if (!autorizado) {
+    return null;
+  }
 
-          podeGerenciarConteudo:
-            true,
-
-          atleta: {
-            is: {
-              usuarioId:
-                postUsuarioId,
-            },
-          },
-        },
-
-        select: {
-          id: true,
-          atletaId: true,
-          responsavelUsuarioId:
-            true,
-        },
-      });
-
-  return vinculo;
+  return prisma.responsavelAtleta.findUnique({
+    where: {
+      responsavelUsuarioId_atletaId: {
+        responsavelUsuarioId,
+        atletaId: atleta.id,
+      },
+    },
+    select: {
+      id: true,
+      atletaId: true,
+      responsavelUsuarioId: true,
+    },
+  });
 }
 
 export const deletarPost =
@@ -544,13 +664,34 @@ export const deletarPost =
           });
       }
 
-      /*
-       * Caso normal:
-       * o próprio autor está apagando.
-       */
       const proprioAutor =
-        post.usuarioId ===
-        req.userId;
+        !post.organizacaoId &&
+        post.usuarioId === req.userId;
+
+      let gestorOrganizacao = false;
+
+      if (post.organizacaoId) {
+        const contexto = await getActiveContext(req.userId);
+
+        const mesmaOrganizacao =
+          contexto?.kind === "ORGANIZATION" &&
+          contexto.organizationId === post.organizacaoId;
+
+        if (mesmaOrganizacao) {
+          gestorOrganizacao = await canPermission(
+            req.userId,
+            "GERENCIAR_ORGANIZACAO"
+          );
+        }
+
+        if (!gestorOrganizacao) {
+          return res.status(403).json({
+            code: "POST_ORGANIZATION_DELETE_FORBIDDEN",
+            message:
+              "Somente um gestor autorizado da organização proprietária pode excluir esta publicação.",
+          });
+        }
+      }
 
       let vinculoResponsavel:
         Awaited<
@@ -560,20 +701,7 @@ export const deletarPost =
         > =
         null;
 
-      /*
-       * Se não é o autor,
-       * verificamos se é responsável.
-       */
-      if (!proprioAutor) {
-        /*
-         * Post publicado em nome de
-         * organização não pode ser
-         * removido pelo responsável
-         * da criança.
-         *
-         * Mesmo que a criança tenha sido
-         * o executor da publicação.
-         */
+      if (!proprioAutor && !gestorOrganizacao) {
         if (
           post.organizacaoId
         ) {
@@ -589,10 +717,12 @@ export const deletarPost =
         }
 
         vinculoResponsavel =
-          await responsavelPodeGerenciarPostagem(
-            req.userId,
-            post.usuarioId
-          );
+          post.usuarioId
+            ? await responsavelPodeGerenciarPostagem(
+                req.userId,
+                post.usuarioId
+              )
+            : null;
 
         if (
           !vinculoResponsavel
@@ -812,7 +942,7 @@ export const buscarPostagemPorId =
         });
     }
   };
-  
+
 export const registrarCompartilhamento = async (req: AuthedReq, res: Response) => {
   const { postId } = req.params;
   try {
@@ -825,6 +955,7 @@ export const registrarCompartilhamento = async (req: AuthedReq, res: Response) =
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },
@@ -906,6 +1037,7 @@ export const compartilharPostPorMensagem = async (req: AuthedReq, res: Response)
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },

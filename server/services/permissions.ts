@@ -12,7 +12,6 @@ import {
   hasRole,
   papelCanonico,
 } from "./roles.js";
-
 import {
   getActiveContext,
 } from "./activeContext.js";
@@ -21,6 +20,7 @@ export type AppPermission =
   | "CRIAR_TREINO"
   | "GERENCIAR_TURMA"
   | "GERENCIAR_ORGANIZACAO"
+  | "GERENCIAR_CREATOR_INSTITUCIONAL"
   | "CRIAR_EVENTO"
   | "CRIAR_AULA_AO_VIVO"
   | "PUBLICAR_METODOLOGIA"
@@ -35,6 +35,7 @@ export const APP_PERMISSIONS:
     "CRIAR_AULA_AO_VIVO",
     "PUBLICAR_METODOLOGIA",
     "VER_ADMIN",
+    "GERENCIAR_CREATOR_INSTITUCIONAL",
   ];
 
 function permissoesDoPapel(
@@ -93,6 +94,10 @@ function permissoesOrganizacao(
     return [];
   }
 
+  const podeGerenciarCreator =
+    funcao === FuncaoMembroOrganizacao.PROPRIETARIO ||
+    funcao === FuncaoMembroOrganizacao.ADMINISTRADOR;
+
   const clubeOuEscola =
     tipo ===
       TipoOrganizacao.CLUBE ||
@@ -107,11 +112,19 @@ function permissoesOrganizacao(
       ? [
           "CRIAR_TREINO",
           "GERENCIAR_TURMA",
+          "GERENCIAR_ORGANIZACAO",
+          ...(podeGerenciarCreator
+            ? (["GERENCIAR_CREATOR_INSTITUCIONAL"] as const)
+            : []),
           "CRIAR_EVENTO",
           "CRIAR_AULA_AO_VIVO",
           "PUBLICAR_METODOLOGIA",
         ]
       : [
+          "GERENCIAR_ORGANIZACAO",
+          ...(podeGerenciarCreator
+            ? (["GERENCIAR_CREATOR_INSTITUCIONAL"] as const)
+            : []),
           "CRIAR_AULA_AO_VIVO",
           "PUBLICAR_METODOLOGIA",
         ];
@@ -148,6 +161,7 @@ async function permissoesAtivas(
       },
 
       select: {
+        deletedAt: true,
         administrador: {
           select: {
             id: true,
@@ -156,7 +170,7 @@ async function permissoesAtivas(
       },
     });
 
-  if (!usuario) {
+  if (!usuario || usuario.deletedAt) {
     return [];
   }
 
@@ -201,19 +215,23 @@ async function permissoesAtivas(
     contexto.role ??
     contexto.tipoUsuario;
 
-  const possuiPapel =
-    await hasRole(
-      usuarioId,
-      papel,
-    );
+  const possuiPapel = await hasRole(
+    usuarioId,
+    papel,
+  );
 
   if (!possuiPapel) {
     return [];
   }
 
-  return permissoesDoPapel(
-    papel
-  );
+  // O papel Admin, isoladamente, não concede
+  // permissões administrativas.
+  // É obrigatório existir um registro Administrador.
+  if (papel === TipoUsuario.Admin) {
+    return [];
+  }
+
+  return permissoesDoPapel(papel);
 }
 
 

@@ -108,8 +108,18 @@ export function AuthGateProvider({
 
   const requireAuth = useCallback(
     (options: AuthGateOptions = {}) => {
-      const { token, usuarioId } =
-        readAuthSessionSnapshot();
+      const {
+        token,
+        usuarioId,
+        somenteGestaoConta,
+      } = readAuthSessionSnapshot();
+
+      if (token && usuarioId && somenteGestaoConta) {
+        limparFluxoAuthPendente();
+
+        navigate("/configuracoes");
+        return false;
+      }
 
       if (token && usuarioId) {
         return true;
@@ -118,7 +128,7 @@ export function AuthGateProvider({
       openAuthGate(options);
       return false;
     },
-    [openAuthGate]
+    [openAuthGate, navigate],
   );
 
   const handleAuthError = useCallback(
@@ -200,23 +210,26 @@ export function AuthGateProvider({
             return;
           }
 
-          const { isAdmin } =
-            applyAuthSession(
-              data,
-              {
-                lembrar: false,
-              }
-            );
+          const { isAdmin } = applyAuthSession(data, {
+            lembrar: false,
+          });
 
           setOpen(false);
 
-          navigate(
-            isAdmin
-              ? "/admin"
-              : consumirRetornoAuth(
-                  "/perfil"
-                )
-          );
+          const retorno = consumirRetornoAuth("/perfil");
+
+          if (data.somenteGestaoConta === true) {
+            limparFluxoAuthPendente();
+          }
+
+          const destino =
+            data.somenteGestaoConta === true
+              ? "/configuracoes"
+              : isAdmin
+                ? "/admin"
+                : retorno;
+
+          navigate(destino);
         } catch (error: any) {
           console.error(
             "Erro no Google pelo Auth Gate:",
@@ -339,7 +352,9 @@ export function AuthGateProvider({
             </div>
 
             <p className="mt-4 text-center text-xs text-gray-500">
-              Depois de entrar, você volta para onde estava.
+              Depois de entrar, você volta para onde estava,
+              desde que sua conta tenha um perfil ativo e
+              permissão para realizar a ação.
             </p>
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   StatusUsuarioPapel,
   TipoUsuario,
   AuthProvider,
+  Prisma
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import {
@@ -20,6 +21,10 @@ import {
   audit,
 } from "../services/audit.js";
 import bcrypt from "bcryptjs";
+import {
+  calcularIdadePorNascimento,
+  categoriaAtletaPorIdade,
+} from "../utils/categoriaAtleta.js";
 
 type AuthRequest =
   Request & {
@@ -200,51 +205,23 @@ async function exigirAtleta(
 }
 
 function calcularIdade(
-  nascimento:
-    Date | string | null | undefined
-) {
+  nascimento: Date | string | null | undefined
+): number | null {
   if (!nascimento) {
     return null;
   }
 
   const data =
-    new Date(nascimento);
+    nascimento instanceof Date
+      ? nascimento
+      : new Date(nascimento);
 
-  if (
-    Number.isNaN(
-      data.getTime()
-    )
-  ) {
+  if (!Number.isFinite(data.getTime())) {
     return null;
   }
 
-  const hoje =
-    new Date();
-
-  let idade =
-    hoje.getFullYear() -
-    data.getFullYear();
-
-  const aindaNaoFez =
-    hoje.getMonth() <
-      data.getMonth() ||
-    (
-      hoje.getMonth() ===
-        data.getMonth() &&
-      hoje.getDate() <
-        data.getDate()
-    );
-
-  if (aindaNaoFez) {
-    idade--;
-  }
-
-  return Math.max(
-    0,
-    idade
-  );
+  return calcularIdadePorNascimento(data);
 }
-
 
 async function notificarDesvinculoResponsavel(
   atletaUsuarioId: string,
@@ -1407,72 +1384,140 @@ export async function ativarMeuAtleta(
         });
     }
 
-    // Vínculos voluntários também são permitidos para atletas com 12 anos ou mais.
-
     if (
       vinculo.status ===
       StatusResponsavelAtleta.ATIVO
     ) {
+      if (!vinculo.confirmadoEm) {
+        return res.status(409).json({
+          code: "GUARDIAN_CONFIRMATION_INCONSISTENT",
+          message:
+            "Este vínculo está ativo, mas não possui " +
+            "confirmação registrada. É necessária uma " +
+            "regularização antes de continuar.",
+        });
+      }
+
       return res.json({
         ok: true,
-        status:
-          vinculo.status,
+        status: vinculo.status,
+        principal: vinculo.principal,
+        confirmadoEm: vinculo.confirmadoEm,
       });
     }
 
-    const possuiResponsavelPrincipalAtivo =
-        await prisma
-            .responsavelAtleta
-            .findFirst({
+    const atualizado = await prisma.$transaction(
+      async (tx) => {
+        const vinculoAtual =
+          await tx.responsavelAtleta.findUnique({
             where: {
-                atletaId:
-                vinculo.atletaId,
-
-                status:
-                StatusResponsavelAtleta.ATIVO,
-
-                principal:
-                true,
-
-                id: {
-                not:
-                    vinculo.id,
-                },
+              id: vinculo.id,
             },
-
             select: {
-                id: true,
+              id: true,
+              atletaId: true,
+              responsavelUsuarioId: true,
+              status: true,
+              origemSolicitacao: true,
             },
+          });
+
+        if (
+          !vinculoAtual ||
+          vinculoAtual.responsavelUsuarioId !==
+            responsavelUsuarioId
+        ) {
+          throw new Error("GUARDIAN_LINK_NOT_FOUND");
+        }
+
+        if (
+          vinculoAtual.status !==
+            StatusResponsavelAtleta.PENDENTE
+        ) {
+          throw new Error("GUARDIAN_LINK_CHANGED");
+        }
+
+        if (
+          vinculoAtual.origemSolicitacao !==
+            OrigemSolicitacaoResponsavel.ATLETA
+        ) {
+          throw new Error("GUARDIAN_REQUEST_ORIGIN_INVALID");
+        }
+
+        const principalExistente =
+          await tx.responsavelAtleta.findFirst({
+            where: {
+              atletaId: vinculoAtual.atletaId,
+              status: StatusResponsavelAtleta.ATIVO,
+              principal: true,
+              id: {
+                not: vinculoAtual.id,
+              },
+            },
+            select: {
+              id: true,
+            },
+          });
+
+        if (principalExistente) {
+          const principalValido =
+            await tx.responsavelAtleta.findFirst({
+              where: {
+                id: principalExistente.id,
+                confirmadoEm: {
+                  not: null,
+                },
+              },
+              select: {
+                id: true,
+              },
             });
 
-    const atualizado =
-      await prisma.responsavelAtleta.update({
-        where: {
-          id:
-            vinculo.id,
-        },
+          if (!principalValido) {
+            throw new Error(
+              "GUARDIAN_PRIMARY_INCONSISTENT"
+            );
+          }
+        }
 
-        data: {
-          status:
-            StatusResponsavelAtleta.ATIVO,
+        const resultado =
+          await tx.responsavelAtleta.updateMany({
+            where: {
+              id: vinculoAtual.id,
+              status: StatusResponsavelAtleta.PENDENTE,
+              origemSolicitacao:
+                OrigemSolicitacaoResponsavel.ATLETA,
+            },
+            data: {
+              status: StatusResponsavelAtleta.ATIVO,
+              principal: !principalExistente,
+              confirmadoEm: new Date(),
+              revogadoEm: null,
+            },
+          });
 
-          principal:
-            !possuiResponsavelPrincipalAtivo,
+        if (resultado.count !== 1) {
+          throw new Error("GUARDIAN_LINK_CHANGED");
+        }
 
-          confirmadoEm:
-            new Date(),
-
-          revogadoEm:
-            null,
-        },
-
-        select: {
-          id: true,
-          atletaId: true,
-          status: true,
-          confirmadoEm: true,
-        },
-      });
+        return tx.responsavelAtleta.findUniqueOrThrow({
+          where: {
+            id: vinculoAtual.id,
+          },
+          select: {
+            id: true,
+            atletaId: true,
+            status: true,
+            principal: true,
+            confirmadoEm: true,
+          },
+        });
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
 
     try {
         const vinculoComAtleta =
@@ -1550,6 +1595,45 @@ export async function ativarMeuAtleta(
         atualizado,
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "GUARDIAN_PRIMARY_INCONSISTENT"
+    ) {
+      return res.status(409).json({
+        code: "GUARDIAN_PRIMARY_INCONSISTENT",
+        message:
+          "Existe um responsável principal que precisa " +
+          "ser regularizado antes de aceitar outro vínculo.",
+      });
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      return res.status(409).json({
+        code: "GUARDIAN_APPROVAL_CONFLICT",
+        message:
+          "Outra alteração ocorreu neste vínculo. " +
+          "Atualize a página e tente novamente.",
+      });
+    }
+
+    if (
+      error instanceof Error &&
+      [
+        "GUARDIAN_LINK_NOT_FOUND",
+        "GUARDIAN_LINK_CHANGED",
+        "GUARDIAN_REQUEST_ORIGIN_INVALID",
+      ].includes(error.message)
+    ) {
+      return res.status(409).json({
+        code: error.message,
+        message:
+          "Esta solicitação mudou ou não está disponível " +
+          "para aprovação.",
+      });
+    }
+
     console.error(
       "[Responsaveis] Erro ao ativar atleta:",
       error

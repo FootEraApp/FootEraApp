@@ -9,11 +9,41 @@ import {
   criarGestor,
   atualizarGestor,
   removerGestor,
+  solicitarTransferenciaPropriedade,
+  sairDaOrganizacao,
+  buscarDestinatariosTransferencia,
+  listarTransferenciasRecebidas,
+  responderTransferenciaRecebida,
+  listarHistoricoTransferencias,
 } from "../controllers/gerenciarOrganizacoesController.js";
 
 const router = Router();
 router.use(authenticateToken);
 
+router.get(
+  "/transferencias/historico",
+  listarHistoricoTransferencias,
+);
+router.get(
+  "/transferencias/recebidas",
+  listarTransferenciasRecebidas,
+);
+router.post(
+  "/transferencias/:transferenciaId/responder",
+  responderTransferenciaRecebida,
+);
+router.get(
+  "/minhas/:organizacaoId/transferencias/destinatarios",
+  buscarDestinatariosTransferencia,
+);
+router.post(
+  "/minhas/:organizacaoId/transferencias",
+  solicitarTransferenciaPropriedade,
+);
+router.post(
+  "/minhas/:organizacaoId/sair",
+  sairDaOrganizacao
+);
 router.put("/gestores/:id", atualizarGestor);
 router.delete("/gestores/:id", removerGestor);
 router.get("/gestores", listarGestores);

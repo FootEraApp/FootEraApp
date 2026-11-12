@@ -37,6 +37,7 @@ type PayloadClube = {
   clube: {
     id: string;
     usuarioId: string;
+    organizacaoId?: string | null;
     nome: string;
     cnpj?: string | null;
     telefone1?: string | null;
@@ -2019,7 +2020,10 @@ export default function PerfilClube({
             );
 
             return postsUserId ? (
-              <ProfilePostsSection usuarioId={postsUserId} />
+              <ProfilePostsSection
+                usuarioId={postsUserId}
+                organizacaoId={data?.clube?.organizacaoId}
+              />
             ) : (
               <div className="bg-white/70 rounded-xl p-4 shadow-sm text-sm text-green-900/70">
                 Não foi possível carregar o usuário das postagens.

@@ -4,7 +4,6 @@ import {
   getCadastroIndex,
   getEscolhaTipo,
   getCriar,
-  deletarUsuario,
   cadastrarUsuario,
   checarEmail,
   checarUsername,
@@ -21,7 +20,6 @@ router.get("/escolha", getEscolhaTipo);
 router.get("/criar", getCriar);
 router.get("/verify", verificarEmail);
 router.post("/resend-verification", resendVerification);
-router.delete("/deletar/:id", deletarUsuario);
 router.get("/buscar", buscarPerfisPublico); 
 router.get("/", getCadastroIndex);
 router.post("/", cadastrarUsuario);

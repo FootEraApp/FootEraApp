@@ -5,6 +5,7 @@ import { Request, Response } from "express";
   const itens = await prisma.clube.findMany({
     select: {
       id: true,
+      nome: true,
       usuario: { select: { nome: true } },
     },
     orderBy: { usuario: { nome: "asc" } },
@@ -13,7 +14,7 @@ import { Request, Response } from "express";
   res.json(
     itens.map((c) => ({
       id: c.id,
-      nome: c.usuario.nome,
+      nome: c.usuario?.nome ?? c.nome,
     }))
   );
 }

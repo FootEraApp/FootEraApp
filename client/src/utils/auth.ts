@@ -1,27 +1,37 @@
 import Storage from "../../../server/utils/storage.js";
 
 export function readToken(): string | null {
-  const t =
-    (window as any)?.Storage?.token ||
+  const token = (
     localStorage.getItem("token") ||
     sessionStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("jwt");
-  if (!t || t === "null" || t === "undefined") return null;
-  return t;
+    ""
+  ).trim();
+
+  if (
+    !token ||
+    token === "null" ||
+    token === "undefined"
+  ) {
+    return null;
+  }
+
+  return token;
 }
 
 export function readUserId(): string | null {
-  const v =
-    (window as any)?.Storage?.usuarioId ||
-    localStorage.getItem("usuarioId");
-  if (!v || v === "null" || v === "undefined") return null;
-  return v;
+  const id = (
+    localStorage.getItem("usuarioId") ||
+    sessionStorage.getItem("usuarioId") ||
+    ""
+  ).trim();
+
+  return id && id !== "null" && id !== "undefined"
+    ? id
+    : null;
 }
 
 export function getUserId(): string | null {
-  const id = localStorage.getItem("usuarioId");
-  return id && id !== "null" && id !== "undefined" ? id : null;
+  return readUserId();
 }
 
 export function clearAuth(): void {

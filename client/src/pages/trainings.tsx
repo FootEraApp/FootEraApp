@@ -170,8 +170,6 @@ export default function TrainingsPage() {
   const [removendoId, setRemovendoId] = useState<string | null>(null);
 
   const [aviso, setAviso] = useState("");
-  const [mesInicial, setMesInicial] = useState(format(new Date(), "yyyy-MM"));
-  const SEM_PROF_LABEL = "Sem professor";
   
   useEffect(() => {
     if (!ehResponsavel) {
@@ -342,7 +340,6 @@ export default function TrainingsPage() {
   }, [
     perfilUsuarioId,
     visitandoOutroAtleta,
-    mesInicial,
     ehResponsavel,
     atletaIdSelecionado,
   ]);
@@ -720,17 +717,6 @@ export default function TrainingsPage() {
       )}
         {erro && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-700">{erro}</p>}
         {aviso && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-800">{aviso}</p>}
-        {visitandoOutroAtleta && (
-          <label className="flex items-center gap-2 text-sm text-green-900">
-            Ver treinos deste mês e do seguinte
-            <input
-              type="month"
-              value={mesInicial}
-              onChange={(e) => e.target.value && setMesInicial(e.target.value)}
-              className="rounded-lg border border-green-200 bg-white px-2 py-1"
-            />
-          </label>
-        )}
         <div className="relative flex w-full min-w-0 flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-800" />

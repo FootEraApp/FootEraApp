@@ -7,7 +7,6 @@ import {
 import { aplicarEstatisticasPosSubmissao } from "./submissoes/utilsEstatistica.js";
 import { inferirTipoTreino } from "../utils/inferirTipoTreino.js";
 import { recomputePontuacaoAtleta } from "server/services/recomputePontuacao.js";
-import { requireUsage } from "server/lib/usage.js";
 import { sendLimitInfo } from "server/lib/limitInfo.js";
 import { UPGRADE_HINT_BY_CAP } from "server/lib/upgradeHints.js";
 import {
@@ -17,6 +16,22 @@ import {
 import { AuthenticatedRequest } from "server/middlewares/auth.js";
 import { logCapabilityDenied } from "server/services/observability.js";
 import { prisma } from "../prisma.js";
+import {
+  executarComLimiteDiarioTreinos,
+  verificarLimiteDiarioNaTransacao,
+  registrarRealizacaoDiaria,
+  respostaErroLimiteDiario,
+} from "../services/limiteDiarioTreinos.service.js";
+import { TipoUsuario } from "@prisma/client";
+import {
+  getActiveContext,
+} from "../services/activeContext.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
+import {
+  usuarioPodeGerenciarSessaoTreino,
+} from "./sessoesTurmaController.js";
 
 async function resolveUsuarioIdForActivity(_: string | undefined, atletaId: string) {
   const atleta = await prisma.atleta.findUnique({
@@ -35,11 +50,6 @@ export async function criarSubmissaoTreinoUpload(
   req: AuthenticatedRequest,
   res: Response
 ) {
-  if (req.user?.tipo === "Atleta" && req.user?.plano !== "PRO") {
-    const ok = await requireUsage(req, res, "treinos_semana");
-    if (!ok) return;
-  }
-
   try {
     const {
       observacao,
@@ -80,7 +90,56 @@ export async function criarSubmissaoTreinoUpload(
       return res.status(400).json({ error: "Treino inválido." });
     }
 
-    const atletaId = atletaIdBody || ag.atletaId || null;
+    if (
+      atletaIdBody &&
+      atletaIdBody !== ag.atletaId
+    ) {
+      return res.status(403).json({
+        code: "ATLETA_MISMATCH",
+        message:
+          "O atleta informado não pertence a este treino agendado.",
+      });
+    }
+
+    const atletaId = ag.atletaId ?? null;
+
+    if (atletaId) {
+      const executorId = String(
+        req.userId ?? req.user?.id ?? ""
+      ).trim();
+
+      if (!executorId) {
+        return res.status(401).json({
+          code: "AUTH_REQUIRED",
+          message: "Usuário não autenticado.",
+        });
+      }
+
+      const contexto = await getActiveContext(executorId);
+
+      const proprioAtleta =
+        contexto?.kind === "PERSONAL" &&
+        contexto.tipoUsuario === TipoUsuario.Atleta &&
+        ag.atleta?.usuarioId === executorId;
+
+      const responsavelAutorizado =
+        contexto?.kind === "PERSONAL" &&
+        contexto.tipoUsuario === TipoUsuario.Responsavel
+          ? await verificarPermissaoResponsavelAtleta({
+              responsavelUsuarioId: executorId,
+              atletaId,
+              permissao: "podeGerenciarTreinos",
+            })
+          : false;
+
+      if (!proprioAtleta && !responsavelAutorizado) {
+        return res.status(403).json({
+          code: "ATLETA_ACCESS_DENIED",
+          message:
+            "Você não possui permissão para enviar este treino em nome do atleta.",
+        });
+      }
+    }
 
     const assetUrl = file ? `/uploads/${file.filename}` : null;
     const isVideo = !!file?.mimetype?.startsWith("video");
@@ -215,47 +274,138 @@ export async function criarSubmissaoTreinoUpload(
       atletaId
     );
 
-    const existing = await prisma.submissaoTreino.findUnique({
-      where: { atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId } },
-      select: { id: true },
+    const resultado = await executarComLimiteDiarioTreinos({
+      atletaId,
+      data: new Date(),
+
+      jaContado: async (tx) => {
+        const atual = await tx.treinoAgendado.findUnique({
+          where: { id: treinoAgendadoId },
+          select: {
+            atletaId: true,
+            status: true,
+          },
+        });
+
+        if (!atual || atual.atletaId !== atletaId) {
+          throw new Error("ATLETA_MISMATCH");
+        }
+
+        return atual.status === "CONCLUIDO";
+      },
+
+      gravar: async (tx) => {
+        const atual = await tx.treinoAgendado.findUniqueOrThrow({
+          where: { id: treinoAgendadoId },
+          select: {
+            status: true,
+            finishedAt: true,
+          },
+        });
+
+        const existing = await tx.submissaoTreino.findUnique({
+          where: {
+            atletaId_treinoAgendadoId: {
+              atletaId,
+              treinoAgendadoId,
+            },
+          },
+          select: {
+            id: true,
+            aprovado: true,
+          },
+        });
+
+        const created = await tx.submissaoTreino.upsert({
+          where: {
+            atletaId_treinoAgendadoId: {
+              atletaId,
+              treinoAgendadoId,
+            },
+          },
+
+          update: {
+            observacao,
+            usuarioId:
+              usuarioIdForActivity ?? req.user?.id,
+            duracaoMinutos: duracaoMinutosFinal,
+            duracaoSegundos: tempoSegNum,
+            aprovado: true,
+            repeticoes: repeticoesNum,
+
+            ...(midia
+              ? {
+                  midias: {
+                    create: [midia],
+                  },
+                }
+              : {}),
+
+            tipoTreinoSnapshot:
+              ag.treinoProgramado!.tipoTreino,
+          },
+
+          create: {
+            treinoAgendadoId,
+            atletaId,
+            observacao,
+
+            usuarioId:
+              usuarioIdForActivity ?? req.user?.id,
+
+            duracaoMinutos: duracaoMinutosFinal,
+            duracaoSegundos: tempoSegNum,
+            aprovado: true,
+            pontosCreditados: pontosConsiderados,
+            pontuacaoSnapshot: pontosConsiderados,
+            repeticoes: repeticoesNum,
+
+            ...(midia
+              ? {
+                  midias: {
+                    create: [midia],
+                  },
+                }
+              : {}),
+
+            tipoTreinoSnapshot:
+              ag.treinoProgramado!.tipoTreino,
+          },
+
+          select: {
+            id: true,
+            criadoEm: true,
+          },
+        });
+
+        // Não modifica a data de conclusão caso
+        // o agendamento já tenha sido concluído.
+        if (atual.status !== "CONCLUIDO") {
+          await tx.treinoAgendado.update({
+            where: { id: treinoAgendadoId },
+            data: {
+              status: "CONCLUIDO",
+              execucaoStatus: "COMPLETED",
+              finishedAt: new Date(),
+            },
+          });
+        }
+
+        await registrarRealizacaoDiaria(tx, {
+          atletaId,
+          origem: "AGENDADO",
+          origemId: treinoAgendadoId,
+          realizadoEm: atual.finishedAt ?? new Date(),
+        });
+
+        return {
+          existing,
+          created,
+        };
+      },
     });
 
-    const created = await prisma.submissaoTreino.upsert({
-      where: { atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId } },
-      update: {
-        observacao,
-        usuarioId: usuarioIdForActivity ?? req.user?.id,
-        duracaoMinutos: duracaoMinutosFinal,
-        duracaoSegundos: tempoSegNum,
-        aprovado: true,
-        repeticoes: repeticoesNum,
-        ...(midia ? { midias: { create: [midia] } } : {}),
-        tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
-      },
-      create: {
-        treinoAgendadoId,
-        atletaId,
-        observacao,
-        usuarioId: usuarioIdForActivity ?? req.user?.id,
-        duracaoMinutos: duracaoMinutosFinal,
-        duracaoSegundos: tempoSegNum,
-        aprovado: true,
-        pontosCreditados: pontosConsiderados,
-        pontuacaoSnapshot: pontosConsiderados,
-        repeticoes: repeticoesNum,
-        ...(midia ? { midias: { create: [midia] } } : {}),
-        tipoTreinoSnapshot: ag.treinoProgramado.tipoTreino
-      },
-      select: { id: true, criadoEm: true },
-    });
-
-    await prisma.treinoAgendado.update({
-      where: { id: treinoAgendadoId },
-      data: {
-        status: "CONCLUIDO",
-        finishedAt: new Date(),
-      },
-    });
+    const { existing, created } = resultado;
 
     const usuarioId = await resolveUsuarioIdForActivity(undefined, atletaId);
 
@@ -280,17 +430,14 @@ export async function criarSubmissaoTreinoUpload(
       });
     }
 
-    await recomputePontuacaoAtleta(atletaId);
+    await aplicarEstatisticasPosSubmissao(
+      created.id,
+      atletaId,
+      treinoAgendadoId,
+      minutosConsiderados
+    );
 
-    const isFirst = !existing;
-    if (isFirst) {
-      await aplicarEstatisticasPosSubmissao(
-        created.id,
-        atletaId,
-        treinoAgendadoId,
-        minutosConsiderados
-      ).catch(() => {});
-    }
+    await recomputePontuacaoAtleta(atletaId);
 
     const tipoStr = inferirTipoTreino({
       nome: ag?.treinoProgramado?.nome ?? undefined,
@@ -369,8 +516,31 @@ export async function criarSubmissaoTreinoUpload(
         : "Submissão aprovada e pontuação creditada.",
     });
   } catch (error) {
-    console.error("Erro ao salvar submissão de treino:", error);
-    return res.status(500).json({ error: "Erro ao salvar submissão de treino." });
+    const limite = respostaErroLimiteDiario(error);
+
+    if (limite) {
+      return res.status(403).json(limite);
+    }
+
+    if (
+      error instanceof Error &&
+      error.message === "ATLETA_MISMATCH"
+    ) {
+      return res.status(403).json({
+        code: "ATLETA_MISMATCH",
+        message:
+          "O treino não pertence ao atleta informado.",
+      });
+    }
+
+    console.error(
+      "Erro ao salvar submissão de treino:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Erro ao salvar submissão de treino.",
+    });
   }
 }
 
@@ -560,6 +730,20 @@ export async function criarSubmissaoTreinoSessaoUpload(
 
     if (!sessaoId) return res.status(400).json({ error: "Informe sessaoId." });
 
+    const autorizado =
+      await usuarioPodeGerenciarSessaoTreino(
+        req,
+        sessaoId
+      );
+
+    if (!autorizado) {
+      return res.status(403).json({
+        code: "SESSION_ACCESS_DENIED",
+        message:
+          "Você não possui permissão para registrar treinos desta sessão.",
+      });
+    }
+
     const sessao = await prisma.sessaoTreinoTurma.findUnique({
       where: { id: sessaoId },
       include: {
@@ -708,60 +892,172 @@ export async function criarSubmissaoTreinoSessaoUpload(
         }
       : undefined;
 
-    const existentes = await prisma.submissaoTreino.findMany({
-      where: { treinoAgendadoId: { in: Array.from(agendadoByAtleta.values()) } },
-      select: { atletaId: true, treinoAgendadoId: true },
-    });
+    // Ordena os atletas para adquirir os locks sempre
+    // na mesma ordem e reduzir risco de deadlock.
+    const atletasOrdenados = [
+      ...new Set(presentesIds),
+    ].sort();
 
-    const existedSet = new Set(existentes.map(e => `${e.atletaId}:${e.treinoAgendadoId}`));
+    const resultadoSessao = await prisma.$transaction(
+      async (tx) => {
+        const criadas: {
+          id: string;
+          atletaId: string;
+          treinoAgendadoId: string;
+          criadoEm: Date;
+        }[] = [];
 
-    const criadas = await prisma.$transaction(
-      presentesIds.map((atletaId) => {
-        const treinoAgendadoId = agendadoByAtleta.get(atletaId)!;
+        const existedSet = new Set<string>();
 
-        return prisma.submissaoTreino.upsert({
-          where: {
-            atletaId_treinoAgendadoId: { atletaId, treinoAgendadoId },
-          },
-          update: {
-            observacao,
-            aprovado: true,
-            duracaoSegundos: tempoRealSeg ?? undefined,
-            duracaoMinutos: minutosReais ?? undefined,
-            repeticoes: repeticoesNum,
-            ...(midiaCreate ? { midias: midiaCreate } : {}),
-          },
-          create: {
+        for (const atletaId of atletasOrdenados) {
+          const treinoAgendadoId =
+            agendadoByAtleta.get(atletaId);
+
+          if (!treinoAgendadoId) {
+            throw new Error(
+              `AGENDAMENTO_AUSENTE:${atletaId}`
+            );
+          }
+
+          await tx.$queryRaw`
+            SELECT pg_advisory_xact_lock(
+              hashtext('footera_daily_training'),
+              hashtext(${atletaId})
+            )::text AS lock_result
+          `;
+
+          const agendadoAtual =
+            await tx.treinoAgendado.findUniqueOrThrow({
+              where: { id: treinoAgendadoId },
+              select: {
+                atletaId: true,
+                status: true,
+                finishedAt: true,
+              },
+            });
+
+          if (agendadoAtual.atletaId !== atletaId) {
+            throw new Error("ATLETA_MISMATCH");
+          }
+
+          const jaConcluido =
+            agendadoAtual.status === "CONCLUIDO";
+
+          await verificarLimiteDiarioNaTransacao(tx, {
             atletaId,
-            treinoAgendadoId,
-            observacao,
-            aprovado: true,
-            pontosCreditados: pontosConsiderados,
-            pontuacaoSnapshot: pontosConsiderados,
-            duracaoSegundos: tempoRealSeg ?? undefined,
-            duracaoMinutos: minutosReais ?? undefined,
-            repeticoes: repeticoesNum,
-            ...(midiaCreate ? { midias: midiaCreate } : {}),
-          },
-          select: { id: true, atletaId: true, treinoAgendadoId: true, criadoEm: true },
-        });
-      })
+            data: new Date(),
+            jaContado: jaConcluido,
+          });
+
+          const existing =
+            await tx.submissaoTreino.findUnique({
+              where: {
+                atletaId_treinoAgendadoId: {
+                  atletaId,
+                  treinoAgendadoId,
+                },
+              },
+              select: { id: true },
+            });
+
+          const key =
+            `${atletaId}:${treinoAgendadoId}`;
+
+          if (existing) {
+            existedSet.add(key);
+          }
+
+          const criada =
+            await tx.submissaoTreino.upsert({
+              where: {
+                atletaId_treinoAgendadoId: {
+                  atletaId,
+                  treinoAgendadoId,
+                },
+              },
+
+              update: {
+                observacao,
+                aprovado: true,
+                duracaoSegundos:
+                  tempoRealSeg ?? undefined,
+                duracaoMinutos:
+                  minutosReais ?? undefined,
+                repeticoes: repeticoesNum,
+
+                ...(midiaCreate
+                  ? { midias: midiaCreate }
+                  : {}),
+              },
+
+              create: {
+                atletaId,
+                treinoAgendadoId,
+                observacao,
+                aprovado: true,
+                pontosCreditados: pontosConsiderados,
+                pontuacaoSnapshot: pontosConsiderados,
+                duracaoSegundos:
+                  tempoRealSeg ?? undefined,
+                duracaoMinutos:
+                  minutosReais ?? undefined,
+                repeticoes: repeticoesNum,
+
+                ...(midiaCreate
+                  ? { midias: midiaCreate }
+                  : {}),
+              },
+
+              select: {
+                id: true,
+                atletaId: true,
+                treinoAgendadoId: true,
+                criadoEm: true,
+              },
+            });
+
+          if (!jaConcluido) {
+            await tx.treinoAgendado.update({
+              where: { id: treinoAgendadoId },
+              data: {
+                status: "CONCLUIDO",
+                execucaoStatus: "COMPLETED",
+                finishedAt: new Date(),
+              },
+            });
+          }
+
+          await registrarRealizacaoDiaria(tx, {
+            atletaId,
+            origem: "AGENDADO",
+            origemId: treinoAgendadoId,
+            realizadoEm:
+              agendadoAtual.finishedAt ?? new Date(),
+          });
+
+          criadas.push(criada);
+        }
+
+        return { criadas, existedSet };
+      },
+      {
+        timeout: 30000,
+        maxWait: 10000,
+      }
     );
 
-    await Promise.allSettled(
-      criadas.map(async (c) => {
-        const key = `${c.atletaId}:${c.treinoAgendadoId}`;
-        const isFirst = !existedSet.has(key);
-        if (!isFirst) return;
+    const { criadas, existedSet } = resultadoSessao;
 
+    await Promise.all(
+      criadas.map(async (c) => {
         await aplicarEstatisticasPosSubmissao(
           c.id,
           c.atletaId,
           c.treinoAgendadoId,
           minutosConsiderados
-        ).catch(() => {});
+        );
 
-        await recomputePontuacaoAtleta(c.atletaId).catch(() => {});
+        await recomputePontuacaoAtleta(c.atletaId);
       })
     );
 
@@ -782,7 +1078,19 @@ export async function criarSubmissaoTreinoSessaoUpload(
       
     });
   } catch (error) {
-    console.error("Erro ao salvar submissão de sessão:", error);
-    return res.status(500).json({ error: "Erro ao salvar submissão da sessão." });
+    const limite = respostaErroLimiteDiario(error);
+
+    if (limite) {
+      return res.status(403).json(limite);
+    }
+
+    console.error(
+      "Erro ao salvar submissão de sessão:",
+      error
+    );
+
+    return res.status(500).json({
+      message: "Erro ao salvar submissão da sessão.",
+    });
   }
 }

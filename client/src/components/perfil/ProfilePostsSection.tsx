@@ -201,7 +201,17 @@ function getParentPost(p: PostagemComUsuario): PostagemComUsuario | null {
   return (p as any).repostOf ?? null;
 }
 
-export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }) {
+type ProfilePostsSectionProps = {
+  usuarioId: string;
+  papel?: string;
+  organizacaoId?: string | null;
+};
+
+export default function ProfilePostsSection({
+  usuarioId,
+  papel,
+  organizacaoId,
+}: ProfilePostsSectionProps) {
   const [posts, setPosts] = useState<PostagemComUsuario[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
@@ -698,21 +708,45 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
         const alvo = String(usuarioId || "").trim();
         const isOwn = alvo === String(Storage.usuarioId || "").trim();
 
-        let dados = await getFeedPosts(isOwn ? "meus" : "todos");
+        const escopo = organizacaoId
+          ? { organizacaoId }
+          : papel
+            ? { usuarioId: alvo, papel }
+            : null;
 
-        dados = (dados || []).filter((p) => {
-          const anyP = p as any;
-          const dono = ownerIdOfPost(p, anyP);
+        if (!escopo) {
+          if (!cancelled) {
+            setPosts([]);
+          }
+          return;
+        }
 
-          const reposterId = String(
-            anyP?.reposterId ??
-              anyP?.repostUserId ??
-              anyP?.repostById ??
-              anyP?.usuarioRepostId ??
-              ""
-          ).trim();
+        let dados = await getFeedPosts(
+          "todos",
+          escopo
+        );
 
-          return dono === alvo || reposterId === alvo;
+        dados = (dados || []).filter((post) => {
+          // Publicações institucionais pertencem à organização,
+          // independentemente de qual membro as publicou.
+          if (organizacaoId) {
+            return (
+              String(post.organizacaoId ?? "") ===
+              String(organizacaoId)
+            );
+          }
+
+          // Publicações pessoais pertencem ao papel utilizado.
+          if (papel) {
+            return (
+              String(post.usuarioId ?? post.usuario?.id ?? "") ===
+                alvo &&
+              !post.organizacaoId &&
+              post.autorContextoKey === `personal:${papel}`
+            );
+          }
+
+          return false;
         });
 
         dados.sort(
@@ -754,7 +788,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
     return () => {
       cancelled = true;
     };
-  }, [usuarioId]);
+  }, [usuarioId, papel, organizacaoId]);
 
   const FALLBACK_AVATAR = `${APP.FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
 
@@ -898,8 +932,8 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                       )}
 
                       {(() => {
-                        const parent = getParentPost(post); 
-                        const root = getRootPost(post);     
+                        const parent = getParentPost(post);
+                        const root = getRootPost(post);
                         const parentComment = parent ? cleanText(parent.conteudo) : "";
                         const rootText = cleanText(root.conteudo);
                         const rootImg = midiaImg(root.imagemUrl);
@@ -976,7 +1010,7 @@ export default function ProfilePostsSection({ usuarioId }: { usuarioId: string }
                           {post.conteudo}
                         </p>
                       )}
-                      
+
                       {isAchievement && parsed && (
                         <AchievementShareCard parsed={parsed} conquista={conquista} />
                       )}

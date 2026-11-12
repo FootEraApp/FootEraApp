@@ -18,6 +18,9 @@ import BottomNav from "@/components/layout/BottomNav.js";
 import {
   applyActiveContextSession,
 } from "../utils/authSession.js";
+import TransferirPropriedade from "../components/organizacoes/TransferirPropriedade.js";
+import SolicitarCorrecaoNascimento from
+  "../components/perfil/SolicitarCorrecaoNascimento.js";
 
 type TipoRender =
   | "atleta"
@@ -244,6 +247,12 @@ const EditarPerfil = () => {
   const token =
     Storage.token;
 
+  const [nascimentoOriginal, setNascimentoOriginal] =
+    useState("");
+  const [mostrarCorrecaoNascimento, setMostrarCorrecaoNascimento] =
+    useState(false);
+  const [contextoAtivoKey, setContextoAtivoKey] =
+    useState<string | null>(null);
   const [dadosUsuario, setDadosUsuario] = useState<any>(null);
   const [dadosTipo, setDadosTipo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -258,6 +267,17 @@ const EditarPerfil = () => {
     normalizarTipoRender(tipoUsuarioOriginal),
   );
   const [papeisUsuario, setPapeisUsuario] = useState<PapelUsuario[]>([]);
+  type OrganizacaoDisponivel = {
+    key: string;
+    kind: "ORGANIZATION";
+    label: string;
+    organizationId: string;
+    organizationType: string;
+    organizationRole?: string;
+  };
+
+  const [organizacoesDisponiveis, setOrganizacoesDisponiveis] =
+    useState<OrganizacaoDisponivel[]>([]);
   const [dadosPorPapel, setDadosPorPapel] = useState<
     Partial<Record<TipoRender, any>>
   >({});
@@ -265,6 +285,22 @@ const EditarPerfil = () => {
     Partial<Record<TipoRender, boolean>>
   >({});
   const [ativandoPapel, setAtivandoPapel] = useState<TipoRender | null>(null);
+  const [criandoOrganizacao, setCriandoOrganizacao] =
+    useState(false);
+
+  const [tipoNovaOrganizacao, setTipoNovaOrganizacao] =
+    useState<PapelApi | null>(null);
+
+  const [dadosNovaOrganizacao, setDadosNovaOrganizacao] =
+    useState({
+      nome: "",
+      cnpj: "",
+      email: "",
+      telefone1: "",
+      siteOficial: "",
+      cidade: "",
+      estado: "",
+    });
   const [trocandoPapel, setTrocandoPapel] = useState<TipoRender | null>(null);
   const [carregandoPapel, setCarregandoPapel] = useState<TipoRender | null>(
     null,
@@ -376,6 +412,13 @@ const EditarPerfil = () => {
         }
 
         const u = res.data.usuario || {};
+
+        setNascimentoOriginal(
+          normalizarDataNascimentoParaInput(
+            u.dataNascimento
+          )
+        );
+
         const tipoSrv =
           res.data?.tipo ?? res.data?.tipoUsuario ?? tipoUsuarioOriginal ?? "";
         const tipoNorm = String(tipoSrv || "").toLowerCase();
@@ -657,6 +700,33 @@ const EditarPerfil = () => {
         if (listaNormalizada.length > 0) {
           setPapeisUsuario(listaNormalizada);
         }
+
+        const respostaContextos = await axios.get(
+          `${API.BASE_URL}/api/usuarios/me/contextos`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (cancelado) return;
+
+        const contextos = Array.isArray(respostaContextos.data?.contexts)
+          ? respostaContextos.data.contexts
+          : [];
+
+        setOrganizacoesDisponiveis(
+          contextos.filter(
+            (contexto: any) =>
+              contexto.kind === "ORGANIZATION" &&
+              typeof contexto.key === "string" &&
+              typeof contexto.organizationId === "string"
+          )
+        );
+        setContextoAtivoKey(
+          respostaContextos.data?.activeContext?.key ?? null
+        );
       } catch (error: any) {
         // Enquanto o endpoint de papéis ainda não estiver publicado, a página
         // continua funcionando com o tipo atual vindo do perfil.
@@ -942,7 +1012,6 @@ const EditarPerfil = () => {
   const isCreator = tipoRender === "creator";
   const isOrganizacaoInstitucional =
     isClube || isEscolinha || isFederacao || isMarca;
-
   const perfilSelecionado = obterPerfilDisponivel(tipoRender);
   const papelSelecionado = perfilSelecionado
     ? (papeisUsuario.find((item) => item.papel === perfilSelecionado.papel) ??
@@ -971,6 +1040,27 @@ const EditarPerfil = () => {
         })
       );
 
+      return;
+    }
+
+    const ehOrganizacao = [
+      "clube",
+      "escolinha",
+      "marca",
+      "federacao",
+    ].includes(perfil.tipo);
+
+    if (ehOrganizacao) {
+      const organizacoes = organizacoesDoPerfil(perfil.tipo);
+
+      if (organizacoes.length === 0) {
+        setDadosTipo({});
+        return;
+      }
+
+      // Não usamos o formulário pessoal para editar
+      // uma organização sem identificar a entidade.
+      setDadosTipo({});
       return;
     }
 
@@ -1029,9 +1119,63 @@ const EditarPerfil = () => {
   };
 
   const ativarPerfil = async (perfil: PerfilDisponivel) => {
-    if (!confirmacoesAtivacao[perfil.tipo]) {
-      toast.error("Marque a confirmação para ativar este perfil.");
+    if (modoGerenciado) {
+      toast.error(
+        "Não é possível criar ou ativar perfis nesta conta gerenciada."
+      );
       return;
+    }
+
+    if (!confirmacoesAtivacao[perfil.tipo]) {
+      toast.error(
+        "Marque a confirmação para ativar este perfil."
+      );
+      return;
+    }
+
+    // Organizações possuem fluxo próprio de criação.
+    const papelOrganizacional = [
+      "Clube",
+      "Escolinha",
+      "Marca",
+      "Federacao",
+    ].includes(perfil.papel);
+
+    if (papelOrganizacional) {
+      // Abrir o formulário sem criar um UsuarioPapel incompleto.
+      setTipoNovaOrganizacao(perfil.papel);
+
+      setDadosNovaOrganizacao({
+        nome: "",
+        cnpj: "",
+        email: "",
+        telefone1: "",
+        siteOficial: "",
+        cidade: "",
+        estado: "",
+      });
+
+      return;
+    }
+
+    // Fluxo original dos papéis pessoais.
+    const registroAnterior = papeisUsuario.find(
+      (item) => item.papel === perfil.papel
+    );
+
+    const reativando =
+      registroAnterior?.status === "INATIVO";
+
+    if (reativando) {
+      const confirmou = window.confirm(
+        `O perfil de ${perfil.titulo} foi desativado anteriormente.\n\n` +
+        "Deseja reativar esse perfil e recuperar o acesso aos dados anteriores?\n\n" +
+        "Sua conta e seus outros perfis não serão alterados."
+      );
+
+      if (!confirmou) {
+        return;
+      }
     }
 
     setAtivandoPapel(perfil.tipo);
@@ -1039,73 +1183,232 @@ const EditarPerfil = () => {
     try {
       const resposta = await axios.post(
         `${API.BASE_URL}/api/usuarios/me/papeis`,
-        { papel: perfil.papel },
         {
-          headers: { Authorization: `Bearer ${token}` },
+          papel: perfil.papel,
+          reativar: reativando,
         },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
 
       const statusResposta = String(
-        resposta.data?.papel?.status ?? resposta.data?.status ?? "PENDENTE",
+        resposta.data?.papel?.status ??
+        resposta.data?.status ??
+        "PENDENTE"
       ).toUpperCase();
+
       const status: StatusPapel =
-        statusResposta === "ATIVO" ? "ATIVO" : "PENDENTE";
+        statusResposta === "ATIVO"
+          ? "ATIVO"
+          : "PENDENTE";
 
       setPapeisUsuario((prev) => {
         const semPapelAtual = prev.filter(
-          (item) => item.papel !== perfil.papel,
+          (item) => item.papel !== perfil.papel
         );
+
         return [
           ...semPapelAtual,
           {
-            id: resposta.data?.papel?.id ?? resposta.data?.id,
+            id:
+              resposta.data?.papel?.id ??
+              resposta.data?.id,
             papel: perfil.papel,
             status,
-            perfilCompletoEm: resposta.data?.papel?.perfilCompletoEm ?? null,
+            perfilCompletoEm:
+              resposta.data?.papel?.perfilCompletoEm ??
+              null,
           },
         ];
       });
 
       setDadosTipo({});
-      setDadosPorPapel((prev) => ({ ...prev, [perfil.tipo]: {} }));
+
+      setDadosPorPapel((prev) => ({
+        ...prev,
+        [perfil.tipo]: {},
+      }));
+
       toast.success(
         status === "ATIVO"
           ? `Perfil de ${perfil.titulo} ativado.`
-          : `Perfil de ${perfil.titulo} liberado para configuração.`,
+          : `Perfil de ${perfil.titulo} liberado para configuração.`
       );
     } catch (error: any) {
-      console.error("[EditarPerfil] Erro ao ativar papel", error);
+      console.error(
+        "[EditarPerfil] Erro ao ativar papel",
+        error
+      );
+
       toast.error(
+        error?.response?.data?.message ||
         error?.response?.data?.error ||
-          (error?.response?.status === 404
-            ? "A ativação de novos perfis ainda precisa ser publicada no backend."
-            : "Não foi possível ativar este perfil agora."),
+        error?.message ||
+        "Não foi possível ativar este perfil agora."
       );
     } finally {
       setAtivandoPapel(null);
     }
   };
 
-  const usarPerfil = async (perfil: PerfilDisponivel) => {
-    const registro = papeisUsuario.find((item) => item.papel === perfil.papel);
-
-    if (registro?.status !== "ATIVO") {
-      toast.error("Conclua a configuração deste perfil antes de usá-lo.");
+  const salvarNovaOrganizacao = async () => {
+    if (!tipoNovaOrganizacao || criandoOrganizacao) {
       return;
     }
 
-    if (tipoEmUso === perfil.tipo || trocandoPapel) return;
+    if (dadosNovaOrganizacao.nome.trim().length < 3) {
+      toast.error(
+        "Informe um nome com pelo menos 3 caracteres."
+      );
+      return;
+    }
+
+    setCriandoOrganizacao(true);
+
+    try {
+      const resposta = await axios.post(
+        `${API.BASE_URL}/api/usuarios/me/organizacoes`,
+        {
+          tipo: tipoNovaOrganizacao,
+          perfil: dadosNovaOrganizacao,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const resultado = resposta.data;
+
+      if (
+        !resultado?.organizacaoId ||
+        resultado?.activeContext?.kind !== "ORGANIZATION" ||
+        resultado.activeContext.organizationId !==
+          resultado.organizacaoId
+      ) {
+        throw new Error(
+          "A organização pode ter sido criada, mas não foi " +
+          "possível confirmar seu contexto. Atualize a página " +
+          "antes de tentar novamente."
+        );
+      }
+
+      applyActiveContextSession(resultado.activeContext);
+
+      toast.success(
+        "Organização criada com sucesso!"
+      );
+
+      setTipoNovaOrganizacao(null);
+
+      window.location.assign("/perfil");
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Não foi possível criar a organização."
+      );
+    } finally {
+      setCriandoOrganizacao(false);
+    }
+  };
+
+  const organizacoesDoPerfil = (tipo: TipoRender) => {
+    const tipoOrganizacao: Record<string, string> = {
+      clube: "CLUBE",
+      escolinha: "ESCOLA",
+      marca: "MARCA",
+      federacao: "FEDERACAO",
+    };
+
+    const esperado = tipoOrganizacao[tipo];
+
+    if (!esperado) return [];
+
+    return organizacoesDisponiveis.filter(
+      (organizacao) =>
+        organizacao.organizationType === esperado
+    );
+  };
+
+  const organizacaoSelecionada = isOrganizacaoInstitucional
+    ? organizacoesDoPerfil(tipoRender!).find(
+        (organizacao) => organizacao.key === contextoAtivoKey,
+      ) ?? null
+    : null;
+
+  const usarPerfil = async (perfil: PerfilDisponivel) => {
+    const registro = papeisUsuario.find(
+      (item) => item.papel === perfil.papel
+    );
+
+    const ehOrganizacao = [
+      "clube",
+      "escolinha",
+      "marca",
+      "federacao",
+    ].includes(perfil.tipo);
+
+    if (trocandoPapel) return;
+
+    let contextoOrganizacao: OrganizacaoDisponivel | null = null;
+
+    if (ehOrganizacao) {
+      const opcoes = organizacoesDoPerfil(perfil.tipo);
+
+      if (opcoes.length === 0) {
+        toast.error(
+          `Você não possui uma organização de ${perfil.titulo} disponível para utilizar.`
+        );
+        return;
+      }
+
+      if (opcoes.length > 1) {
+        toast.error(
+          `Você possui mais de uma organização de ${perfil.titulo}. Escolha a organização pelo seletor inferior.`
+        );
+        return;
+      }
+
+      contextoOrganizacao = opcoes[0];
+    } else {
+      if (registro?.status !== "ATIVO") {
+        toast.error(
+          "Conclua a configuração deste perfil antes de usá-lo."
+        );
+        return;
+      }
+
+      if (tipoEmUso === perfil.tipo) return;
+    }
 
     setTrocandoPapel(perfil.tipo);
 
     try {
-      const resposta = await axios.patch(
-        `${API.BASE_URL}/api/usuarios/me/papel-ativo`,
-        { papel: perfil.papel },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const resposta = contextoOrganizacao
+        ? await axios.patch(
+            `${API.BASE_URL}/api/usuarios/me/contexto-ativo`,
+            {
+              contextKey: contextoOrganizacao.key,
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          )
+        : await axios.patch(
+            `${API.BASE_URL}/api/usuarios/me/papel-ativo`,
+            {
+              papel: perfil.papel,
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
 
       const activeContext =
         resposta.data?.activeContext;
@@ -1130,7 +1433,7 @@ const EditarPerfil = () => {
       applyActiveContextSession(
         activeContext
       );
-
+      setContextoAtivoKey(activeContext.key);
       setTipoEmUso(
         tipoAtivo
       );
@@ -2052,7 +2355,8 @@ const EditarPerfil = () => {
     }
   };
 
-  const FALLBACK_AVATAR = "/assets/usuarios/default-user.png";
+  const FALLBACK_AVATAR =
+   "/assets/usuarios/footera-logo-fundo-verde.png";
 
   const bloqueiaIdentidadeSensivel =
     modoGerenciado ||
@@ -2129,17 +2433,41 @@ const EditarPerfil = () => {
               (item) => item.papel === perfil.papel,
             );
             const selecionado = tipoRender === perfil.tipo;
-            const emUso = tipoEmUso === perfil.tipo;
-            const liberado =
-              registro?.status === "ATIVO" || registro?.status === "PENDENTE";
+            const ehOrganizacao = [
+              "clube",
+              "escolinha",
+              "marca",
+              "federacao",
+            ].includes(perfil.tipo);
+
+            const organizacoes = ehOrganizacao
+              ? organizacoesDoPerfil(perfil.tipo)
+              : [];
+
+            const emUso = ehOrganizacao
+              ? organizacoes.some(
+                  (item) => item.key === contextoAtivoKey
+                )
+              : tipoEmUso === perfil.tipo;
+
+            const liberado = ehOrganizacao
+              ? organizacoes.length > 0
+              : registro?.status === "ATIVO" ||
+                registro?.status === "PENDENTE";
 
             const statusTexto = emUso
               ? "Em uso"
-              : registro?.status === "ATIVO"
-                ? "Ativo"
-                : registro?.status === "PENDENTE"
-                  ? "Configurar"
-                  : "Disponível";
+              : ehOrganizacao
+                ? organizacoes.length > 0
+                  ? "Disponível"
+                  : registro?.status === "PENDENTE"
+                    ? "Configurar"
+                    : "Sem organização"
+                : registro?.status === "ATIVO"
+                  ? "Ativo"
+                  : registro?.status === "PENDENTE"
+                    ? "Configurar"
+                    : "Disponível";
 
             return (
               <div
@@ -2191,7 +2519,10 @@ const EditarPerfil = () => {
                   </p>
                 </button>
 
-                {registro?.status === "ATIVO" && !emUso && (
+                {(ehOrganizacao
+                  ? organizacoes.length > 0
+                  : registro?.status === "ATIVO") &&
+                  !emUso && (
                   <button
                     type="button"
                     onClick={() => usarPerfil(perfil)}
@@ -2208,6 +2539,13 @@ const EditarPerfil = () => {
           })}
         </div>
       </section>
+      )}
+
+      {mostrarCorrecaoNascimento && token && (
+        <SolicitarCorrecaoNascimento
+          token={token}
+          onClose={() => setMostrarCorrecaoNascimento(false)}
+        />
       )}
 
       {perfilLiberado ? (
@@ -2237,23 +2575,27 @@ const EditarPerfil = () => {
             </div>
           ) : (
             <>
-              {typeof dadosUsuario.foto === "string" && dadosUsuario.foto && (
-                <div className="mb-6">
-                  <label className="block text-sm font-medium">
-                    Foto Atual
-                  </label>
-                  <img
-                    src={formatarUrlFoto(dadosUsuario.foto, "usuarios")}
-                    onError={(e) => {
-                      const img = e.currentTarget as HTMLImageElement;
-                      img.onerror = null;
-                      img.src = FALLBACK_AVATAR;
-                    }}
-                    className="w-24 h-24 rounded-full object-cover mt-2"
-                    alt="Foto atual"
-                  />
-                </div>
-              )}
+              <div className="mb-6">
+                <label className="block text-sm font-medium">
+                  Foto Atual
+                </label>
+
+                <img
+                  src={
+                    typeof dadosUsuario?.foto === "string" &&
+                    dadosUsuario.foto.trim()
+                      ? formatarUrlFoto(dadosUsuario.foto, "usuarios")
+                      : FALLBACK_AVATAR
+                  }
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    img.onerror = null;
+                    img.src = FALLBACK_AVATAR;
+                  }}
+                  className="mt-2 h-24 w-24 rounded-full border border-gray-200 object-cover"
+                  alt="Foto atual do perfil"
+                />
+              </div>
 
               <div className="mb-6">
                 <label className="block text-sm font-medium">
@@ -2342,7 +2684,8 @@ const EditarPerfil = () => {
                     type="date"
                     name="dataNascimento"
                     disabled={
-                      bloqueiaIdentidadeSensivel
+                      bloqueiaIdentidadeSensivel ||
+                      Boolean(nascimentoOriginal)
                     }
                     min="1900-01-01"
                     max={new Date().toISOString().slice(0, 10)}
@@ -2370,6 +2713,16 @@ const EditarPerfil = () => {
                     </p>
                   )}
                 </div>
+              )}
+
+              {!modoGerenciado && nascimentoOriginal && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarCorrecaoNascimento(true)}
+                  className="mt-3 text-sm font-semibold text-green-800 underline"
+                >
+                  Solicitar correção da data de nascimento
+                </button>
               )}
 
               {(isProfessor || isOlheiro || isAtleta) && (
@@ -2486,8 +2839,21 @@ const EditarPerfil = () => {
 
               {renderCamposEspecificos()}
 
+              {!modoGerenciado &&
+                isOrganizacaoInstitucional &&
+                organizacaoSelecionada?.organizationRole ===
+                  "PROPRIETARIO" &&
+                organizacaoSelecionada.organizationId &&
+                token && (
+                  <TransferirPropriedade
+                    key={organizacaoSelecionada.organizationId}
+                    organizacaoId={organizacaoSelecionada.organizationId}
+                    nomeOrganizacao={organizacaoSelecionada.label}
+                    token={token}
+                  />
+                )}
               <button
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-green-700 px-5 py-3 font-semibold text-white transition hover:bg-green-600 sm:w-auto"
+                className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-green-700 px-5 py-3 font-semibold text-white transition hover:bg-green-600 sm:w-auto"
                 onClick={async () => {
                   const rawUsername = (dadosUsuario.nomeDeUsuario ?? "").trim();
                   const usernameFinal = rawUsername
@@ -2636,14 +3002,29 @@ const EditarPerfil = () => {
 
                     const usuarioPayload = {
                       ...dadosUsuario,
+
                       foto:
                         dadosUsuario.foto instanceof File
                           ? undefined
                           : dadosUsuario.foto,
+
                       nomeDeUsuario: usernameFinal || null,
+
                       cep: cepFinal === "" ? null : cepFinal,
-                      dataNascimento: dataNascimentoFinal || null,
+
+                      // Só permite atualizar a data nos perfis
+                      // em que o campo é exibido.
+                      // Nos demais, preserva a data já cadastrada.
+                      ...(exigeDataNascimento && dataNascimentoFinal
+                        ? { dataNascimento: dataNascimentoFinal }
+                        : {}),
                     };
+
+                    // Remove a propriedade herdada de dadosUsuario
+                    // quando o perfil não edita data de nascimento.
+                    if (!exigeDataNascimento) {
+                      delete usuarioPayload.dataNascimento;
+                    }
 
                     formData.append("usuario", JSON.stringify(usuarioPayload));
                     formData.append("tipo", JSON.stringify(tipo));
@@ -2792,7 +3173,15 @@ const EditarPerfil = () => {
             </span>
 
             <h2 className="mt-4 text-xl font-bold text-gray-950">
-              Ativar perfil de {perfilSelecionado?.titulo}
+              {perfilSelecionado &&
+                ["Clube", "Escolinha", "Marca", "Federacao"].includes(
+                  perfilSelecionado.papel
+                )
+                  ? `Criar nova organização: ${perfilSelecionado.titulo}`
+                  : `Reativar perfil de ${perfilSelecionado?.titulo}`}
+              {papelSelecionado?.status === "INATIVO"
+                ? `Reativar perfil de ${perfilSelecionado?.titulo}`
+                : `Ativar perfil de ${perfilSelecionado?.titulo}`}
             </h2>
             <p className="mt-2 text-sm leading-6 text-gray-600">
               Você continuará com a mesma conta, e-mail e login. Este perfil
@@ -2820,7 +3209,7 @@ const EditarPerfil = () => {
               <span>
                 <span className="flex items-center gap-2 font-medium text-gray-900">
                   <ShieldCheck className="h-4 w-4 text-green-700" />
-                  Confirmo que quero ativar este perfil
+                  Confirmo que quero {papelSelecionado?.status === "INATIVO" ? "reativar" : "ativar"} este perfil
                 </span>
                 <span className="mt-1 block text-xs leading-5 text-gray-500">
                   Nenhuma nova conta será criada e você poderá completar os
@@ -2843,10 +3232,109 @@ const EditarPerfil = () => {
             >
               {ativandoPapel === perfilSelecionado?.tipo
                 ? "Ativando perfil..."
-                : `Ativar perfil de ${perfilSelecionado?.titulo ?? "usuário"}`}
+                : perfilSelecionado &&
+                  ["Clube", "Escolinha", "Marca", "Federacao"].includes(
+                    perfilSelecionado.papel
+                  )
+                    ? `Criar organização: ${perfilSelecionado.titulo}`
+                    : `${
+                        papelSelecionado?.status === "INATIVO"
+                          ? "Reativar"
+                          : "Ativar"
+                      } perfil de ${perfilSelecionado?.titulo ?? "usuário"}`}
             </button>
           </div>
         </section>
+      )}
+
+      {tipoNovaOrganizacao && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
+            <h2 className="text-xl font-bold text-green-900">
+              Criar nova organização
+            </h2>
+
+            <p className="mt-2 text-sm text-gray-600">
+              Tipo: {tipoNovaOrganizacao}
+            </p>
+
+            <p className="mt-2 text-sm text-gray-600">
+              A organização será criada com você como
+              proprietário, sem alterar seus outros perfis.
+            </p>
+
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void salvarNovaOrganizacao();
+              }}
+            >
+              {([
+                ["nome", "Nome da organização", "Ex.: Escola Futuro FC", true],
+                ["cnpj", "CNPJ", "Ex.: 12.345.678/0001-90", false],
+                ["email", "E-mail institucional", "Ex.: contato@exemplo.com.br", false],
+                ["telefone1", "Telefone", "Ex.: (27) 99999-9999", false],
+                ["siteOficial", "Site oficial", "Ex.: https://exemplo.com.br", false],
+                ["cidade", "Cidade", "Ex.: Vitória", false],
+                ["estado", "Estado", "Ex.: ES", false],
+              ] as const).map(([campo, titulo, exemplo, obrigatorio]) => (
+                <label key={campo} className="block space-y-1">
+                  <span className="text-sm font-medium text-gray-800">
+                    {titulo}{" "}
+                    <span className="text-gray-500">
+                      {obrigatorio ? "(obrigatório)" : "(opcional)"}
+                    </span>
+                  </span>
+
+                  <input
+                    type={campo === "email" ? "email" : "text"}
+                    required={obrigatorio}
+                    minLength={campo === "nome" ? 3 : undefined}
+                    maxLength={
+                      campo === "nome"
+                        ? 120
+                        : campo === "estado"
+                          ? 60
+                          : 255
+                    }
+                    placeholder={exemplo}
+                    value={dadosNovaOrganizacao[campo]}
+                    onChange={(event) =>
+                      setDadosNovaOrganizacao((anterior) => ({
+                        ...anterior,
+                        [campo]: event.target.value,
+                      }))
+                    }
+                    disabled={criandoOrganizacao}
+                    className="w-full rounded-lg border border-gray-300 p-3 focus:border-green-600 focus:outline-none"
+                  />
+                </label>
+              ))}
+
+              <div className="flex gap-3 pt-3">
+                <button
+                  type="button"
+                  disabled={criandoOrganizacao}
+                  onClick={() => setTipoNovaOrganizacao(null)}
+                  className="flex-1 rounded-lg border p-3 font-semibold"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={criandoOrganizacao}
+                  className="flex-1 rounded-lg bg-green-700 p-3 font-semibold text-white disabled:opacity-50"
+                >
+                  {criandoOrganizacao
+                    ? "Criando..."
+                    : "Criar organização"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       <BottomNav />

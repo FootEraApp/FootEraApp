@@ -444,7 +444,10 @@ export default function PerfilAtleta({
 
            {aba === "postagens" && (
              <section className="mt-4">
-               <ProfilePostsSection usuarioId={perfil.usuario.id} />
+               <ProfilePostsSection
+                  usuarioId={perfil.usuario.id}
+                  papel="Atleta"
+                />
              </section>
            )}
          </div>

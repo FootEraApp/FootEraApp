@@ -195,12 +195,32 @@ interface FeedApiResponse {
   meta?: FeedMeta;
 }
 
+export type EscopoPerfilPosts =
+  | {
+      usuarioId: string;
+      papel: string;
+      organizacaoId?: never;
+    }
+  | {
+      organizacaoId: string;
+      usuarioId?: never;
+      papel?: never;
+    };
+
 export async function getFeedPosts(
-  filtro: FiltroFeed = "todos"
+  filtro: FiltroFeed = "todos",
+  escopo?: EscopoPerfilPosts
 ): Promise<PostagemComUsuario[]> {
   const params: Record<string, string> = {};
   if (filtro && filtro !== "todos") {
     params.filtro = filtro;
+  }
+
+  if (escopo?.organizacaoId) {
+    params.perfilOrganizacaoId = escopo.organizacaoId;
+  } else if (escopo?.usuarioId && escopo?.papel) {
+    params.perfilUsuarioId = escopo.usuarioId;
+    params.perfilPapel = escopo.papel;
   }
 
   const qs = new URLSearchParams(params).toString();

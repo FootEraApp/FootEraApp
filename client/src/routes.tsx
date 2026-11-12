@@ -8,6 +8,7 @@ import {
   UserContext,
 } from "./context/UserContext.js";
 
+const RecuperarPerfil = lazy(() => import("./pages/recuperarPerfil.js"));
 const AdminDashboard = lazy(() => import("./pages/admin-page.js"));
 const AvaliarTreino = lazy(() => import("./pages/treino/avaliarTreino.js"));
 const PaginaLogin = lazy(() => import("./pages/login.js"));
@@ -122,14 +123,25 @@ function RequireCreator({
     return <RouteLoading />;
   }
 
-  const autorizado =
-    context.activeContext
-      ?.kind === "PERSONAL" &&
+  const ehCreatorPessoal =
+    context.activeContext?.kind === "PERSONAL" &&
     String(
-      context.activeTipoUsuario ??
+      context.activeContext.role ??
+        context.activeTipoUsuario ??
         ""
-    ).toLowerCase() ===
-      "creator";
+    ).toLowerCase() === "creator";
+
+  const ehGestorOrganizacao =
+    context.activeContext?.kind === "ORGANIZATION" &&
+    Boolean(context.activeContext.organizationId) &&
+    ["PROPRIETARIO", "ADMINISTRADOR"].includes(
+      String(
+        context.activeContext.organizationRole ?? ""
+      ).toUpperCase()
+    );
+
+  const autorizado =
+    ehCreatorPessoal || ehGestorOrganizacao;
 
   if (!autorizado) {
     window.location.replace(
@@ -400,6 +412,11 @@ export function AppRoutes() {
         <Route path="/treinos"><Private><PaginaTreinos /></Private></Route>
         <Route path="/perfil/pontuacao"><Private><PaginaPontuacaoPerfil /></Private></Route>
         <Route path="/perfil/:id/pontuacao"><Private><PaginaPontuacaoDePerfil /></Private></Route>
+        <Route path="/perfil/recuperar">
+          <Private>
+            <RecuperarPerfil />
+          </Private>
+        </Route>
         <Route path="/perfil/editar"><Private><PaginaEditarPerfil /></Private></Route>
         
         <Route path="/creator/profile">

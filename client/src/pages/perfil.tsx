@@ -15,6 +15,7 @@ import PerfilMarca from "@/components/perfil/PerfilMarca.js";
 import PerfilFederacao from "@/components/perfil/PerfilFederacao.js";
 import PerfilResponsavel from "../components/perfil/PerfilResponsavel.js";
 import HealthBanner from "../components/legal/HealthBanner.js";
+import AniversarioBanner from "../components/billing/AniversarioBanner.js";
 import SubscriptionBanner from "../components/billing/SubscriptionBanner.js";
 import { http } from "../services/http.js";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -137,9 +138,6 @@ function tipoPerfilDoActiveContext(
 
     case "admin":
       return "Admin";
-
-    case "responsavel":
-      return "Responsavel";
 
     default:
       return null;
@@ -548,7 +546,13 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-transparent pb-20">
       <div className="max-w-3xl mx-auto px-4 pt-3">
         <HealthBanner />
-        {isOwnProfile && <SubscriptionBanner />}
+
+        {isOwnProfile && (
+          <>
+            <AniversarioBanner token={token} />
+            <SubscriptionBanner />
+          </>
+        )}
       </div>
 
       {tipoRender ===

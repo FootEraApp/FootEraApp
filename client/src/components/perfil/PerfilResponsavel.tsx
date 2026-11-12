@@ -27,6 +27,7 @@ import Storage from "../../utils/storage.js";
 import {
   API,
 } from "../../config.js";
+import ProfilePostsSection from "./ProfilePostsSection.js";
 
 type PerfilResponsavelBasico = {
   id: string;
@@ -2319,15 +2320,22 @@ async function restaurarContaAtleta(
       <section className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-4">
             <img
-            src={
-                perfil?.foto ||
-                "/assets/usuarios/default-user.png"
-            }
-            alt={
-                perfil?.nome ||
-                "Responsável"
-            }
-            className="h-16 w-16 rounded-full border object-cover"
+              src={
+                perfil?.foto?.trim() ||
+                "/assets/usuarios/footera-logo-fundo-verde.png"
+              }
+              onError={(evento) => {
+                const fallback =
+                  "/assets/usuarios/footera-logo-fundo-verde.png";
+
+                if (evento.currentTarget.src.endsWith(fallback)) {
+                  return;
+                }
+
+                evento.currentTarget.src = fallback;
+              }}
+              alt={perfil?.nome || "Responsável"}
+              className="h-16 w-16 rounded-full border object-cover"
             />
 
             <div className="min-w-0 flex-1">
@@ -3724,6 +3732,30 @@ async function restaurarContaAtleta(
             </div>
         </section>
         )}
+        <section className="mt-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+          <div className="mb-3">
+            <h2 className="text-lg font-bold text-green-950">
+              Minhas postagens como Responsável
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Publicações feitas usando o perfil Responsável.
+              As postagens dos atletas supervisionados permanecem
+              nos respectivos perfis de Atleta.
+            </p>
+          </div>
+
+          {perfil?.id ? (
+            <ProfilePostsSection
+              usuarioId={perfil.id}
+              papel="Responsavel"
+            />
+          ) : (
+            <p className="py-4 text-center text-sm text-gray-500">
+              Carregando postagens...
+            </p>
+          )}
+        </section>
     </main>
   );
 }

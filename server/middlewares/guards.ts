@@ -11,6 +11,7 @@ import {
 import {
   getActiveContext,
 } from "../services/activeContext.js";
+import { prisma } from "../prisma.js";
 
 export function requireCapability(
   capability:
@@ -277,6 +278,22 @@ export async function requireAdmin(
     return res.status(401).json({
       message:
         "Não autenticado.",
+    });
+  }
+
+  const administrador = await prisma.administrador.findUnique({
+    where: {
+      usuarioId: userId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!administrador) {
+    return res.status(403).json({
+      code: "ADMIN_ACCESS_REVOKED",
+      message: "Esta conta não possui acesso administrativo ativo.",
     });
   }
 

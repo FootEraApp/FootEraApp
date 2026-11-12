@@ -19,13 +19,18 @@ import {
   getMetodologiasAvulsas,
   resetMetodologiasAvulsasDev,
   getAulasAoVivoPagas,
+  getCheckoutOperacao,
+  getMeuCupomAniversario,
 } from "../controllers/billingController.js";
+import {
+  validarWebhookMercadoPago,
+} from "../middlewares/validarWebhookMercadoPago.js";
 
 const router = Router();
 
-/* WEBHOOKS — públicos */
 router.post(
   "/mercadopago/webhook",
+  validarWebhookMercadoPago,
   mercadoPagoWebhook
 );
 
@@ -51,11 +56,17 @@ router.get(
   getAulasAoVivoPagas
 );
 
-/*
- * DAQUI PARA BAIXO:
- * tudo exige autenticação.
- */
 router.use(authenticateToken);
+
+router.get(
+  "/aniversario",
+  getMeuCupomAniversario
+);
+
+router.get(
+  "/checkout-operacao/:chaveCliente",
+  getCheckoutOperacao
+);
 
 router.get(
   "/check-expiring",
@@ -118,12 +129,9 @@ router.post(
   switchPlan
 );
 
-/*
- * Continua privado.
- * Não faz sentido visitante poder resetar.
- */
 router.post(
   "/metodologias-avulsas/reset-dev",
+  requireAdmin,
   resetMetodologiasAvulsasDev
 );
 

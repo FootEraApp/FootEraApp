@@ -18,6 +18,7 @@ import ProfilePostsSection from "../../components/perfil/ProfilePostsSection";
 import CoverImage from "../../components/shared/CoverImage";
 import ProfileReplaysSection from "../../components/perfil/ProfileReplaysSection";
 import { UserContext } from "../../context/UserContext";
+import { formatarUrlFoto } from "../../utils/formatarFoto.js";
 
 const API = String(
   import.meta.env.VITE_API_URL ||
@@ -25,12 +26,9 @@ const API = String(
 )
   .trim()
   .replace(/\/+$/, "");
-const FRONTEND_BASE_URL =
-  import.meta.env.VITE_FRONTEND_BASE_URL ||
-  import.meta.env.VITE_APP_URL ||
-  window.location.origin;
 
-const AVATAR_FALLBACK = `${FRONTEND_BASE_URL}/assets/usuarios/footera-logo-fundo-verde.png`;
+const AVATAR_FALLBACK =
+  "/assets/usuarios/footera-logo-fundo-verde.png";
 
 type Conteudo = {
   id: string;
@@ -364,6 +362,14 @@ export default function CreatorProfile() {
     return params.get("id") || "";
   }, []);
 
+  const organizacaoId = useMemo(() => {
+    const params = new URLSearchParams(
+      window.location.search
+    );
+
+    return params.get("organizacaoId") || "";
+  }, []);
+
   const meuId = useMemo(() => {
     return (
         localStorage.getItem("usuarioId") ||
@@ -419,7 +425,7 @@ export default function CreatorProfile() {
     }, []);
 
   useEffect(() => {
-    if (!usuarioId) {
+    if (!usuarioId && !organizacaoId) {
       setLoading(false);
       return;
     }
@@ -430,7 +436,13 @@ export default function CreatorProfile() {
       "";
 
     fetch(
-      `${API}/api/creator/profile/${usuarioId}`,
+        organizacaoId
+          ? `${API}/api/creator/organization/${encodeURIComponent(
+              organizacaoId
+            )}`
+          : `${API}/api/creator/profile/${encodeURIComponent(
+              usuarioId
+            )}`,
       {
         headers: token
           ? {
@@ -494,10 +506,10 @@ export default function CreatorProfile() {
       .finally(() =>
         setLoading(false)
       );
-  }, [usuarioId, meuId]);
+  }, [usuarioId, organizacaoId, meuId]);
 
   useEffect(() => {
-    if (!usuarioId) return;
+    if (!usuarioId || organizacaoId) return;
 
     if (meuId && meuId === usuarioId) return;
 
@@ -510,15 +522,21 @@ export default function CreatorProfile() {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }).catch(() => {});
-  }, [usuarioId, meuId]);
+  }, [usuarioId, meuId, organizacaoId]);
 
   useEffect(() => {
+    if (organizacaoId) {
+      setSeguindo(false);
+      setFollowPendente(false);
+      return;
+    }
+
     if (!usuarioId) return;
 
     const token =
-        localStorage.getItem("token") ||
-        sessionStorage.getItem("token") ||
-        "";
+      localStorage.getItem("token") ||
+      sessionStorage.getItem("token") ||
+      "";
 
     if (!token) {
         setSeguindo(false);
@@ -542,10 +560,16 @@ export default function CreatorProfile() {
         setSeguindo(false);
         setFollowPendente(false);
         });
-  }, [usuarioId, meuId]);
+  }, [usuarioId, meuId, organizacaoId]);
 
   useEffect(() => {
+    if (organizacaoId) {
+      setEventos([]);
+      return;
+    }
+
     if (!usuarioId) {
+      setEventos([]);
       return;
     }
 
@@ -621,9 +645,7 @@ export default function CreatorProfile() {
           []
         );
       });
-  }, [
-    usuarioId,
-  ]);
+  }, [usuarioId, organizacaoId]);
 
   if (loading) {
     return (
@@ -680,18 +702,43 @@ export default function CreatorProfile() {
   }
 
   const { creator, metricas, conteudos } = data;
-  const souDono =
+  const contextoOrganizacaoAtivo =
+    userContext?.activeContext;
+
+  const ehGestorInstitucional =
     Boolean(
-      usuarioLogadoId &&
-      String(creator.usuarioId) === usuarioLogadoId
+      organizacaoId &&
+      contextoOrganizacaoAtivo?.kind === "ORGANIZATION" &&
+      contextoOrganizacaoAtivo.organizationId ===
+        organizacaoId &&
+      ["PROPRIETARIO", "ADMINISTRADOR"].includes(
+        String(
+          contextoOrganizacaoAtivo.organizationRole ?? ""
+        ).toUpperCase()
+      )
     );
+
+  const souDono =
+    organizacaoId
+      ? ehGestorInstitucional
+      : Boolean(
+          usuarioLogadoId &&
+          String(creator.usuarioId) === usuarioLogadoId &&
+          creator.tipo === "PESSOA_FISICA"
+        );
 
   const contextoCreatorDoDono =
     souDono &&
-    userContext?.activeContext?.kind === "PERSONAL" &&
-    String(
-      userContext?.activeTipoUsuario ?? ""
-    ).toLowerCase() === "creator";
+    (
+      ehGestorInstitucional ||
+      (
+        !organizacaoId &&
+        userContext?.activeContext?.kind === "PERSONAL" &&
+        String(
+          userContext?.activeTipoUsuario ?? ""
+        ).toLowerCase() === "creator"
+      )
+    );
   const eventosAoVivo = Array.isArray(data.eventosAoVivo) ? data.eventosAoVivo : [];
 
   const eventosDaAba = [
@@ -744,7 +791,13 @@ export default function CreatorProfile() {
     return acc + Number(c.totalAssinantes ?? 0);
   }, 0);
 
-  const creatorReturnUrl = `/creator/profile?id=${creator.usuarioId}`;
+  const creatorReturnUrl = organizacaoId
+    ? `/creator/profile?organizacaoId=${encodeURIComponent(
+        organizacaoId
+      )}`
+    : `/creator/profile?id=${encodeURIComponent(
+        creator.usuarioId
+      )}`;
   const isOwnCreator = souDono;
   const perfilOriginal = creator.perfilOriginal || {};
 
@@ -908,7 +961,14 @@ export default function CreatorProfile() {
     ];
 
     async function toggleSeguirCreator() {
-    const token =
+      if (organizacaoId) {
+        toast.error(
+          "Os seguidores de Creators institucionais ainda estão sendo preparados."
+        );
+        return;
+      }
+
+      const token =
         localStorage.getItem("token") ||
         sessionStorage.getItem("token") ||
         "";
@@ -1019,11 +1079,22 @@ export default function CreatorProfile() {
                   : "w-24 h-24 rounded-full bg-white/10 border-4 border-white/20 flex items-center justify-center text-2xl font-bold relative overflow-hidden"
               }
             >
-              {creator.avatarUrl ? (
-                <img src={creator.avatarUrl} alt={creator.nomePublico} className="w-full h-full object-cover" />
-              ) : (
-                creator.initials
-              )}
+
+            <img
+              src={
+                typeof creator.avatarUrl === "string" &&
+                creator.avatarUrl.trim()
+                  ? formatarUrlFoto(creator.avatarUrl.trim(), "usuarios")
+                  : AVATAR_FALLBACK
+              }
+              alt={`Foto de ${creator.nomePublico}`}
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                const img = event.currentTarget;
+                img.onerror = null;
+                img.src = AVATAR_FALLBACK;
+              }}
+            />
 
               {creator.verificado && (
                 <span className="absolute right-0 bottom-0 bg-emerald-500 rounded-full p-1 border-2 border-[#163d29]">
@@ -1081,6 +1152,7 @@ export default function CreatorProfile() {
             </div>
 
             <div className="flex gap-2 w-full max-w-md mt-3">
+              {!organizacaoId && (
               <button
                 disabled={seguindo === null}
                 onClick={() => {
@@ -1107,6 +1179,7 @@ export default function CreatorProfile() {
                     ? "Solicitação enviada"
                     : "Seguir"}
               </button>
+              )}
               <button
                 onClick={() => (window.location.href = `/minha-rede?returnTo=${encodeURIComponent(creatorReturnUrl)}`)}
                 className="flex-1 border border-white/20 rounded-xl py-2 text-sm"
@@ -1439,9 +1512,24 @@ export default function CreatorProfile() {
         )}
 
         {aba === "postagens" && (
-            <section className="mt-4">
-                <ProfilePostsSection usuarioId={creator.usuarioId} />
-            </section>
+          <section className="mt-4">
+            {organizacaoId ? (
+              <div className="rounded-2xl border border-emerald-100 bg-white p-6 text-center shadow-sm">
+                <p className="font-semibold text-emerald-900">
+                  Postagens da organização
+                </p>
+
+                <p className="mt-2 text-sm text-gray-500">
+                  As postagens institucionais serão exibidas aqui
+                  após a integração com o feed da organização.
+                </p>
+              </div>
+            ) : (
+              <ProfilePostsSection
+                usuarioId={creator.usuarioId}
+              />
+            )}
+          </section>
         )}
 
         {aba === "sobre" && (

@@ -8,8 +8,6 @@ import {
   Prisma,
   VisibilidadePostagem,
   NotificacaoTipo,
-  TipoUsuario,
-  StatusResponsavelAtleta,
 } from "@prisma/client";
 import {
   audit,
@@ -33,6 +31,10 @@ import {
 import {
   criarNotificacaoEEnviarPush,
 } from "./notificacoesController.js";
+import {
+  verificarPermissaoResponsavelAtleta,
+} from "../services/responsavelPermissoes.service.js";
+import { canPermission } from "../services/permissions.js";
 
 const ADS_CAP_PER_DAY = 5;
 const AD_EVERY_N = 10;
@@ -347,7 +349,7 @@ async function carregarCadeiaRepost(post: any): Promise<any> {
 
   let atual = post;
   let depth = 0;
-  const MAX_DEPTH = 20; 
+  const MAX_DEPTH = 20;
 
   while (atual?.repostOfId && depth < MAX_DEPTH) {
     const pai = await prisma.postagem.findUnique({
@@ -572,6 +574,40 @@ async function getAdsConfigForUser(userId?: string) {
   };
 }
 
+async function podeVisualizarCadeiaPostagem(
+  post: any,
+  usuarioId?: string | null
+): Promise<boolean> {
+  const visitados = new Set<string>();
+  let atual = post;
+  let profundidade = 0;
+
+  while (atual) {
+    if (profundidade++ >= 20) {
+      return false;
+    }
+
+    const id = String(atual.id ?? "");
+
+    if (!id || visitados.has(id)) {
+      return false;
+    }
+
+    visitados.add(id);
+
+    const permitido =
+      await podeVisualizarPostagem(atual, usuarioId);
+
+    if (!permitido) {
+      return false;
+    }
+
+    atual = atual.repostOf ?? null;
+  }
+
+  return true;
+}
+
 export const getFeedPosts: RequestHandler = async (req, res) => {
   try {
     const userId = (req as any).userId as string | undefined;
@@ -632,11 +668,75 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
       filterWhere = { usuarioId: { in: ids } };
     }
 
-    const where:
-      Prisma.PostagemWhereInput = {
+    const perfilUsuarioId = String(
+      req.query.perfilUsuarioId ?? ""
+    ).trim();
+
+    const perfilPapel = String(
+      req.query.perfilPapel ?? ""
+    ).trim();
+
+    const perfilOrganizacaoId = String(
+      req.query.perfilOrganizacaoId ?? ""
+    ).trim();
+
+    const filtrosDePerfilInformados = [
+      perfilUsuarioId,
+      perfilPapel,
+      perfilOrganizacaoId,
+    ].some(Boolean);
+
+    let perfilWhere: Prisma.PostagemWhereInput = {};
+
+    if (filtrosDePerfilInformados) {
+      // O cliente escolhe um perfil pessoal OU uma organização.
+      // Não permitimos misturar os dois modos.
+      if (
+        perfilOrganizacaoId &&
+        (perfilUsuarioId || perfilPapel)
+      ) {
+        return res.status(400).json({
+          code: "INVALID_PROFILE_FILTER",
+          message: "Informe somente um tipo de perfil.",
+        });
+      }
+
+      if (perfilOrganizacaoId) {
+        perfilWhere = {
+          organizacaoId: perfilOrganizacaoId,
+        };
+      } else {
+        const papeisPermitidos = [
+          "Atleta",
+          "Professor",
+          "Olheiro",
+          "Learning",
+          "Responsavel",
+          "Creator",
+        ];
+
+        if (
+          !perfilUsuarioId ||
+          !papeisPermitidos.includes(perfilPapel)
+        ) {
+          return res.status(400).json({
+            code: "INVALID_PROFILE_FILTER",
+            message: "Informe um usuário e um papel válidos.",
+          });
+        }
+
+        perfilWhere = {
+          usuarioId: perfilUsuarioId,
+          organizacaoId: null,
+          autorContextoKey: `personal:${perfilPapel}`,
+        };
+      }
+    }
+
+    const where: Prisma.PostagemWhereInput = {
       AND: [
         visibilityWhere,
-        filterWhere,
+        filtrosDePerfilInformados ? perfilWhere : filterWhere,
       ],
     };
 
@@ -653,9 +753,20 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
         postagensBase
       );
 
+    const autorizacoes = await Promise.all(
+      postagensComCadeia.map((post) =>
+        podeVisualizarCadeiaPostagem(post, userId)
+      )
+    );
+
+    const postagensAutorizadas =
+      postagensComCadeia.filter(
+        (_, index) => autorizacoes[index]
+      );
+
     const postagens =
       ordenarPostsDestaquePrimeiro(
-        postagensComCadeia.map(
+        postagensAutorizadas.map(
           normalizarOrganizacaoPost
         )
       );
@@ -667,7 +778,7 @@ export const getFeedPosts: RequestHandler = async (req, res) => {
             sanitizePublicPost
           )
           .filter(Boolean);
-          
+
     const ads = await getAdsConfigForUser(userId);
 
     return res.json({
@@ -726,11 +837,26 @@ export async function getPostById(req: Request, res: Response) {
       });
     }
 
+    const postComCadeia =
+      await carregarCadeiaRepost(postBase);
+
+    const cadeiaPermitida =
+      await podeVisualizarCadeiaPostagem(
+        postComCadeia,
+        viewerId
+      );
+
+    if (!cadeiaPermitida) {
+      return res.status(403).json({
+        code: "POST_NOT_ACCESSIBLE",
+        message:
+          "Esta publicação não está disponível.",
+      });
+    }
+
     const post =
       normalizarOrganizacaoPost(
-        await carregarCadeiaRepost(
-          postBase
-        )
+        postComCadeia
       );
 
     if (!viewerId) {
@@ -740,6 +866,7 @@ export async function getPostById(req: Request, res: Response) {
     }
 
     return res.json(post);
+
   } catch (error) {
     console.error("Erro ao buscar post:", error);
     return res.status(500).json({ erro: "Erro interno ao buscar o post" });
@@ -826,17 +953,9 @@ export const curtirPostagem: RequestHandler = async (req, res) => {
         },
       });
 
-      /*
-      * Não notificamos quando o usuário
-      * curte a própria publicação.
-      *
-      * Mesmo que o post seja exibido como
-      * organização, usuarioId continua
-      * sendo quem efetivamente publicou.
-      */
       if (
-        String(post.usuarioId) !==
-        String(usuarioId)
+        post.usuarioId &&
+        post.usuarioId !== usuarioId
       ) {
         try {
           const nomeOrganizacao =
@@ -909,7 +1028,7 @@ export const seguirUsuario: RequestHandler = async (req, res) => {
   if (jaSegue) return res.status(409).json({ message: "Você já segue este usuário." });
 
   await prisma.seguidor.create({ data: { seguidorUsuarioId, seguidoUsuarioId } });
-  
+
   const organizacaoId =
     await obterOrganizacaoAtivaDoUsuario(
       seguidoUsuarioId
@@ -947,7 +1066,7 @@ export const postar: RequestHandler = async (req, res) => {
 
   const { conteudo, descricao, imagemUrl: imagemUrlBody, videoUrl: videoUrlBody } = req.body;
   const texto = (descricao && descricao.length ? descricao : conteudo) || "";
-  const file = req.file as any; 
+  const file = req.file as any;
 
   try {
     let tipoMidia: "Imagem" | "Video" | undefined;
@@ -958,10 +1077,10 @@ export const postar: RequestHandler = async (req, res) => {
       const isVideo = file.mimetype?.startsWith("video");
       if (isVideo) {
         tipoMidia = "Video";
-        videoUrl = file.location; 
+        videoUrl = file.location;
       } else {
         tipoMidia = "Imagem";
-        imagemUrl = file.location; 
+        imagemUrl = file.location;
       }
     } else {
       if (imagemUrlBody) {
@@ -1077,51 +1196,43 @@ async function responsavelPodeGerenciarPostagem(
   responsavelUsuarioId: string,
   atletaUsuarioId: string
 ) {
-  const contexto =
-    await getActiveContext(
-      responsavelUsuarioId
-    );
+  const atleta = await prisma.atleta.findUnique({
+    where: {
+      usuarioId: atletaUsuarioId,
+    },
+    select: {
+      id: true,
+    },
+  });
 
-  if (
-    contexto?.kind !==
-      "PERSONAL" ||
-    contexto.tipoUsuario !==
-      TipoUsuario.Responsavel
-  ) {
+  if (!atleta) {
     return null;
   }
 
-  const vinculo =
-    await prisma
-      .responsavelAtleta
-      .findFirst({
-        where: {
-          responsavelUsuarioId,
+  const autorizado =
+    await verificarPermissaoResponsavelAtleta({
+      responsavelUsuarioId,
+      atletaId: atleta.id,
+      permissao: "podeGerenciarConteudo",
+    });
 
-          status:
-            StatusResponsavelAtleta.ATIVO,
+  if (!autorizado) {
+    return null;
+  }
 
-          podeGerenciarConteudo:
-            true,
-
-          atleta: {
-            is: {
-              usuarioId:
-                atletaUsuarioId,
-            },
-          },
-        },
-
-        select: {
-          id: true,
-          atletaId: true,
-
-          responsavelUsuarioId:
-            true,
-        },
-      });
-
-  return vinculo;
+  return prisma.responsavelAtleta.findUnique({
+    where: {
+      responsavelUsuarioId_atletaId: {
+        responsavelUsuarioId,
+        atletaId: atleta.id,
+      },
+    },
+    select: {
+      id: true,
+      atletaId: true,
+      responsavelUsuarioId: true,
+    },
+  });
 }
 
 export const deletarPostagem:
@@ -1170,13 +1281,36 @@ async (req, res) => {
         });
     }
 
+    // Uma postagem pessoal pertence ao autor.
+    // Uma postagem institucional pertence à organização.
     const proprioAutor =
-      String(
-        post.usuarioId
-      ) ===
-      String(
-        usuarioId
-      );
+      !post.organizacaoId &&
+      post.usuarioId === usuarioId;
+
+    let gestorOrganizacao = false;
+
+    if (post.organizacaoId) {
+      const contexto = await getActiveContext(usuarioId);
+
+      const mesmaOrganizacao =
+        contexto?.kind === "ORGANIZATION" &&
+        contexto.organizationId === post.organizacaoId;
+
+      if (mesmaOrganizacao) {
+        gestorOrganizacao = await canPermission(
+          usuarioId,
+          "GERENCIAR_ORGANIZACAO"
+        );
+      }
+
+      if (!gestorOrganizacao) {
+        return res.status(403).json({
+          code: "POST_ORGANIZATION_DELETE_FORBIDDEN",
+          mensagem:
+            "Somente um gestor autorizado da organização proprietária pode excluir esta publicação.",
+        });
+      }
+    }
 
     let vinculoResponsavel:
       Awaited<
@@ -1186,21 +1320,7 @@ async (req, res) => {
       > =
       null;
 
-    /*
-     * Se não é o próprio autor,
-     * verificamos se é o responsável
-     * daquele atleta.
-     */
-    if (!proprioAutor) {
-      /*
-       * Uma postagem feita em nome
-       * de organização pertence
-       * publicamente à organização.
-       *
-       * O responsável não deve poder
-       * apagar essa publicação apenas
-       * porque a criança foi o executor.
-       */
+    if (!proprioAutor && !gestorOrganizacao) {
       if (
         post.organizacaoId
       ) {
@@ -1216,10 +1336,12 @@ async (req, res) => {
       }
 
       vinculoResponsavel =
-        await responsavelPodeGerenciarPostagem(
-          usuarioId,
-          post.usuarioId
-        );
+        post.usuarioId
+          ? await responsavelPodeGerenciarPostagem(
+              usuarioId,
+              post.usuarioId
+            )
+          : null;
 
       if (
         !vinculoResponsavel
@@ -1236,35 +1358,6 @@ async (req, res) => {
       }
     }
 
-    /*
-     * Mídias pertencentes ao post.
-     */
-    if (
-      post.imagemUrl &&
-      post.imagemUrl.includes(
-        "amazonaws.com"
-      )
-    ) {
-      await deleteFromS3(
-        post.imagemUrl
-      );
-    }
-
-    if (
-      post.videoUrl &&
-      post.videoUrl.includes(
-        "amazonaws.com"
-      )
-    ) {
-      await deleteFromS3(
-        post.videoUrl
-      );
-    }
-
-    /*
-     * Se for repost,
-     * reduz contador do post raiz.
-     */
     if (
       post.repostOfId
     ) {
@@ -1398,7 +1491,7 @@ async (req, res) => {
       mensagem:
         vinculoResponsavel
           ? "Postagem removida pelo responsável."
-          : "Postagem e arquivos excluídos com sucesso.",
+          : "Postagem excluída com sucesso.",
     });
   } catch (err) {
     console.error(
@@ -1452,31 +1545,15 @@ export const getPerfil: RequestHandler = async (req, res) => {
   }
 };
 
-export const deletarUsuario: RequestHandler = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const usuario = await prisma.usuario.findUnique({ where: { id } });
-
-    if (!usuario) {
-      return res.status(404).json({ message: "Usuário não encontrado." });
-    }
-
-    await prisma.seguidor.deleteMany({
-      where: {
-        OR: [{ seguidorUsuarioId: id }, { seguidoUsuarioId: id }],
-      },
-    });
-
-    await prisma.postagem.deleteMany({ where: { usuarioId: id } });
-
-    await prisma.usuario.delete({ where: { id } });
-
-    res.json({ message: "Usuário deletado com sucesso." });
-  } catch (error) {
-    console.error("Erro ao deletar usuário:", error);
-    res.status(500).json({ message: "Erro interno ao deletar usuário." });
-  }
+export const deletarUsuario = async (
+  _req: Request,
+  res: Response
+) => {
+  return res.status(409).json({
+    code: "ACCOUNT_DELETION_UNDER_REVIEW",
+    message:
+      "A exclusão definitiva de contas está temporariamente indisponível enquanto verificamos a preservação dos dados financeiros e institucionais.",
+  });
 };
 
 export async function repostPost(req: Request, res: Response) {
@@ -1500,10 +1577,28 @@ export async function repostPost(req: Request, res: Response) {
           usuarioId: true,
           visibilidade: true,
           oculto: true,
+          organizacaoId: true,
         },
       });
 
     if (!clicked) return res.status(404).json({ message: "Post não encontrado" });
+
+    const postComCadeia =
+      await carregarCadeiaRepost(clicked);
+
+    const cadeiaPermitida =
+      await podeVisualizarCadeiaPostagem(
+        postComCadeia,
+        userId
+      );
+
+    if (!cadeiaPermitida) {
+      return res.status(403).json({
+        code: "POST_NOT_ACCESSIBLE",
+        message:
+          "Você não pode republicar este conteúdo.",
+      });
+    }
 
     const permitido =
       await podeVisualizarPostagem(
@@ -1652,6 +1747,7 @@ async (req, res) => {
         select: {
           id: true,
           usuarioId: true,
+          organizacaoId: true,
           visibilidade: true,
           oculto: true,
         },

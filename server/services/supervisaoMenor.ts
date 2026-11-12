@@ -126,12 +126,12 @@ export async function obterSupervisaoMenor(
       .responsaveis[0] ??
     null;
 
+  const ehMenorDe12 =
+    idade !== null && idade < 12;
+
   const supervisionado =
-    idade !== null &&
-    idade < 12 &&
-    usuario.atleta
-      .responsaveis
-      .length > 0;
+    ehMenorDe12 &&
+    usuario.atleta.responsaveis.length > 0;
 
   return {
     supervisionado,

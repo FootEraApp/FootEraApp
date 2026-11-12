@@ -31,6 +31,7 @@ import {
 import {
   PUBLIC_PATHS,
 } from "../../utils/publicRoutes.js";
+import socket from "../../services/socket.js";
 
 interface Usuario {
   id: string;
@@ -605,36 +606,85 @@ export default function ProfileHeader({
   ]);
 
   useEffect(() => {
-    if (!isOwnProfile) return;
-
-    const token = Storage.token;
-    if (!token) return;
-
-    (async () => {
-      try {
-        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread-count`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (r.ok) {
-          const j = await r.json();
-          const count = typeof j === "number" ? j : j?.count ?? 0;
-          setUnreadDM(count);
-          return;
-        }
-      } catch {}
-
-      try {
-        const r = await fetch(`${API.BASE_URL}/api/mensagem/unread`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (r.ok) {
-          const arr = await r.json();
-          setUnreadDM(Array.isArray(arr) ? arr.length : 0);
-          return;
-        }
-      } catch {}
+    if (!isOwnProfile) {
       setUnreadDM(0);
-    })();
+      return;
+    }
+
+    let ativo = true;
+
+    const carregarMensagensNaoLidas = async () => {
+      const token = Storage.token;
+
+      if (!token) {
+        if (ativo) setUnreadDM(0);
+        return;
+      }
+
+      try {
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/mensagem/unread-count`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!resposta.ok) return;
+
+        const dados = await resposta.json();
+
+        if (ativo) {
+          setUnreadDM(
+            Number(dados?.count ?? 0)
+          );
+        }
+      } catch (erro) {
+        console.warn(
+          "[ProfileHeader] Falha ao consultar mensagens:",
+          erro
+        );
+      }
+    };
+
+    const atualizarViaSocket = (dados: any) => {
+      if (
+        dados &&
+        typeof dados.mensagens === "number"
+      ) {
+        setUnreadDM(dados.mensagens);
+      } else {
+        void carregarMensagensNaoLidas();
+      }
+    };
+
+    const atualizarViaEvento = () => {
+      void carregarMensagensNaoLidas();
+    };
+
+    void carregarMensagensNaoLidas();
+
+    socket.on("badge:update", atualizarViaSocket);
+
+    window.addEventListener(
+      "mensagens:atualizar-badge",
+      atualizarViaEvento
+    );
+
+    return () => {
+      ativo = false;
+
+      socket.off(
+        "badge:update",
+        atualizarViaSocket
+      );
+
+      window.removeEventListener(
+        "mensagens:atualizar-badge",
+        atualizarViaEvento
+      );
+    };
   }, [isOwnProfile]);
 
   useEffect(() => {
@@ -2134,10 +2184,21 @@ export default function ProfileHeader({
               <button
                 type="button"
                 onClick={() => {
-                  const destino =
-                    `/creator/profile?id=${encodeURIComponent(
-                      creatorUsuarioId
-                    )}`;
+                  const creatorId = String(
+                    creatorUsuarioId ?? ""
+                  ).trim();
+
+                  const ehInstitucional = creatorId.startsWith(
+                    "organization:"
+                  );
+
+                  const destino = ehInstitucional
+                    ? `/creator/profile?organizacaoId=${encodeURIComponent(
+                        creatorId.slice("organization:".length)
+                      )}`
+                    : `/creator/profile?id=${encodeURIComponent(
+                        creatorId
+                      )}`;
 
                   if (
                     requireAuth({

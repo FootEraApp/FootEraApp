@@ -70,7 +70,7 @@ type BillingState = {
   precisaEscolherPagamento: boolean;
   metodoPreferido: MetodoPagamento | null;
   bloqueado: boolean;
-  trialJaUsado?: boolean; 
+  trialJaUsado?: boolean;
 };
 
 type UsuarioResumoPagamento = {
@@ -154,6 +154,8 @@ function PagamentoModal({
   bloquearCheckoutPorTrial,
   canFinalize,
   checkoutError,
+  checkoutBloqueado,
+  checkoutInconclusivo,
   onFinalize,
   pixQrUrl,
   pixCopiaECola,
@@ -175,6 +177,8 @@ function PagamentoModal({
   bloquearCheckoutPorTrial: boolean;
   canFinalize: boolean;
   checkoutError: string | null;
+  checkoutBloqueado: boolean;
+  checkoutInconclusivo: string | null;
   onFinalize: () => void;
   pixQrUrl: string | null;
   pixCopiaECola: string | null;
@@ -446,6 +450,26 @@ function PagamentoModal({
                 {checkoutError}
               </div>
             ) : null}
+            {checkoutBloqueado && (
+              <div
+                role="alert"
+                className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+              >
+                <strong>Pagamento aguardando verificação.</strong>
+
+                <p className="mt-1">
+                  A cobrança pode ter sido criada no Mercado Pago.
+                  Por segurança, não gere outro pagamento antes
+                  da conciliação.
+                </p>
+
+                {checkoutInconclusivo && (
+                  <p className="mt-2 break-all text-xs">
+                    Identificação: {checkoutInconclusivo}
+                  </p>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -804,7 +828,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
   ATLETA_PRO: {
     id: "ATLETA_PRO",
     title: "Atleta Pro",
-    monthly: 19.9,         
+    monthly: 19.9,
     annual: null,
     benefits: ["Sem anúncios", "Poder agendar treinos dos professores FootEra", "Mais limites operacionais", "Quantidade ilimitada de treinos agendados por semana"],
   },
@@ -825,14 +849,14 @@ const FALLBACK_PLANS: Record<string, Plan> = {
   PROFESSOR_PRO: {
     id: "PROFESSOR_PRO",
     title: "Professor Pro",
-    monthly: 39.9,         
+    monthly: 39.9,
     annual: null,
     benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
   PROFESSOR_LEARNING_1: {
     id: "PROFESSOR_LEARNING_1",
     title: "Professor Learning 1",
-    monthly: 59.9,         
+    monthly: 59.9,
     annual: null,
     benefits: ["Sem anúncios", "Recursos Pro do professor", "Mais limites operacionais", "Escolher 1 metodologia por mês", "Você pode criar metodologias e disponibilizar para os alunos"],
   },
@@ -846,7 +870,7 @@ const FALLBACK_PLANS: Record<string, Plan> = {
   ORGANIZACOES_PRO: {
     id: "ORGANIZACOES_PRO",
     title: "Organizações Pro",
-    monthly: 79.9,        
+    monthly: 79.9,
     annual: null,
     benefits: ["Sem anúncios", "Poder criar mais de 5 treinos", "Poder criar treino para daqui a mais de 30 dias", "Mais limites operacionais", "Você pode criar metodologias e disponibilizar para os membros da organização"],
   },
@@ -940,6 +964,59 @@ function writePersist(s: PersistState) {
   } catch {}
 }
 
+type CheckoutIntencaoSalva = {
+  chaveCliente: string;
+  assinatura: string;
+};
+
+function obterChaveCheckout(
+  storageKey: string,
+  assinatura: string
+): string {
+  const salvo = localStorage.getItem(storageKey);
+
+  if (salvo) {
+    let anterior: CheckoutIntencaoSalva;
+
+    try {
+      anterior = JSON.parse(salvo);
+    } catch {
+      throw new Error(
+        "CHECKOUT_INTENCAO_ARMAZENADA_INVALIDA"
+      );
+    }
+
+    if (
+      typeof anterior.chaveCliente !== "string" ||
+      typeof anterior.assinatura !== "string"
+    ) {
+      throw new Error(
+        "CHECKOUT_INTENCAO_ARMAZENADA_INVALIDA"
+      );
+    }
+
+    if (anterior.assinatura !== assinatura) {
+      throw new Error(
+        "CHECKOUT_INTENCAO_ANTERIOR_PENDENTE"
+      );
+    }
+
+    return anterior.chaveCliente;
+  }
+
+  const chaveCliente = crypto.randomUUID();
+
+  localStorage.setItem(
+    storageKey,
+    JSON.stringify({
+      chaveCliente,
+      assinatura,
+    } satisfies CheckoutIntencaoSalva)
+  );
+
+  return chaveCliente;
+}
+
 function normalizarReturnToLocal(
   valor: string | null
 ) {
@@ -974,9 +1051,14 @@ export default function PagamentosPage() {
       ?.key ??
     null;
 
+  const checkoutOperacaoStorageKey =
+    userContext?.user?.id && activeContextKey
+      ? `footera:billing:checkout-operacao:${userContext.user.id}:${activeContextKey}`
+      : null;
+
   const isAuthenticated =
     Boolean(token);
-  
+
   const [tipoBackend, setTipoBackend] = useState<string | null>(null);
 
   const tipoPagamentoAtual = useMemo(
@@ -1086,7 +1168,7 @@ export default function PagamentosPage() {
   const [pickLearning, setPickLearning] = useState(false);
   const [pickPlus, setPickPlus] = useState(false);
   const [pickMetods, setPickMetods] = useState<Record<string, boolean>>({});
-  const [selectedMain, setSelectedMain] = useState<string | null>(null); 
+  const [selectedMain, setSelectedMain] = useState<string | null>(null);
   const [cupomInput, setCupomInput] = useState("");
   const [cupomPreview, setCupomPreview] = useState<{ total: number; base: number; desconto: number; codigo: string; tipo: string } | null>(null);
   const [method, setMethod] = useState<MetodoPagamento>("PIX");
@@ -1097,6 +1179,32 @@ export default function PagamentosPage() {
   const [boletoPdf, setBoletoPdf] = useState<string | null>(null);
   const [pendingPaymentId, setPendingPaymentId] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const checkoutEmAndamentoRef = useRef(false);
+
+  const [checkoutEmAndamento, setCheckoutEmAndamento] =
+    useState(false);
+
+  const [checkoutInconclusivo, setCheckoutInconclusivo] =
+    useState<string | null>(null);
+
+  const [checkoutBloqueado, setCheckoutBloqueado] =
+    useState(false);
+
+  const bloquearCheckoutInconclusivo = (
+    pagamentoId?: string | null
+  ) => {
+    if (pagamentoId) {
+      setPendingPaymentId(pagamentoId);
+      setCheckoutInconclusivo(pagamentoId);
+    }
+
+    setCheckoutBloqueado(true);
+
+    toast.error(
+      "Não foi possível confirmar a criação da cobrança. " +
+      "Por segurança, não tente pagar novamente antes da verificação."
+    );
+  };
 
   const headers =
     useMemo(
@@ -1113,6 +1221,221 @@ export default function PagamentosPage() {
       }),
       [token]
     );
+
+  useEffect(() => {
+    if (!isAuthenticated || !checkoutOperacaoStorageKey) {
+      return;
+    }
+
+    const salvo = localStorage.getItem(
+      checkoutOperacaoStorageKey
+    );
+
+    if (!salvo) {
+      return;
+    }
+
+    // Bloqueia antes de qualquer consulta assíncrona.
+    setCheckoutBloqueado(true);
+
+    let chaveCliente: string;
+
+    try {
+      const intencao = JSON.parse(salvo);
+
+      if (
+        typeof intencao.chaveCliente !== "string" ||
+        !/^[0-9a-f-]{36}$/i.test(intencao.chaveCliente)
+      ) {
+        throw new Error("CHECKOUT_STORAGE_INVALID");
+      }
+
+      chaveCliente = intencao.chaveCliente;
+    } catch {
+      console.error(
+        "[billing] Intenção armazenada inválida; revisão necessária."
+      );
+      return;
+    }
+
+    let cancelado = false;
+
+    void (async () => {
+      try {
+        const resposta = await fetch(
+          `${API.BASE_URL}/api/billing/checkout-operacao/${encodeURIComponent(chaveCliente)}`,
+          {
+            method: "GET",
+            headers,
+          }
+        );
+
+        if (!resposta.ok) {
+          if (resposta.status === 401) {
+            setCheckoutBloqueado(true);
+
+            if (!cancelado) {
+              toast.error(
+                "Sua sessão expirou. Faça login novamente " +
+                "para recuperar o pagamento anterior."
+              );
+            }
+
+            return;
+          }
+
+          if (resposta.status === 403) {
+            setCheckoutBloqueado(true);
+
+            if (!cancelado) {
+              toast.error(
+                "Selecione o perfil usado para iniciar " +
+                "este pagamento."
+              );
+            }
+
+            return;
+          }
+
+    console.warn(
+      "[billing] Checkout anterior exige verificação:",
+      resposta.status
+    );
+
+    setCheckoutBloqueado(true);
+    return;
+  }
+
+        const dados = await resposta.json();
+        if (cancelado) return;
+
+        const operacao = dados?.operacao;
+
+        if (!operacao) return;
+
+        if (
+          operacao.requerConciliacaoExterna === true
+        ) {
+          setCheckoutBloqueado(true);
+
+          setCheckoutInconclusivo(
+            operacao.pagamentoId ?? chaveCliente
+          );
+
+          if (operacao.pagamentoId) {
+            setPendingPaymentId(
+              operacao.pagamentoId
+            );
+          }
+
+          console.warn(
+            "[billing] Operação externa não confirmada:",
+            {
+              pagamentoId: operacao.pagamentoId,
+              status: operacao.status,
+            }
+          );
+
+          return;
+        }
+
+        if (
+          operacao.status === "CONFIRMADA" &&
+          operacao.statusPagamento === "PENDENTE" &&
+          operacao.modalidade?.startsWith("PREFERENCIA_") &&
+          typeof operacao.checkoutUrlRecuperada === "string"
+        ) {
+          const url = new URL(operacao.checkoutUrlRecuperada);
+
+          if (
+            url.protocol === "https:" &&
+            (
+              url.hostname === "mercadopago.com" ||
+              url.hostname.endsWith(".mercadopago.com")
+            )
+          ) {
+            setCheckoutInconclusivo(
+              operacao.pagamentoId ?? chaveCliente
+            );
+
+            setCheckoutBloqueado(true);
+
+            // Redirecionamento para a preferência
+            // existente; não cria outra cobrança.
+            window.location.assign(url.href);
+            return;
+          }
+        }
+
+        if (operacao.statusPagamento === "APROVADO") {
+        localStorage.removeItem(
+          checkoutOperacaoStorageKey
+        );
+
+        setCheckoutBloqueado(false);
+        setCheckoutInconclusivo(null);
+        setPendingPaymentId(null);
+        setPixCopiaECola(null);
+        setPixQrUrl(null);
+
+        return;
+      }
+
+        setCheckoutInconclusivo(
+          operacao.pagamentoId ?? chaveCliente
+        );
+
+        if (operacao.pagamentoId) {
+          setPendingPaymentId(operacao.pagamentoId);
+        }
+
+        if (
+          operacao.status === "CONFIRMADA" &&
+          operacao.statusPagamento === "PENDENTE" &&
+          operacao.podeRecuperarPix === true &&
+          typeof operacao.pixCopiaECola === "string" &&
+          operacao.pixCopiaECola.trim().length > 0
+        ) {
+          setPixCopiaECola(operacao.pixCopiaECola);
+          setPixQrUrl(null);
+          setOpenPagamentoModal(true);
+          setCheckoutBloqueado(true);
+
+          if (operacao.pagamentoId) {
+            void pollPaymentStatus(
+              operacao.pagamentoId
+            ).catch((erro) => {
+              console.error(
+                "[billing] Falha ao acompanhar PIX recuperado:",
+                erro
+              );
+            });
+          }
+
+          toast.success(
+            "Seu PIX anterior foi recuperado. " +
+            "Utilize o mesmo código para pagar."
+          );
+        }
+        // Não libera uma nova cobrança automaticamente.
+        // A confirmação da criação não equivale ao pagamento.
+        setCheckoutBloqueado(true);
+      } catch (erro) {
+        console.error(
+          "[billing] Falha ao consultar operação anterior:",
+          erro
+        );
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    isAuthenticated,
+    checkoutOperacaoStorageKey,
+    headers,
+  ]);
 
   const redirectAfterPayment =
     useMemo(() => {
@@ -1538,8 +1861,8 @@ export default function PagamentosPage() {
     if (pApi) {
 
       return {
-        ...(pFallback ?? {}), 
-        ...pApi,            
+        ...(pFallback ?? {}),
+        ...pApi,
         benefits: pFallback?.benefits ?? pApi.benefits ?? [],
       } as Plan;
     }
@@ -1669,7 +1992,7 @@ export default function PagamentosPage() {
         eventoPagamento,
       ]
     );
-    
+
   const cartTotalBase = useMemo(() => cart.reduce((s, it) => s + (it.price || 0), 0), [cart]);
 
   function totalComCupomLocal() {
@@ -1725,7 +2048,7 @@ export default function PagamentosPage() {
 
   const trialAtivoAgora =
     hasTrialFlag &&
-    !showCanceladoUI; 
+    !showCanceladoUI;
 
   const bloquearCheckoutPorTrial =
     trialAtivoAgora &&
@@ -1756,7 +2079,7 @@ export default function PagamentosPage() {
 
   const isTrial = trialAtivoAgora;
   const isBloqueada = billingState?.bloqueado || statusAssinatura === "BLOQUEADA";
-  
+
   const trialJaUsado = Boolean(billingState?.trialJaUsado)
     || assinaturas.some((a) => Boolean(a.trialStartsAt || a.trialEndsAt))
     || Boolean(assinaturaSingle?.trialStartsAt || assinaturaSingle?.trialEndsAt);
@@ -2223,7 +2546,7 @@ export default function PagamentosPage() {
       }
 
       if (filtroPublicoMetod !== "TODOS") {
-        const pub = String(m.publicoAlvo ?? "").toUpperCase(); 
+        const pub = String(m.publicoAlvo ?? "").toUpperCase();
         if (pub !== filtroPublicoMetod) return false;
       }
 
@@ -2234,7 +2557,7 @@ export default function PagamentosPage() {
     buscaMetod,
     filtroNivelMetod,
     filtroConteudoMetod,
-    filtroPublicoMetod, 
+    filtroPublicoMetod,
   ]);
 
   const aulasAoVivoFiltradas =
@@ -2443,10 +2766,17 @@ export default function PagamentosPage() {
     pagador.telefone,
   ]);
 
-  const canFinalize = !polling && !checkoutError;
+  const canFinalize =
+    !polling &&
+    !checkoutError &&
+    !checkoutEmAndamento &&
+    !checkoutBloqueado;
 
   async function previewCoupon() {
-    if (carrinhoTemEvento) {
+    const cupomAniversario =
+      cupomInput.trim().toUpperCase() === "20PARABENS";
+
+    if (carrinhoTemEvento && !cupomAniversario) {
       setCupomInput("");
       setCupomPreview(null);
 
@@ -2457,7 +2787,7 @@ export default function PagamentosPage() {
       return;
     }
 
-    if (cart.length !== 1) {
+    if (cart.length !== 1 && !cupomAniversario) {
       setCupomPreview(null);
 
       toast.error(
@@ -2635,6 +2965,15 @@ export default function PagamentosPage() {
           await loadMe();
           localStorage.removeItem(LS_KEY);
 
+          if (checkoutOperacaoStorageKey) {
+            localStorage.removeItem(
+              checkoutOperacaoStorageKey
+            );
+          }
+
+          setCheckoutBloqueado(false);
+          setCheckoutInconclusivo(null);
+
           if (redirectAfterPayment) {
             window.location.href = redirectAfterPayment;
             return;
@@ -2699,6 +3038,12 @@ export default function PagamentosPage() {
 
   async function startCheckout() {
     if (
+      checkoutEmAndamentoRef.current ||
+      checkoutBloqueado
+    ) {
+      return;
+    }
+    if (
       !requireAuth({
         title:
           "Entre para comprar",
@@ -2721,6 +3066,8 @@ export default function PagamentosPage() {
     const err = validarCamposAntesDoCheckout();
     if (err) return toast.error(err);
 
+    checkoutEmAndamentoRef.current = true;
+    setCheckoutEmAndamento(true);
     setPixCopiaECola(null);
     setPixQrUrl(null);
     setBoletoLinha(null);
@@ -2728,11 +3075,30 @@ export default function PagamentosPage() {
     setPendingPaymentId(null);
 
     try {
+      if (!checkoutOperacaoStorageKey) {
+        throw new Error(
+          "CHECKOUT_USUARIO_OU_CONTEXTO_INDISPONIVEL"
+        );
+      }
+
+      const assinaturaCheckout = JSON.stringify({
+        contexto: activeContextKey,
+        items: cart.map((item) => ({
+          planoId: item.planoId,
+          periodicidade: item.periodicidade,
+        })),
+        metodo: method,
+        cupom: cupomInput.trim().toUpperCase(),
+      });
+
+      const chaveCliente = obterChaveCheckout(
+        checkoutOperacaoStorageKey,
+        assinaturaCheckout
+      );
+
       const pagamentoDeEvento =
         cart.length === 1 &&
-        cart[0]
-          .categoria ===
-          "EVENTO";
+        cart[0].categoria === "EVENTO";
 
       const pagamentoEmBundle =
         cart.length > 1 &&
@@ -2755,13 +3121,15 @@ export default function PagamentosPage() {
             method,
 
           cupom:
-            null,
+            cupomInput.trim().toUpperCase() || null,
 
           returnTo:
             redirectAfterPayment ||
             "/pagamentos",
 
           pagador,
+
+          chaveCliente,
         };
 
         const rBundle =
@@ -2786,6 +3154,28 @@ export default function PagamentosPage() {
             .catch(() => ({}));
 
         if (!rBundle.ok) {
+          if (
+            rBundle.status === 409 &&
+            [
+              "BILLING_CHECKOUT_OPERATION_EXISTS",
+              "BILLING_CHECKOUT_OPERATION_ALREADY_STARTED",
+              "BILLING_CHECKOUT_IDEMPOTENCY_CONFLICT",
+            ].includes(data?.code)
+          ) {
+            bloquearCheckoutInconclusivo(
+              data?.pagamentoId ?? null
+            );
+            return;
+          }
+
+          if (
+            rBundle.status === 503 &&
+            data?.code ===
+              "BILLING_CHECKOUT_EXTERNAL_RECONCILIATION_REQUIRED"
+          ) {
+            bloquearCheckoutInconclusivo(data.pagamentoId);
+            return;
+          }
           if (
             rBundle.status === 403 &&
             data?.code === "TRIAL_ACTIVE"
@@ -2893,12 +3283,36 @@ export default function PagamentosPage() {
               redirectAfterPayment ||
               "/pagamentos",
             pagador,
+            chaveCliente,
           }),
         });
 
         const data = await r.json();
 
         if (!r.ok) {
+          if (
+            r.status === 409 &&
+            [
+              "BILLING_CHECKOUT_OPERATION_EXISTS",
+              "BILLING_CHECKOUT_OPERATION_ALREADY_STARTED",
+              "BILLING_CHECKOUT_IDEMPOTENCY_CONFLICT",
+            ].includes(data?.code)
+          ) {
+            bloquearCheckoutInconclusivo(
+              data?.pagamentoId ?? null
+            );
+            return;
+          }
+
+          if (
+            r.status === 503 &&
+            data?.code ===
+              "BILLING_CHECKOUT_EXTERNAL_RECONCILIATION_REQUIRED"
+          ) {
+            bloquearCheckoutInconclusivo(data.pagamentoId);
+            return;
+          }
+
           if (r.status === 403 && data.code === "TRIAL_ACTIVE") {
             toast.error(data.message || "Trial ativo. Volte quando faltarem 7 dias.");
             await loadMe();
@@ -2933,8 +3347,35 @@ export default function PagamentosPage() {
       toast.error("Pagamento(s) iniciado(s). Atualizando status...");
       await loadMe();
     } catch (e) {
-      console.error(e);
-      toast.error("Erro ao iniciar pagamento");
+      console.error(
+        "[billing] Falha ao iniciar ou recuperar checkout:",
+        e
+      );
+
+      const mensagem =
+        e instanceof Error ? e.message : "";
+
+      if (
+        mensagem === "CHECKOUT_INTENCAO_ANTERIOR_PENDENTE"
+      ) {
+        setCheckoutBloqueado(true);
+
+        toast.error(
+          "Existe uma tentativa de pagamento anterior. " +
+          "Verifique essa compra antes de iniciar outra."
+        );
+      } else if (
+        mensagem === "CHECKOUT_USUARIO_OU_CONTEXTO_INDISPONIVEL"
+      ) {
+        toast.error(
+          "Não foi possível identificar seu perfil de pagamento."
+        );
+      } else {
+        bloquearCheckoutInconclusivo();
+      }
+    } finally {
+      checkoutEmAndamentoRef.current = false;
+      setCheckoutEmAndamento(false);
     }
   }
 
@@ -3612,7 +4053,7 @@ export default function PagamentosPage() {
                           currency: "BRL",
                         })}
                       </div>
-                      
+
                       <div className="text-xs text-gray-500 mt-1">
                         ID: {aula.id}
                       </div>
@@ -3696,7 +4137,10 @@ export default function PagamentosPage() {
         )}
       </section>
 
-      {!carrinhoTemEvento && (
+      {(
+        !carrinhoTemEvento ||
+        cart.length === 1
+      ) && (
         <section className="mb-6 p-4 border rounded-xl bg-white shadow-sm">
           <div className="flex items-center gap-2 mb-3">
             <Gift className="w-5 h-5" />
@@ -3707,8 +4151,9 @@ export default function PagamentosPage() {
           </div>
 
           <p className="text-sm text-gray-600 mb-3">
-            No momento, cupom funciona por item
-            (se o carrinho tiver 1 item).
+            Cupons comuns seguem suas condições de uso.
+            No dia do seu aniversário, utilize 20PARABENS
+            para consultar seu desconto especial de 20%.
           </p>
 
           <div className="flex gap-2">
@@ -3838,11 +4283,27 @@ export default function PagamentosPage() {
                     Total: <b>{brl(totalComCupomLocal())}</b>. Clique em <b>Finalizar</b> para gerar o QR Code e o código “copia e cola”.
                   </p>
 
-                  {pixQrUrl && (
+                  {pixQrUrl ? (
                     <div className="mb-3">
-                      <img src={pixQrUrl} alt="QR Code PIX" className="w-56 border rounded-lg" />
+                      <img
+                        src={pixQrUrl}
+                        alt="QR Code PIX"
+                        className="w-56 border rounded-lg"
+                      />
                     </div>
-                  )}
+                  ) : pixCopiaECola ? (
+                    <div className="mb-3 rounded-lg border p-3 text-sm">
+                      <p className="font-semibold text-green-700">
+                        PIX recuperado com sucesso.
+                      </p>
+
+                      <p className="mt-1 text-gray-600">
+                        O código copia e cola está disponível
+                        abaixo para concluir o pagamento.
+                      </p>
+                    </div>
+                  ) : null}
+
                   {pixCopiaECola && (
                     <div className="mb-2">
                       <div className="text-xs text-gray-600 mb-1">Copia e cola:</div>
@@ -4028,6 +4489,25 @@ export default function PagamentosPage() {
                     {checkoutError}
                   </div>
                 ) : null}
+                {checkoutBloqueado && (
+                  <div
+                    role="alert"
+                    className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                  >
+                    <strong>Pagamento aguardando verificação.</strong>
+
+                    <p className="mt-1">
+                      A cobrança pode ter sido criada. Não gere outro
+                      pagamento antes da conciliação.
+                    </p>
+
+                    {checkoutInconclusivo && (
+                      <p className="mt-2 break-all text-xs">
+                        Identificação: {checkoutInconclusivo}
+                      </p>
+                    )}
+                  </div>
+                )}
             </div>
             <p className="mt-2 text-sm text-green-700 ">OBS: Depois que você apertar em finalizar pagamento ele irá verificar seus dados, caso não for PIX, e te enviará para a página do mercado pago, para o pagamento ser realmente efetuado, não se pode pular a próxima etapa se não, não irá ser realizado o pagamento.</p>
           </>
@@ -4098,6 +4578,8 @@ export default function PagamentosPage() {
         bloquearCheckoutPorTrial={bloquearCheckoutEfetivo}
         canFinalize={canFinalize}
         checkoutError={checkoutError}
+        checkoutBloqueado={checkoutBloqueado}
+        checkoutInconclusivo={checkoutInconclusivo}
         onFinalize={startCheckout}
         pixQrUrl={pixQrUrl}
         pixCopiaECola={pixCopiaECola}

@@ -90,6 +90,9 @@ export default function ActiveContextSwitcher() {
                     String(context.user.id)
                   )}`;
               }
+              else if (window.location.pathname === "/perfil/editar") {
+                window.location.href = "/perfil/editar";
+              }
             } catch (
               error
             ) {
