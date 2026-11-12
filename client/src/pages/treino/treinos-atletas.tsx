@@ -4,6 +4,7 @@ import React, { useContext, useEffect, useRef, useState, type SVGProps } from "r
 import { Link, useLocation } from "wouter";
 import {
   CalendarClock,
+  Timer,
   Volleyball,
   CircleX,
   CircleCheck,
@@ -623,6 +624,171 @@ function getCriadorLabel(t: TreinoAgendado): string | null {
   if (tipo) return `${nome} (${tipo})`;
   return nome;
 }
+
+const PAUSA_OPCOES = [
+  { segundos: 30, label: "30s" },
+  { segundos: 45, label: "45s" },
+  { segundos: 60, label: "1min" },
+  { segundos: 90, label: "1min30s" },
+  { segundos: 120, label: "2min" },
+];
+
+function PausaEntreExercicios({
+  treinoEmAndamento,
+  podeConfigurar,
+}: {
+  treinoEmAndamento: boolean;
+  podeConfigurar: boolean;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [duracao, setDuracao] = useState(60);
+  const [terminaEm, setTerminaEm] = useState<number | null>(null);
+  const [restante, setRestante] = useState(0);
+  const [terminou, setTerminou] = useState(false);
+  const painelRef = useRef<HTMLDivElement | null>(null);
+  const botaoRef = useRef<HTMLButtonElement | null>(null);
+  const emPausa = treinoEmAndamento && terminaEm !== null;
+  const tempoPausa = formatHHMMSS(restante).slice(3);
+
+  useEffect(() => {
+    if (!treinoEmAndamento) {
+      setTerminaEm(null);
+      setRestante(0);
+      setTerminou(false);
+    }
+    if (!podeConfigurar) setAberto(false);
+  }, [treinoEmAndamento, podeConfigurar]);
+
+  useEffect(() => {
+    if (terminaEm === null || !treinoEmAndamento) return;
+
+    // Usa o horário de término para não acumular atraso com a aba em segundo plano.
+    const atualizar = () => {
+      const segundos = Math.max(0, Math.ceil((terminaEm - Date.now()) / 1000));
+      setRestante(segundos);
+      if (segundos === 0) {
+        setTerminaEm(null);
+        setTerminou(true);
+      }
+    };
+
+    atualizar();
+    const intervalo = window.setInterval(atualizar, 250);
+    window.addEventListener("focus", atualizar);
+    document.addEventListener("visibilitychange", atualizar);
+
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener("focus", atualizar);
+      document.removeEventListener("visibilitychange", atualizar);
+    };
+  }, [terminaEm, treinoEmAndamento]);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const fecharFora = (event: PointerEvent) => {
+      if (!painelRef.current?.contains(event.target as Node)) setAberto(false);
+    };
+    const fecharEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAberto(false);
+        botaoRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", fecharFora);
+    document.addEventListener("keydown", fecharEscape);
+    return () => {
+      document.removeEventListener("pointerdown", fecharFora);
+      document.removeEventListener("keydown", fecharEscape);
+    };
+  }, [aberto]);
+
+  return (
+    <div ref={painelRef} className="relative shrink-0">
+      <div className={`flex h-12 overflow-hidden rounded-xl border ${
+        emPausa
+          ? "border-amber-300 bg-amber-50 text-amber-800"
+          : "border-emerald-200 bg-emerald-50 text-emerald-800"
+      }`}>
+        <button
+          type="button"
+          disabled={!treinoEmAndamento || !podeConfigurar}
+          aria-label={emPausa
+            ? `Encerrar pausa: ${tempoPausa} restantes`
+            : `Iniciar pausa de ${duracao} segundos`}
+          title={emPausa ? "Encerrar pausa" : "Iniciar pausa"}
+          onClick={() => {
+            setAberto(false);
+            setTerminou(false);
+            if (emPausa) {
+              setTerminaEm(null);
+              setRestante(0);
+              return;
+            }
+            if (!treinoEmAndamento || !podeConfigurar) return;
+            setRestante(duracao);
+            setTerminaEm(Date.now() + duracao * 1000);
+          }}
+          className="inline-flex items-center justify-center gap-2 px-3 text-sm font-semibold transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Timer className="h-4 w-4" />
+          <span className="font-mono tabular-nums" role="timer" aria-label="Tempo da pausa">
+            {emPausa ? tempoPausa : formatHHMMSS(duracao).slice(3)}
+          </span>
+        </button>
+
+        <button
+          ref={botaoRef}
+          type="button"
+          disabled={!podeConfigurar || emPausa}
+          onClick={() => setAberto((valor) => !valor)}
+          aria-label="Escolher duração da pausa"
+          aria-expanded={aberto}
+          aria-controls="opcoes-pausa-treino"
+          className="inline-flex w-9 items-center justify-center border-l border-emerald-200 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ChevronUp className={`h-4 w-4 transition-transform ${aberto ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {aberto && podeConfigurar && !emPausa && (
+        <div
+          id="opcoes-pausa-treino"
+          role="group"
+          aria-label="Duração da pausa"
+          className="absolute bottom-full right-0 mb-2 w-36 overflow-hidden rounded-xl border border-emerald-100 bg-white p-1 shadow-lg"
+        >
+          {PAUSA_OPCOES.map((opcao) => (
+            <button
+              key={opcao.segundos}
+              type="button"
+              aria-pressed={duracao === opcao.segundos}
+              onClick={() => {
+                setDuracao(opcao.segundos);
+                setTerminou(false);
+                setAberto(false);
+                botaoRef.current?.focus();
+              }}
+              className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                duracao === opcao.segundos
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <span>{opcao.label}</span>
+              {duracao === opcao.segundos && <CircleCheck className="h-4 w-4" />}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <span role="status" className="sr-only">
+        {terminou ? "Pausa concluída. Você pode continuar os exercícios." : ""}
+      </span>
+    </div>
+  );
+}
+
 
 export default function TreinosAtletas() {
   const [location, navigate] = useLocation();
@@ -3834,11 +4000,11 @@ return (
                     "calc(12px + env(safe-area-inset-bottom))",
                 }}
               >
-                <div className="max-w-3xl mx-auto">
+                <div className="relative max-w-3xl mx-auto flex items-center gap-3">
                   <button
                     onClick={handleCentralClick}
                     disabled={disabledCentral}
-                    className={`h-12 w-full px-4 rounded-xl text-white font-medium
+                    className={`h-12 min-w-0 flex-1 px-4 rounded-xl text-white font-medium
                       ${
                         st === "IN_PROGRESS"
                           ? "bg-emerald-700 hover:bg-emerald-800"
@@ -3853,6 +4019,15 @@ return (
                   >
                     {labelCentral}
                   </button>
+                  <PausaEntreExercicios
+                    key={fullscreenId}
+                    treinoEmAndamento={st === "IN_PROGRESS"}
+                    podeConfigurar={
+                      !isCompletedTreino &&
+                      !isReadyToSubmit &&
+                      (st === "IN_PROGRESS" || !finalIsMissed)
+                    }
+                  />
                 </div>
               </div>
             );

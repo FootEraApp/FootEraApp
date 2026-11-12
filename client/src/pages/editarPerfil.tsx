@@ -12,6 +12,9 @@ import {
   ChevronRight,
   LockKeyhole,
   ShieldCheck,
+  User,
+  Volleyball,
+  GraduationCap,
 } from "lucide-react";
 import { Link } from "wouter";
 import BottomNav from "@/components/layout/BottomNav.js";
@@ -113,6 +116,135 @@ const PERFIS_DISPONIVEIS: PerfilDisponivel[] = [
     descricao: "Conteúdos, metodologias e experiências autorais.",
   },
 ];
+
+function TutorialTrocaPerfil() {
+  return (
+    <aside
+      aria-label="Como trocar de perfil rapidamente"
+      className="flex items-center gap-4 rounded-2xl border border-green-200 bg-green-50 p-4 sm:gap-6 sm:p-5"
+    >
+      <style>{`
+        @keyframes footera-tutorial-upper {
+          0%, 18% {
+            opacity: 0;
+            transform: translateY(94px);
+          }
+          24% {
+            opacity: 1;
+            transform: translateY(94px);
+          }
+          44%, 76% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          94%, 100% {
+            opacity: 0;
+            transform: translateY(94px);
+          }
+        }
+
+        @keyframes footera-tutorial-lower {
+          0%, 18% {
+            opacity: 0;
+            transform: translateY(50px);
+          }
+          24% {
+            opacity: 1;
+            transform: translateY(50px);
+          }
+          44%, 76% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          94%, 100% {
+            opacity: 0;
+            transform: translateY(50px);
+          }
+        }
+
+        @keyframes footera-tutorial-hold {
+          0%, 8%, 48%, 100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+          }
+          18%, 28% {
+            transform: scale(0.92);
+            box-shadow: 0 0 0 7px rgba(22, 163, 74, 0.18);
+          }
+        }
+
+        .footera-tutorial-upper {
+          animation: footera-tutorial-upper 4.5s ease-in-out infinite;
+        }
+
+        .footera-tutorial-lower {
+          animation: footera-tutorial-lower 4.5s ease-in-out infinite;
+        }
+
+        .footera-tutorial-hold {
+          animation: footera-tutorial-hold 4.5s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .footera-tutorial-upper,
+          .footera-tutorial-lower,
+          .footera-tutorial-hold {
+            animation: none;
+          }
+        }
+      `}</style>
+
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-semibold text-green-950">
+          Troque de perfil rapidamente
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-green-900">
+          Na barra inferior, <strong>segure o botão Perfil</strong>{" "}
+          até aparecerem seus papéis. Depois, arraste o dedo até
+          o papel desejado e solte para trocar.
+        </p>
+
+        <p className="mt-2 text-xs leading-5 text-green-800">
+          Você também pode soltar o botão e tocar em uma das opções.
+          Um toque rápido no botão abre seu perfil.
+        </p>
+      </div>
+
+      {/* Exemplo visual: não altera o contexto do usuário. */}
+      <div
+        aria-hidden="true"
+        className="relative h-40 w-28 shrink-0 select-none"
+      >
+        <div className="footera-tutorial-upper absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-green-900 text-white">
+          <span className="absolute right-full mr-2 rounded-md bg-green-900 px-2 py-1 text-[10px] font-semibold text-white">
+            Atleta
+          </span>
+
+          <Volleyball className="h-5 w-5" />
+        </div>
+
+        <div className="footera-tutorial-lower absolute right-2 top-[52px] flex h-9 w-9 items-center justify-center rounded-full bg-green-900 text-white">
+          <span className="absolute right-full mr-2 rounded-md bg-green-900 px-2 py-1 text-[10px] font-semibold text-white">
+            Professor
+          </span>
+
+          <GraduationCap className="h-5 w-5" />
+        </div>
+
+        <div className="absolute left-0 right-0 top-[98px] flex h-11 items-center justify-end rounded-xl bg-green-900 px-2">
+          <div className="footera-tutorial-hold flex h-9 w-9 items-center justify-center rounded-lg bg-green-700 text-white">
+            <User className="h-5 w-5" />
+          </div>
+        </div>
+
+        <span className="absolute bottom-0 left-0 right-0 text-center text-[10px] text-green-800">
+          Demonstração
+        </span>
+      </div>
+    </aside>
+  );
+}
 
 function normalizarTipoRender(valor: unknown): TipoRender | null {
   const tipo = String(valor ?? "")
@@ -2025,8 +2157,10 @@ const EditarPerfil = () => {
         </div>
       </section>
 
+      <TutorialTrocaPerfil />
+
       {perfilLiberado ? (
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
+        <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-6 border-b border-gray-100 pb-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>

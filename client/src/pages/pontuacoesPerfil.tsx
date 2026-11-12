@@ -1,3 +1,4 @@
+// client/src/pages/pontuacoesPerfil
 import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "@/lib/toast";
 import axios from "axios";
@@ -5,7 +6,7 @@ import { Link, useLocation, useRoute } from "wouter";
 import { ArrowLeft, BarChart2, Timer, KeyRound, Play, CheckCircle, AlertCircle, Volleyball, User, CirclePlus, Search, House } from "lucide-react";
 import Storage from "../../../server/utils/storage.js";
 import { API } from "../config.js";
-import CardAtletaShield from "../components/cards/CardAtletaShield.js";
+import CardAtletaInterativo from "../components/cards/CardAtletaInterativo.js";
 import * as htmlToImage from "html-to-image";
 import { publicImgUrl } from "../utils/publicUrl.js";
 import api from "../lib/api.js";
@@ -281,15 +282,7 @@ export default function PontuacaoDetalhada() {
   const [historico, setHistorico] = useState<any[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
 
-  const isMobile = typeof window !== "undefined" ? window.innerWidth <= 768 : false;
-  const CARD_SIZE = useMemo(() => {
-    if (isMobile) {
-      const w = (typeof window !== "undefined" ? window.innerWidth : 360) - 32;
-      const h = (typeof window !== "undefined" ? window.innerHeight : 640) * 0.7;
-      return { w, h };
-    }
-    return { w: 300, h: 420 };
-  }, [isMobile]);
+
 
   async function preloadImgs(node: HTMLElement) {
   const imgs = Array.from(node.querySelectorAll("img, image")) as (HTMLImageElement | SVGImageElement)[];
@@ -476,7 +469,8 @@ useEffect(() => {
         `OVR: ${ovr}\n` +
         `Performance: ${perf} pts\n` +
         `Disciplina: ${disc} pts\n` +
-        `Responsabilidade: ${resp} pts`;
+        `Responsabilidade: ${resp} pts\n` +
+        `Meu perfil: https://footera.app.br/perfil/${encodeURIComponent(targetUserId)}?papel=Atleta`;
 
       const node = cardShotRef.current;
       if (!node) { toast.error("Não consegui capturar o card."); return; }
@@ -545,22 +539,23 @@ useEffect(() => {
           <section className="mx-4 mt-4">
             {perfil.atletaId ? (
               <div className="flex flex-col items-center gap-3">
-                <div ref={cardShotRef}>
-                  <CardAtletaShield
-                    atleta={{
-                      atletaId: perfil.atletaId,
-                      nome: perfil.nome,
-                      foto: perfil.foto,
-                      posicao: perfil.posicao,
-                      idade: null,
-                    }}
-                    ovr={pontos?.mediaGeral ?? 0}
-                    perf={pontos?.performance ?? 0}
-                    disc={pontos?.disciplina ?? 0}
-                    resp={pontos?.responsabilidade ?? 0}
-                    size={{ w: CARD_SIZE.w, h: CARD_SIZE.h }}
-                    goldenMinOVR={88}
-                  />
+                <div>
+<CardAtletaInterativo
+  usuarioId={targetUserId}
+  atleta={{
+    atletaId: perfil.atletaId,
+    nome: perfil.nome,
+    foto: perfil.foto,
+    posicao: perfil.posicao,
+    idade: null,
+  }}
+  ovr={pontos?.mediaGeral ?? 0}
+  perf={pontos?.performance ?? 0}
+  disc={pontos?.disciplina ?? 0}
+  resp={pontos?.responsabilidade ?? 0}
+  capturaRef={cardShotRef}
+  bloqueado={postando}
+/>
                 </div>
 
                 <div className="flex gap-2">

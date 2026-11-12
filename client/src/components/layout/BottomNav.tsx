@@ -1,3 +1,4 @@
+// client/src/components/layout/BottomNav
 import {
   useEffect,
   useState,
@@ -26,6 +27,7 @@ import {
 import {
   UserContext,
 } from "../../context/UserContext.js";
+import ActiveContextSwitcher from "../context/ActiveContextSwitcher.js";
 
 type ActiveKey =
   | "feed"
@@ -62,25 +64,11 @@ export default function BottomNav({
       ?.activeContext ??
     null;
 
-  const contexts =
-    userContext
-      ?.contexts ??
-    [];
 
-  const contextsLoading =
-    userContext
-      ?.contextsLoading ??
-    false;
 
-  const switchActiveContext =
-    userContext
-      ?.switchActiveContext;
 
-  const [
-    switchingContext,
-    setSwitchingContext,
-  ] =
-    useState(false);
+
+
 
   const tipoUsuario =
     activeContext
@@ -254,91 +242,11 @@ export default function BottomNav({
     }
   };
 
-  const mostrarSeletorContexto =
-    Boolean(
-      userContext
-        ?.isLoggedIn
-    ) &&
-    contexts.length > 1;
+
 
   return (
     <>
-      {mostrarSeletorContexto && (
-        <div className="fixed bottom-12 left-0 right-0 z-50 border-t border-zinc-200 bg-white px-3 py-2 shadow-lg">
-          <div className="mx-auto flex max-w-xl items-center justify-between gap-3">
-            <span className="shrink-0 text-[11px] font-medium text-zinc-500">
-              Usando FootEra como
-            </span>
 
-            <select
-              value={
-                activeContext
-                  ?.key ?? ""
-              }
-              disabled={
-                contextsLoading ||
-                switchingContext
-              }
-              onChange={async (
-                event
-              ) => {
-                const contextKey =
-                  event.target
-                    .value;
-
-                if (
-                  !contextKey ||
-                  !switchActiveContext ||
-                  contextKey ===
-                    activeContext?.key
-                ) {
-                  return;
-                }
-
-                try {
-                  setSwitchingContext(
-                    true
-                  );
-
-                  await switchActiveContext(
-                    contextKey
-                  );
-
-                } catch (
-                  error
-                ) {
-                  console.error(
-                    "[BottomNav] Erro ao trocar contexto:",
-                    error
-                  );
-                } finally {
-                  setSwitchingContext(
-                    false
-                  );
-                }
-              }}
-              className="min-w-0 max-w-[230px] rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs font-semibold text-zinc-900 outline-none"
-            >
-              {contexts.map(
-                (contexto) => (
-                  <option
-                    key={
-                      contexto.key
-                    }
-                    value={
-                      contexto.key
-                    }
-                  >
-                    {
-                      contexto.label
-                    }
-                  </option>
-                )
-              )}
-            </select>
-          </div>
-        </div>
-      )}
 
       <nav
       className={`fixed bottom-0 left-0 right-0 z-50 bg-green-900 text-white px-6 py-2 flex justify-around items-center shadow-md ${className}`}
@@ -498,28 +406,16 @@ export default function BottomNav({
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={() =>
+      <ActiveContextSwitcher
+        active={active === "perfil"}
+        onProfileClick={() =>
           irPrivado(
             "/perfil",
             "Entre na FootEra para acessar seu perfil."
           )
         }
-        className={`${baseItem} ${
-          active ===
-          "perfil"
-            ? activeItem
-            : "hover:opacity-90"
-        }`}
-        aria-label="Perfil"
-      >
-        <User
-          className={
-            iconClass
-          }
-        />
-      </button>
+      />
+      
     </nav>
     </>
   );
