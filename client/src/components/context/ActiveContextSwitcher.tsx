@@ -1,6 +1,5 @@
 // client/src/components/context/ActiveContextSwitcher.tsx
 import { useContext, useEffect, useRef, useState } from "react";
-
 import {
   User,
   Volleyball,
@@ -13,9 +12,7 @@ import {
   Video,
   Loader2,
 } from "lucide-react";
-
 import { UserContext } from "../../context/UserContext.js";
-
 import type { CSSProperties } from "react";
 
 function getRoleIcon(tipo: string) {
@@ -40,6 +37,38 @@ function getRoleIcon(tipo: string) {
     default:
       return User;
   }
+}
+
+function getContextDisplay(item: {
+  kind?: string | null;
+  tipoUsuario?: string | null;
+  label?: string | null;
+}) {
+  const kind = String(item.kind ?? "").toUpperCase();
+  const role = String(item.tipoUsuario ?? "").trim();
+  const label = String(item.label ?? "").trim();
+
+  const isOrganization =
+    kind === "ORGANIZATION" ||
+    kind === "ORGANIZACAO" ||
+    kind === "ORGANIZAÇÃO";
+
+  if (isOrganization) {
+    const nome =
+      label && label.toLowerCase() !== role.toLowerCase()
+        ? label
+        : "Membro do clube";
+
+    return {
+      roleName: nome,
+      Icon: Shield,
+    };
+  }
+
+  return {
+    roleName: role || label || "Perfil",
+    Icon: getRoleIcon(role),
+  };
 }
 
 export default function ActiveContextSwitcher({
@@ -211,9 +240,7 @@ export default function ActiveContextSwitcher({
           className="pointer-events-none absolute bottom-full -right-[6px] mb-3 flex max-h-[65dvh] w-[min(240px,calc(100vw-48px))] flex-col items-end gap-2 overflow-y-auto overflow-x-hidden bg-transparent py-1"
         >
           {contexts.map((item, index) => {
-            const role = String(item.tipoUsuario ?? "");
-            const roleName = role || "Perfil";
-            const Icon = getRoleIcon(role);
+            const { roleName, Icon } = getContextDisplay(item);
 
             const selected =
               item.key === context?.activeContext?.key;

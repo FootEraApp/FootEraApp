@@ -178,6 +178,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# Audios privados do chat - armazenamento local
+.footera-chat-audio-local/
+
 ### Node Patch ###
 # Serverless Webpack directories
 .webpack/
