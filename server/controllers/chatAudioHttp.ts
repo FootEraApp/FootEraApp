@@ -6,23 +6,58 @@ import { CHAT_AUDIO_MAX_BYTES, chatAudioDisponivel, lerChatAudio } from "../serv
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: CHAT_AUDIO_MAX_BYTES, files: 1, fields: 2 },
+
+  limits: {
+    fileSize: CHAT_AUDIO_MAX_BYTES,
+    files: 1,
+
+    // paraId, audioDuracaoMs, clientMsgId e tipo.
+    fields: 8,
+    fieldSize: 16 * 1024,
+  },
 });
 
-export function receberChatAudio(req: Request, res: Response, next: (err?: unknown) => void): void {
+
+export function receberChatAudio(
+  req: Request,
+  res: Response,
+  next: (err?: unknown) => void
+): void {
   if (!chatAudioDisponivel()) {
-    res.status(503).json({ code: "CHAT_AUDIO_UNAVAILABLE" });
+    res.status(503).json({
+      code: "CHAT_AUDIO_UNAVAILABLE",
+      error:
+        "O armazenamento de áudios não está configurado.",
+    });
     return;
   }
+
   upload.single("audio")(req, res, (erro: unknown) => {
     if (erro) {
-      res.status(400).json({ code: "CHAT_AUDIO_INVALID_UPLOAD" });
+      const excedeuTamanho =
+        erro instanceof multer.MulterError &&
+        erro.code === "LIMIT_FILE_SIZE";
+
+      console.error(
+        "[chat-audio] Falha ao receber upload:",
+        erro
+      );
+
+      res.status(excedeuTamanho ? 413 : 400).json({
+        code: excedeuTamanho
+          ? "CHAT_AUDIO_TOO_LARGE"
+          : "CHAT_AUDIO_INVALID_UPLOAD",
+      });
       return;
     }
-    if (!req.file) {
-      res.status(400).json({ code: "CHAT_AUDIO_FILE_REQUIRED" });
+
+    if (!req.file || req.file.size === 0) {
+      res.status(400).json({
+        code: "CHAT_AUDIO_FILE_REQUIRED",
+      });
       return;
     }
+
     next();
   });
 }

@@ -1,3 +1,4 @@
+// server/controllers/mensagensController
 import { Request, Response } from "express";
 import { prisma } from "../prisma.js";
 import { AuthenticatedRequest } from "../middlewares/auth.js";

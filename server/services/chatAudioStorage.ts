@@ -8,6 +8,12 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import {
+  chatAudioS3Disponivel,
+  gravarChatAudioS3,
+  lerChatAudioS3,
+  removerChatAudioS3,
+} from "../middlewares/s3Upload.js";
 
 export const CHAT_AUDIO_MAX_BYTES = 8 * 1024 * 1024;
 export const CHAT_AUDIO_MAX_MS = 120_000;
@@ -34,36 +40,7 @@ function localHabilitado(): boolean {
 }
 
 export function chatAudioDisponivel(): boolean {
-  if (process.env.ENABLE_CHAT_AUDIO !== "true") {
-    return false;
-  }
-
-  if (localHabilitado()) {
-    return true;
-  }
-
-  const bucketAudio =
-    process.env.AWS_S3_CHAT_AUDIO_BUCKET?.trim();
-
-  const bucketDocumentos =
-    process.env.AWS_S3_PRIVATE_BUCKET?.trim();
-
-  if (!bucketAudio) {
-    return false;
-  }
-
-  if (
-    bucketDocumentos &&
-    bucketAudio === bucketDocumentos
-  ) {
-    console.error(
-      "[chat-audio] O bucket de áudio deve ser separado do bucket de documentos."
-    );
-
-    return false;
-  }
-
-  return true;
+  return chatAudioS3Disponivel();
 }
 
 function bucket(): string {
@@ -114,46 +91,41 @@ export function validarChatAudio(buffer: Buffer, mimeRaw: string): { mime: ChatA
   return { mime: "audio/ogg", ext: "ogg" };
 }
 
-export async function gravarChatAudio(tipo: "privadas" | "grupos", bytes: Buffer, mimeRaw: string): Promise<ChatAudioInfo> {
-  if (!chatAudioDisponivel()) throw new Error("CHAT_AUDIO_DISABLED");
-  const { mime, ext } = validarChatAudio(bytes, mimeRaw);
-  const key = `${PREFIX}${tipo}/${randomUUID()}.${ext}`;
-  if (localHabilitado()) {
-    const destino = localPath(key);
-    await mkdir(path.dirname(destino), { recursive: true });
-    await writeFile(destino, bytes, { flag: "wx", mode: 0o600 });
-  } else {
-    await s3.send(new PutObjectCommand({
-      Bucket: bucket(), Key: key, Body: bytes, ContentType: mime,
-      ServerSideEncryption: "AES256", CacheControl: "private, no-store",
-    }));
+export async function gravarChatAudio(
+  pasta: "privadas" | "grupos",
+  buffer: Buffer,
+  mimetype: string
+): Promise<{
+  key: string;
+  mime: string;
+  bytes: number;
+}> {
+  if (
+    !Buffer.isBuffer(buffer) ||
+    buffer.length === 0
+  ) {
+    throw new Error("CHAT_AUDIO_FILE_REQUIRED");
   }
-  return { key, mime, bytes: bytes.length };
+
+  if (buffer.length > CHAT_AUDIO_MAX_BYTES) {
+    throw new Error("CHAT_AUDIO_TOO_LARGE");
+  }
+
+  return gravarChatAudioS3(
+    pasta,
+    buffer,
+    mimetype
+  );
 }
 
-export async function lerChatAudio(key: string): Promise<Buffer> {
-  chaveValida(key);
-  if (!chatAudioDisponivel()) throw new Error("CHAT_AUDIO_DISABLED");
-  if (localHabilitado()) {
-    const bytes = await readFile(localPath(key));
-    if (bytes.length > CHAT_AUDIO_MAX_BYTES) throw new Error("CHAT_AUDIO_INVALID_SIZE");
-    return bytes;
-  }
-  const resposta = await s3.send(new GetObjectCommand({ Bucket: bucket(), Key: key }));
-  if (!resposta.Body) throw new Error("CHAT_AUDIO_NOT_FOUND");
-  const bytes = Buffer.from(await resposta.Body.transformToByteArray());
-  if (!bytes.length || bytes.length > CHAT_AUDIO_MAX_BYTES) throw new Error("CHAT_AUDIO_INVALID_SIZE");
-  return bytes;
+export async function lerChatAudio(
+  key: string
+): Promise<Buffer> {
+  return lerChatAudioS3(key);
 }
 
-export async function removerChatAudio(key: string): Promise<void> {
-  chaveValida(key);
-  if (!chatAudioDisponivel()) throw new Error("CHAT_AUDIO_DISABLED");
-  if (localHabilitado()) {
-    await unlink(localPath(key)).catch((e: NodeJS.ErrnoException) => {
-      if (e.code !== "ENOENT") throw e;
-    });
-  } else {
-    await s3.send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
-  }
+export async function removerChatAudio(
+  key: string
+): Promise<void> {
+  await removerChatAudioS3(key);
 }
