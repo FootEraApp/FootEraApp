@@ -1,4 +1,3 @@
-// client/src/components/context/ActiveContextSwitcher.tsx
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   User,
@@ -403,8 +402,6 @@ export default function ActiveContextSwitcher({
           }
         }}
         onClick={(event) => {
-          // Bloqueia o clique gerado depois do toque longo.
-          // Cliques pelo teclado continuam funcionando.
           if (event.detail > 0 && suppressClickRef.current) {
             suppressClickRef.current = false;
             return;

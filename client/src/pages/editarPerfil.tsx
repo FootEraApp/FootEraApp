@@ -226,7 +226,6 @@ function TutorialTrocaPerfil() {
         </p>
       </div>
 
-      {/* Exemplo visual: não altera o contexto do usuário. */}
       <div
         aria-hidden="true"
         className="relative h-40 w-28 shrink-0 select-none"

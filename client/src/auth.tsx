@@ -1,4 +1,3 @@
-// client/src/auth.tsx
 import {
   ReactNode,
   useEffect,

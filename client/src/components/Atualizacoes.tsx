@@ -1,4 +1,3 @@
-// client/src/components/Atualizacoes.tsx
 import React, { useRef, useState } from "react";
 import {
   CheckCircle2,

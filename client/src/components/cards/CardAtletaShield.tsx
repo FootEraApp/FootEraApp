@@ -1,4 +1,3 @@
-// client/src/components/cards/CardAtletaShield
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { API } from "@/config.js";
@@ -21,7 +20,6 @@ export type CardAtletaShieldProps = {
   resp?: number;
   size?: { w: number; h: number };
   goldenMinOVR?: number;
-  // Opcional: quando informado, ocupa o lugar da foto na mesma carta.
   qrValue?: string;
 };
 const GOLDEN_MIN_OVR = 88;

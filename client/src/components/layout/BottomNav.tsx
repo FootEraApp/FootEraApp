@@ -1,4 +1,3 @@
-// client/src/components/layout/BottomNav.tsx
 import { useContext, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Volleyball, CirclePlus, Search, House, Eye, Bell } from "lucide-react";
@@ -59,7 +58,6 @@ export default function BottomNav({
           setBadgeCount(Number(data.total ?? data.totalNotificacoes ?? 0));
         }
       } catch {
-        // Badge não deve quebrar navegação.
       }
     };
 

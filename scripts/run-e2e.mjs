@@ -30,7 +30,6 @@ let client;
 function killTree(proc) {
   if (!proc || !proc.pid) return Promise.resolve();
 
-  // Windows: mata a árvore inteira
   if (process.platform === "win32") {
     return new Promise((resolve) => {
       const killer = spawn("taskkill", ["/PID", String(proc.pid), "/T", "/F"], {
@@ -41,7 +40,6 @@ function killTree(proc) {
     });
   }
 
-  // Linux/Mac: tenta SIGTERM e depois SIGKILL
   return new Promise((resolve) => {
     try { proc.kill("SIGTERM"); } catch {}
     setTimeout(() => {

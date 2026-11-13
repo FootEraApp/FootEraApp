@@ -658,7 +658,6 @@ function PausaEntreExercicios({
   useEffect(() => {
     if (terminaEm === null || !treinoEmAndamento) return;
 
-    // Usa o horário de término para não acumular atraso com a aba em segundo plano.
     const atualizar = () => {
       const segundos = Math.max(0, Math.ceil((terminaEm - Date.now()) / 1000));
       setRestante(segundos);

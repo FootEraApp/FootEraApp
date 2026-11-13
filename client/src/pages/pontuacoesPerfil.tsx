@@ -1,4 +1,3 @@
-// client/src/pages/pontuacoesPerfil
 import { toast } from "@/lib/toast";
 import { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
